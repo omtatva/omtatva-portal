@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, CSSProperties } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { auth } from "../../lib/firebase";
+import { auth } from "../lib/firebase";
 
 export default function Navbar() {
   const [platformOpen, setPlatformOpen] = useState(false);
