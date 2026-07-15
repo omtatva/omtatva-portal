@@ -23,7 +23,7 @@ style={{
 >
 
 <source
-src="/demo.mp4"
+src="https://storage.googleapis.com/omtatva_portal_bucket/videos/Original%20to%20Ai%20Conversion.1.mp4"
 type="video/mp4"
 />
 

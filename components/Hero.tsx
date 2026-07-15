@@ -206,7 +206,7 @@ export default function Hero() {
     }}
   >
     <source
-      src="/company.mp4"
+      src="https://storage.googleapis.com/omtatva_portal_bucket/videos/Draft%2001%20with%20sound%20(2).mp4"
       type="video/mp4"
     />
   </video>

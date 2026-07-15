@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# Large media files
+# Keep videos outside Git repository
+/public/*.mp4
+/public/*.mov
+/public/*.webm
