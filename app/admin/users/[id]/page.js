@@ -32,14 +32,12 @@ const loadUser = async () => {
 
   const snap = await getDoc(docRef);
 
- if (snap.exists()) {
+if (snap.exists()) {
+  const data = snap.data();
 
-    const data = snap.data();
+  setUser(data);
 
-    setUser(data);
-
-    setPerformanceBand(data.performance || "");
-
+   setPerformanceBand(data.performance || " ");
 }
 
 };
@@ -66,7 +64,9 @@ const handleResumeUpload = async (e) => {
     storage,
     `resumes/${id}/${file.name}`
   );
-
+  
+console.log("URL ID:", id);
+console.log("User UID:", user.uid);
   await uploadBytes(storageRef, file);
 
   const url = await getDownloadURL(storageRef);
@@ -85,26 +85,19 @@ const handleResumeUpload = async (e) => {
 
 const updatePerformance = async () => {
   try {
-
     await updateDoc(doc(db, "users", id), {
-
       performance: performanceBand,
-
-      performanceUpdatedAt: new Date()
-
+      performanceUpdatedAt: new Date(),
     });
 
     await loadUser();
 
     alert("Performance Updated Successfully");
-
   } catch (err) {
-
     console.log(err);
-
+    alert("Failed");
   }
 };
-
 
 if(!user){
 
@@ -151,6 +144,30 @@ borderRadius:15,
 boxShadow:"0 10px 30px rgba(0,0,0,.08)"
 }}
 >
+
+  <div
+style={{
+display:"flex",
+gap:15
+}}
+>
+
+<button
+onClick={()=>window.location.href="/admin/users"}
+style={{
+padding:"15px 28px",
+fontSize:"15px",
+borderRadius:12,
+border:"none",
+background:"#111827",
+color:"#fff",
+fontWeight:700,
+cursor:"pointer"
+}}
+>
+← Dashboard
+</button>
+</div>
 
 <div
   style={{
@@ -287,21 +304,50 @@ boxShadow:"0 10px 30px rgba(0,0,0,.08)"
 <h1>{user.totalHours || 0}</h1>
 <p>Working Hours</p>
 </div>
-
 <div style={cardStyle}>
+
   <h3>⭐ Performance</h3>
 
-  <h1
+  <select
+    value={performanceBand}
+    onChange={(e) => setPerformanceBand(e.target.value)}
     style={{
-      color: "#2563eb",
-      fontSize: "36px",
-      margin: "10px 0",
+      width: "100%",
+      padding: "12px",
+      marginTop: "15px",
+      borderRadius: "10px",
+      fontSize: "18px",
+      border: "1px solid #d1d5db",
     }}
   >
-    {user?.performance || "Pending"}
-  </h1>
 
-  <p>Current Rating</p>
+    <option value="Outstanding">Outstanding</option>
+<option value="Excellent">Excellent</option>
+<option value="Very Good">Very Good</option>
+<option value="Good">Good</option>
+<option value="Average">Average</option>
+<option value="Needs Improvement">Needs Improvement</option>
+
+  </select>
+
+  <button
+    onClick={updatePerformance}
+    style={{
+      marginTop: "20px",
+      width: "100%",
+      padding: "12px",
+      background: "#3d6fa8",
+      color: "#fff",
+      border: "none",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontWeight: "700",
+      fontSize: "16px",
+    }}
+  >
+    Update Rating
+  </button>
+
 </div>
 
 </div>

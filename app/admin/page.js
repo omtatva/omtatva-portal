@@ -7,6 +7,9 @@ import {
   getDocs,
   doc,
   getDoc,
+  limit,
+  query,
+  orderBy
 } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebase";
@@ -18,7 +21,7 @@ export default function AdminPage() {
   const [attendanceCount, setAttendanceCount] = useState(0);
   const [timesheetCount, setTimesheetCount] = useState(0);
   const [inactiveUsers, setInactiveUsers] = useState(0);
-
+const [activities, setActivities] = useState([]);
   useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -72,6 +75,29 @@ export default function AdminPage() {
 
   return () => unsubscribe();
 }, []);
+
+useEffect(() => {
+  loadActivities();
+}, []);
+
+const loadActivities = async () => {
+
+  const q = query(
+    collection(db, "activityLogs"),
+    orderBy("createdAt", "desc"),
+    limit(10)
+  );
+
+  const snapshot = await getDocs(q);
+
+  const list = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  setActivities(list);
+
+};
 
 const loadDashboard = async () => {
   try {
@@ -286,7 +312,8 @@ gap:"20px"
 ["📋 Timesheets","/admin/timesheet"],
 ["📄 Documents","/admin/documents"],
 ["📊 Reports","/admin/reports"],
-["🎬 AI Production","/admin/production"]
+["🎬 AI Production","/admin/production"],
+["📅 Holidays", "/admin/holidays"]
 ].map(([title,link])=>(
 
 <button
@@ -362,35 +389,25 @@ borderCollapse:"collapse"
 
 <tbody>
 
-<tr>
+{activities.map((item) => (
 
-<td style={tdStyle}>John</td>
+<tr key={item.id}>
 
-<td style={tdStyle}>Checked In</td>
+<td style={tdStyle}>
+{item.employeeName}
+</td>
 
-<td style={tdStyle}>09:02 AM</td>
+<td style={tdStyle}>
+{item.activity}
+</td>
 
-</tr>
-
-<tr>
-
-<td style={tdStyle}>Rahul</td>
-
-<td style={tdStyle}>Leave Request</td>
-
-<td style={tdStyle}>09:45 AM</td>
+<td style={tdStyle}>
+{item.createdAt?.toDate().toLocaleString()}
+</td>
 
 </tr>
 
-<tr>
-
-<td style={tdStyle}>Priya</td>
-
-<td style={tdStyle}>Timesheet Submitted</td>
-
-<td style={tdStyle}>10:30 AM</td>
-
-</tr>
+))}
 
 </tbody>
 

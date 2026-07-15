@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { auth, db } from "../../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  updateDoc,
+  addDoc,
+  collection,
+  Timestamp,
+} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../../lib/firebase";
 
@@ -24,8 +30,9 @@ const [joiningDate, setJoiningDate] = useState("");
 const [gender, setGender] = useState("");
 const [bloodGroup, setBloodGroup] = useState("");
 const [linkedin, setLinkedin] = useState("");
-const photoURL = await getDownloadURL(photoRef);
-const resumeURL = await getDownloadURL(resumeRef);
+const [photo, setPhoto] = useState(null);
+const [resume, setResume] = useState(null);
+
 
 const [photoPreview, setPhotoPreview] = useState("");
   // const [employeeId, setEmployeeId] = useState("");
@@ -75,6 +82,17 @@ const saveProfile = async () => {
       resumeURL = await getDownloadURL(resumeRef);
 
     }
+
+if (resumeURL) {
+  await addDoc(collection(db, "activityLogs"), {
+    employeeName: `${firstName} ${lastName}`,
+    uid: currentUser.uid,
+    activity: "Resume Uploaded",
+    type: "Document",
+    description: resume.name,
+    createdAt: Timestamp.now(),
+  });
+}
 
     await updateDoc(doc(db, "users", currentUser.uid), {
 
@@ -131,7 +149,14 @@ const saveProfile = async () => {
       updatedAt: new Date(),
 
     });
-
+await addDoc(collection(db, "activityLogs"), {
+  employeeName: `${firstName} ${lastName}`,
+  uid: user.uid,
+  activity: "Profile Completed",
+  type: "Profile",
+  description: "Employee completed profile information",
+  createdAt: Timestamp.now(),
+});
     alert("Profile Saved Successfully");
 
     window.location.href = "/dashboard";
@@ -145,6 +170,7 @@ const saveProfile = async () => {
   }
 
 };
+
 
 
 

@@ -1,0 +1,15 @@
+.timesheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 40px;
+  row-gap: 35px;
+}
+
+
+@media(max-width:900px){
+
+  .timesheet-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
