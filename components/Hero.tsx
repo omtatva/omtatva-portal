@@ -130,7 +130,8 @@ export default function Hero() {
                 Employee Login
               </button>
             </a>
-
+            
+                <a href="/demo">
             <button
               style={{
                 background: "transparent",
@@ -145,6 +146,7 @@ export default function Hero() {
             >
                 ▶ Watch Demo
             </button>
+            </a>
           </div>
 
           {/* Floating cards */}
