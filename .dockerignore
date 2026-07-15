@@ -1,10 +1,8 @@
 node_modules
-npm-debug.log
+.next
 .git
 .gitignore
 .env
 .env.*
-dist
-build
+npm-debug.log
 .vscode
-.DS_Store
