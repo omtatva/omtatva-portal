@@ -162,7 +162,7 @@ export default function Navbar() {
                   ["Employee Portal","/dashboard"],
                   ["Admin Portal","/admin"],
                   ["AI Production","/Ai production"],
-                  // ["Enterprise",""],
+                  ["Enterprise",""],
                 ].map(([name,path]) => (
                   <Link key={path} href={path} style={dropItem}>
                     {name}
@@ -175,14 +175,6 @@ export default function Navbar() {
           </div>
 
 
-          <a href="#about" style={link}>
-            About
-          </a>
-
-
-          <a href="#contact" style={link}>
-            Contact
-          </a>
 
         </div>
 
