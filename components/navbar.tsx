@@ -127,7 +127,7 @@ export default function Navbar() {
                   ["Timesheets","/timesheet"],
                   ["Performance","/dashboard"],
                   ["Documents","/documents"],
-                  ["AI Production",""],
+                  ["AI Production","/Ai production"],
                   ["Reports","/reports"],
                 ].map(([name,path]) => (
                   <Link key={path} href={path} style={dropItem}>
@@ -161,8 +161,8 @@ export default function Navbar() {
                   ["HR Management","/solutions/hr"],
                   ["Employee Portal","/dashboard"],
                   ["Admin Portal","/admin"],
-                  ["AI Production",""],
-                  ["Enterprise",""],
+                  ["AI Production","/Ai production"],
+                  // ["Enterprise",""],
                 ].map(([name,path]) => (
                   <Link key={path} href={path} style={dropItem}>
                     {name}
