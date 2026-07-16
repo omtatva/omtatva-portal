@@ -13,3 +13,41 @@
   }
 
 }
+
+.stats-card {
+  transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 25px 60px rgba(61,111,168,.18);
+}
+
+.feature-card {
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 25px 60px rgba(61,111,168,.18);
+}
+
+.feature-card button {
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover button {
+  background: #28598c;
+}
+
+.timeline-step{
+  transition: all .3s ease;
+}
+
+.timeline-step:hover{
+  transform: translateY(-8px);
+}
+
+html {
+  scroll-behavior: smooth;
+}

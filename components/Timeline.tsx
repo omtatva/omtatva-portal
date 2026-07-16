@@ -82,85 +82,70 @@ export default function Timeline() {
         </p>
       </div>
 
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(6, 1fr)",
+gap: 20,
+    alignItems: "start",
+  }}
+>
+  {steps.map((step) => (
+    <div
+      key={step.title}
+      className="timeline-step"
+      style={{
+        textAlign: "center",
+        padding: 10,
+      }}
+    >
+      {/* Circle */}
       <div
         style={{
+          width: 80,
+          height: 80,
+          borderRadius: "50%",
+          background: "#3d6fa8",
+          color: "#fff",
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          gap: 20,
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 34,
+          margin: "0 auto",
+          boxShadow: "0 15px 30px rgba(61,111,168,.3)",
         }}
       >
-        {steps.map((step, index) => (
-          <div
-            key={step.title}
-            style={{
-              flex: 1,
-              minWidth: 170,
-              textAlign: "center",
-              position: "relative",
-            }}
-          >
-            {index !== steps.length - 1 && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 30,
-                  right: "-50%",
-                  width: "100%",
-                  height: 3,
-                  background: "#66a8e0",
-                  opacity: 0.3,
-                  zIndex: 0,
-                }}
-              />
-            )}
-
-            <div
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: "50%",
-                background: "#3d6fa8",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 28,
-                margin: "0 auto",
-                position: "relative",
-                zIndex: 2,
-                boxShadow: "0 8px 20px rgba(61,111,168,.25)",
-              }}
-            >
-              {step.icon}
-            </div>
-
-            <h3
-              style={{
-                marginTop: 16,
-                marginBottom: 8,
-                color: "#111",
-                fontSize: 20,
-              }}
-            >
-              {step.title}
-            </h3>
-
-            <p
-              style={{
-                color: "#666",
-                lineHeight: 1.5,
-                fontSize: 14,
-                maxWidth: 150,
-                margin: "0 auto",
-              }}
-            >
-              {step.desc}
-            </p>
-          </div>
-        ))}
+        {step.icon}
       </div>
+
+      {/* Title */}
+      <h3
+        style={{
+          marginTop: 18,
+          marginBottom: 10,
+          color: "#111",
+          fontSize: 20,
+        }}
+      >
+        {step.title}
+      </h3>
+
+      {/* Description */}
+      <p
+        style={{
+          color: "#666",
+          lineHeight: 1.6,
+          fontSize: 15,
+          maxWidth: 170,
+          margin: "0 auto",
+        }}
+      >
+        {step.desc}
+      </p>
+    </div>
+  ))}
+</div>
+      
     </section>
   );
 }

@@ -40,7 +40,7 @@ export default function Navbar() {
       <div
         style={{
           width: "95%",
-          padding: "20px 30px",
+          padding: "14px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -69,7 +69,7 @@ export default function Navbar() {
               style={{
                 margin: 0,
                 color: "#3d6fa8",
-                fontSize: "32px",
+                fontSize: "26px",
                 fontWeight: 800,
                 letterSpacing: 1,
               }}
@@ -271,7 +271,7 @@ const employeeBtn: CSSProperties = {
   background:"#3d6fa8",
   color:"#fff",
   border:"none",
-  padding:"14px 28px",
+  padding:"12px 22px",
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,
@@ -283,7 +283,7 @@ const adminBtn: CSSProperties = {
   background:"#111827",
   color:"#fff",
   border:"none",
-  padding:"14px 28px",
+  padding:"12px 22px",
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,
@@ -295,7 +295,7 @@ const logoutBtn: CSSProperties = {
   background:"#dc2626",
   color:"#fff",
   border:"none",
-  padding:"14px 28px",
+  padding:"12px 22px",
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,

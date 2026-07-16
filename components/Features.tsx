@@ -111,16 +111,17 @@ export default function Features() {
         }}
       >
         {features.map((item) => (
-          <div
-            key={item.title}
-            style={{
-              background: "#fff",
-              borderRadius: 18,
-              padding: 24,
-              border: "1px solid #e8eef8",
-              boxShadow: "0 8px 22px rgba(0,0,0,.06)",
-            }}
-          >
+         <div
+  key={item.title}
+  className="feature-card"
+  style={{
+    background: "#fff",
+    borderRadius: 24,
+    padding: 30,
+    border: "1px solid #eaf3ff",
+    boxShadow: "0 15px 35px rgba(0,0,0,.07)",
+  }}
+>
             <div
               style={{
                 width: 58,

@@ -1,3 +1,6 @@
+"use client";
+
+
 export default function Stats() {
   const stats = [
     {
@@ -86,18 +89,18 @@ export default function Stats() {
           gap: 25,
         }}
       >
-        {stats.map((item) => (
-          <div
-            key={item.title}
-            style={{
-              background: "#fff",
-              borderRadius: 18,
-              padding: 25,
-              border: "1px solid #e8eef8",
-              boxShadow: "0 8px 24px rgba(0,0,0,.06)",
-              transition: ".3s",
-            }}
-          >
+       {stats.map((item) => (
+ <div
+  key={item.title}
+  className="stats-card"
+  style={{
+    background: "#fff",
+    borderRadius: 18,
+    padding: 25,
+    border: "1px solid #e8eef8",
+    boxShadow: "0 8px 24px rgba(0,0,0,.06)",
+  }}
+>
             <div
               style={{
                 width: 60,
@@ -115,13 +118,13 @@ export default function Stats() {
             </div>
 
             <h1
-              style={{
-                margin: 0,
-                fontSize: 38,
-                color: item.color,
-                fontWeight: 800,
-              }}
-            >
+  style={{
+    fontSize: 56,
+    fontWeight: 800,
+    color: item.color,
+    margin: 0,
+  }}
+>
               {item.value}
             </h1>
 
