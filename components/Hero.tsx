@@ -13,12 +13,12 @@ export default function Hero() {
       <div
   style={{
     width: "100%",
-    minHeight: "650px",
+    minHeight: "520px",
     display: "grid",
     gridTemplateColumns: "1.1fr .9fr",
-    gap: "60px",
+    gap: "40px",
     alignItems: "center",
-    padding: "80px",
+    padding: "50px 60px",
     borderRadius: "35px",
     background:
       "linear-gradient(135deg,#3d6fa8 0%,#66a8e0 100%)",
@@ -79,11 +79,11 @@ export default function Hero() {
 
           <h1
             style={{
-            fontSize: "clamp(56px,6vw,90px)",
+            fontSize: "clamp(42px,5vw,68px)",
             fontWeight: 800,
             lineHeight: 1,
             color: "#fff",
-            margin: "20px 0",
+            margin: "15px 0",
             }}
           >
             OMTATVA
@@ -96,9 +96,9 @@ export default function Hero() {
               color: "#fff",
               opacity: .95,
               marginTop: 30,
-              fontSize: 20,
-              lineHeight: 1.9,
-              maxWidth: 650,
+              fontSize: 17,
+              lineHeight: 1.6,
+              maxWidth: 520,
             }}
           >
             OMTATVA DIGITALS provides a modern cloud-based
@@ -110,7 +110,7 @@ export default function Hero() {
             style={{
               display: "flex",
               gap: 20,
-              marginTop: 45,
+              marginTop: 30,
             }}
           >
             <a href="/login">
@@ -119,11 +119,11 @@ export default function Hero() {
                   background: "#fff",
                   color: "#3d6fa8",
                   border: "none",
-                  padding: "18px 38px",
+                 padding: "14px 28px",
                   borderRadius: 15,
                   fontWeight: 700,
                   cursor: "pointer",
-                  fontSize: 16,
+                  fontSize: 15,
                   boxShadow: "0 10px 25px rgba(0,0,0,.18)",
                 }}
               >
@@ -137,11 +137,11 @@ export default function Hero() {
                 background: "transparent",
                 color: "#fff",
                 border: "2px solid rgba(255,255,255,.6)",
-                padding: "18px 38px",
+                padding: "14px 28px",
                 borderRadius: 15,
                 fontWeight: 700,
                 cursor: "pointer",
-                fontSize: 16,
+                fontSize: 15,
               }}
             >
                 ▶ Watch Demo
@@ -171,9 +171,10 @@ export default function Hero() {
                   background: "rgba(255,255,255,.18)",
                   backdropFilter: "blur(10px)",
                   color: "#fff",
-                  padding: "12px 22px",
+                  padding: "8px 16px",
                   borderRadius: 40,
-                  fontWeight: 600,
+                  fontWeight: 500,
+                  fontSize: 14, 
                 }}
               >
                 ✓ {item}

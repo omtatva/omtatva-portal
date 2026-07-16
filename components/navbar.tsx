@@ -39,7 +39,7 @@ export default function Navbar() {
     >
       <div
         style={{
-          width: "100%",
+          width: "95%",
           padding: "20px 30px",
           display: "flex",
           alignItems: "center",
@@ -58,8 +58,8 @@ export default function Navbar() {
           <img
             src="/logo.ico"
             style={{
-              width: 70,
-              height: 70,
+              width: 80,
+              height: 80,
               objectFit: "contain",
             }}
           />
@@ -219,7 +219,6 @@ export default function Navbar() {
       borderRadius: "10px",
       cursor: "pointer",
       fontWeight: "700",
-      fontSize: "20px",
     }}
   >
     🚪 Logout
@@ -262,7 +261,7 @@ const dropItem: CSSProperties = {
   padding:"18px 24px",
   textDecoration:"none",
   color:"#333",
-  fontSize:"18px",
+  fontSize:"12px",
   fontWeight:500,
   borderBottom:"1px solid #eee",
 };
@@ -276,7 +275,7 @@ const employeeBtn: CSSProperties = {
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,
-  fontSize:"20px",
+  fontSize:"15px",
 };
 
 
@@ -288,7 +287,7 @@ const adminBtn: CSSProperties = {
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,
-  fontSize:"20px",
+  fontSize:"15px",
 };
 
 
@@ -300,7 +299,7 @@ const logoutBtn: CSSProperties = {
   borderRadius:12,
   cursor:"pointer",
   fontWeight:700,
-  fontSize:"20px",
+  fontSize:"15px",
 };
 
 

@@ -4,28 +4,28 @@ export default function Stats() {
       icon: "👨‍💼",
       value: "20+",
       title: "Employees",
-      subtitle: "Growing creative & technical team",
+      subtitle: "Creative & Technical Team",
       color: "#3d6fa8",
     },
     {
       icon: "🎬",
       value: "10+",
       title: "Projects",
-      subtitle: "Active productions",
+      subtitle: "Active Productions",
       color: "#66a8e0",
     },
     {
       icon: "🤖",
       value: "15+",
       title: "AI Tools",
-      subtitle: "Runway • Veo • Kling • Midjourney",
+      subtitle: "Runway • Veo • Kling",
       color: "#7c3aed",
     },
     {
       icon: "⏱️",
       value: "1000+",
-      title: "Production Hours",
-      subtitle: "Successfully delivered",
+      title: "Hours",
+      subtitle: "Production Delivered",
       color: "#16a34a",
     },
   ];
@@ -33,15 +33,14 @@ export default function Stats() {
   return (
     <section
       style={{
-        margin: "80px auto",
-        // maxWidth: 1400,
-        padding: "0 30px",
+        margin: "60px auto",
+        padding: "0 50px",
       }}
     >
       <div
         style={{
           textAlign: "center",
-          marginBottom: 50,
+          marginBottom: 40,
         }}
       >
         <p
@@ -49,7 +48,8 @@ export default function Stats() {
             color: "#3d6fa8",
             letterSpacing: 2,
             fontWeight: 700,
-            marginBottom: 10,
+            fontSize: 14,
+            marginBottom: 8,
           }}
         >
           COMPANY OVERVIEW
@@ -57,9 +57,9 @@ export default function Stats() {
 
         <h2
           style={{
-            fontSize: 42,
-            color: "#111111",
-            marginBottom: 15,
+            fontSize: 34,
+            color: "#111",
+            margin: "0 0 12px",
           }}
         >
           Trusted by Creative Production Teams
@@ -67,11 +67,11 @@ export default function Stats() {
 
         <p
           style={{
-            color: "#444444",
-            fontSize: 18,
-            maxWidth: 700,
+            color: "#555",
+            fontSize: 17,
+            maxWidth: 650,
             margin: "0 auto",
-            lineHeight: 1.8,
+            lineHeight: 1.6,
           }}
         >
           A unified platform for attendance, HR operations,
@@ -82,34 +82,33 @@ export default function Stats() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-          gap: 30,
+          gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+          gap: 25,
         }}
       >
         {stats.map((item) => (
           <div
             key={item.title}
             style={{
-              background: "#ffffff",
-              borderRadius: 25,
-              padding: 35,
-              boxShadow: "0 15px 40px rgba(0,0,0,.08)",
-              border: "1px solid #eaf3ff",
-              transition: "0.3s",
-              cursor: "pointer",
+              background: "#fff",
+              borderRadius: 18,
+              padding: 25,
+              border: "1px solid #e8eef8",
+              boxShadow: "0 8px 24px rgba(0,0,0,.06)",
+              transition: ".3s",
             }}
           >
             <div
               style={{
-                width: 75,
-                height: 75,
+                width: 60,
+                height: 60,
                 borderRadius: "50%",
-                background: "#eaf3ff",
+                background: "#eef6ff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 34,
-                marginBottom: 25,
+                fontSize: 28,
+                marginBottom: 18,
               }}
             >
               {item.icon}
@@ -117,9 +116,10 @@ export default function Stats() {
 
             <h1
               style={{
-                fontSize: 48,
-                color: item.color,
                 margin: 0,
+                fontSize: 38,
+                color: item.color,
+                fontWeight: 800,
               }}
             >
               {item.value}
@@ -127,9 +127,9 @@ export default function Stats() {
 
             <h3
               style={{
-                color: "#111111",
-                marginTop: 10,
-                marginBottom: 10,
+                margin: "8px 0",
+                fontSize: 22,
+                color: "#222",
               }}
             >
               {item.title}
@@ -137,8 +137,10 @@ export default function Stats() {
 
             <p
               style={{
-                color: "#666666",
-                lineHeight: 1.7,
+                color: "#666",
+                lineHeight: 1.6,
+                fontSize: 15,
+                minHeight: 45,
               }}
             >
               {item.subtitle}
@@ -146,11 +148,10 @@ export default function Stats() {
 
             <div
               style={{
-                marginTop: 25,
-                height: 6,
-                borderRadius: 20,
-                background: "#eaf3ff",
-                overflow: "hidden",
+                marginTop: 18,
+                height: 5,
+                background: "#eef3fb",
+                borderRadius: 10,
               }}
             >
               <div
@@ -158,7 +159,7 @@ export default function Stats() {
                   width: "100%",
                   height: "100%",
                   background: item.color,
-                  borderRadius: 20,
+                  borderRadius: 10,
                 }}
               />
             </div>

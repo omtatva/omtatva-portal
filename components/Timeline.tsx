@@ -3,7 +3,7 @@ export default function Timeline() {
     {
       icon: "👤",
       title: "Employee Login",
-      desc: "Secure login with Firebase Authentication",
+      desc: "Secure Firebase authentication",
     },
     {
       icon: "🕒",
@@ -13,7 +13,7 @@ export default function Timeline() {
     {
       icon: "📋",
       title: "Timesheet",
-      desc: "Daily work updates",
+      desc: "Daily work logging",
     },
     {
       icon: "👨‍💼",
@@ -35,15 +35,15 @@ export default function Timeline() {
   return (
     <section
       style={{
-        maxWidth: 1500,
-        margin: "120px auto",
-        padding: "0 30px",
+        maxWidth: 1300,
+        margin: "70px auto",
+        padding: "0 50px",
       }}
     >
       <div
         style={{
           textAlign: "center",
-          marginBottom: 70,
+          marginBottom: 45,
         }}
       >
         <p
@@ -51,6 +51,8 @@ export default function Timeline() {
             color: "#3d6fa8",
             fontWeight: 700,
             letterSpacing: 2,
+            fontSize: 14,
+            marginBottom: 8,
           }}
         >
           WORKFLOW
@@ -58,9 +60,9 @@ export default function Timeline() {
 
         <h2
           style={{
-            fontSize: 46,
+            fontSize: 34,
             color: "#111",
-            marginTop: 15,
+            margin: "0 0 12px",
           }}
         >
           Employee Journey
@@ -68,11 +70,11 @@ export default function Timeline() {
 
         <p
           style={{
-            maxWidth: 700,
-            margin: "20px auto",
-            color: "#666",
-            lineHeight: 1.8,
-            fontSize: 18,
+            maxWidth: 650,
+            margin: "0 auto",
+            color: "#555",
+            lineHeight: 1.6,
+            fontSize: 17,
           }}
         >
           Every employee follows a streamlined digital workflow from
@@ -84,7 +86,7 @@ export default function Timeline() {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
           flexWrap: "wrap",
           gap: 20,
         }}
@@ -94,20 +96,21 @@ export default function Timeline() {
             key={step.title}
             style={{
               flex: 1,
-              minWidth: 180,
-              position: "relative",
+              minWidth: 170,
               textAlign: "center",
+              position: "relative",
             }}
           >
             {index !== steps.length - 1 && (
               <div
                 style={{
                   position: "absolute",
-                  top: 40,
+                  top: 30,
                   right: "-50%",
                   width: "100%",
-                  height: 4,
+                  height: 3,
                   background: "#66a8e0",
+                  opacity: 0.3,
                   zIndex: 0,
                 }}
               />
@@ -115,19 +118,19 @@ export default function Timeline() {
 
             <div
               style={{
-                width: 80,
-                height: 80,
+                width: 60,
+                height: 60,
                 borderRadius: "50%",
                 background: "#3d6fa8",
                 color: "#fff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 34,
+                fontSize: 28,
                 margin: "0 auto",
                 position: "relative",
                 zIndex: 2,
-                boxShadow: "0 15px 30px rgba(61,111,168,.3)",
+                boxShadow: "0 8px 20px rgba(61,111,168,.25)",
               }}
             >
               {step.icon}
@@ -135,8 +138,10 @@ export default function Timeline() {
 
             <h3
               style={{
-                marginTop: 25,
+                marginTop: 16,
+                marginBottom: 8,
                 color: "#111",
+                fontSize: 20,
               }}
             >
               {step.title}
@@ -145,8 +150,10 @@ export default function Timeline() {
             <p
               style={{
                 color: "#666",
-                lineHeight: 1.7,
-                fontSize: 15,
+                lineHeight: 1.5,
+                fontSize: 14,
+                maxWidth: 150,
+                margin: "0 auto",
               }}
             >
               {step.desc}

@@ -2,7 +2,6 @@ import Hero from "@/components/Hero";
 import Stats from "@/components/Stats";
 import Features from "@/components/Features";
 import Timeline from "@/components/Timeline";
-import Testimonials from "@/components/Testimonials";
 import Footer from "@/components/Footer";
 
 export default function HomePage() {
@@ -19,7 +18,6 @@ export default function HomePage() {
       <Stats />
       <Features />
       <Timeline />
-      <Testimonials />
       <Footer />
     </div>
   );

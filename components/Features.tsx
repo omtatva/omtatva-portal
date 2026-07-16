@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 export default function Features() {
-
   const features = [
     {
       icon: "🕒",
@@ -26,7 +25,7 @@ export default function Features() {
     {
       icon: "⭐",
       title: "Performance Reviews",
-      desc: "HR can evaluate and release employee performance ratings.",
+      desc: "Evaluate employees with structured performance reviews.",
       link: "/performance",
     },
     {
@@ -44,157 +43,141 @@ export default function Features() {
     {
       icon: "🤖",
       title: "AI Production",
-      desc: "Track AI filmmaking workflow using Runway, Veo, Kling and more.",
+      desc: "Manage AI filmmaking workflows using modern AI tools.",
       link: "/production",
     },
     {
       icon: "📊",
       title: "Reports & Analytics",
-      desc: "Interactive dashboards with attendance and productivity insights.",
+      desc: "Interactive dashboards with business insights.",
       link: "/reports",
     },
   ];
 
-
   return (
     <section
       style={{
-        margin: "100px auto",
-        padding: "0 30px",
+        margin: "70px auto",
+        padding: "0 50px",
       }}
     >
-
       <div
         style={{
-          textAlign:"center",
-          marginBottom:60,
+          textAlign: "center",
+          marginBottom: 45,
         }}
       >
-
         <p
           style={{
-            color:"#3d6fa8",
-            fontWeight:700,
-            letterSpacing:2,
+            color: "#3d6fa8",
+            fontWeight: 700,
+            letterSpacing: 2,
+            fontSize: 14,
+            marginBottom: 8,
           }}
         >
           PLATFORM FEATURES
         </p>
 
-
         <h2
           style={{
-            fontSize:44,
-            margin:"15px 0",
-            color:"#111",
+            fontSize: 34,
+            margin: "0 0 12px",
+            color: "#111",
           }}
         >
           Everything You Need In One Platform
         </h2>
 
-
         <p
           style={{
-            maxWidth:750,
-            margin:"0 auto",
-            color:"#444",
-            fontSize:18,
-            lineHeight:1.8,
+            maxWidth: 650,
+            margin: "0 auto",
+            color: "#555",
+            fontSize: 17,
+            lineHeight: 1.6,
           }}
         >
-          Designed for HR teams, employees and AI production
-          companies with modern workflows and enterprise security.
+          Designed for HR teams, employees and AI production companies with
+          secure, cloud-based workflows.
         </p>
-
       </div>
-
-
 
       <div
         style={{
-          display:"grid",
-          gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",
-          gap:28,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+          gap: 22,
         }}
       >
-
-        {features.map((item)=>(
-
+        {features.map((item) => (
           <div
             key={item.title}
             style={{
-              background:"#fff",
-              borderRadius:24,
-              padding:30,
-              border:"1px solid #eaf3ff",
-              boxShadow:"0 15px 35px rgba(0,0,0,.07)",
+              background: "#fff",
+              borderRadius: 18,
+              padding: 24,
+              border: "1px solid #e8eef8",
+              boxShadow: "0 8px 22px rgba(0,0,0,.06)",
             }}
           >
-
             <div
               style={{
-                width:70,
-                height:70,
-                borderRadius:18,
-                background:"#eaf3ff",
-                display:"flex",
-                alignItems:"center",
-                justifyContent:"center",
-                fontSize:34,
-                marginBottom:25,
+                width: 58,
+                height: 58,
+                borderRadius: 14,
+                background: "#eef6ff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                marginBottom: 18,
               }}
             >
               {item.icon}
             </div>
 
-
             <h3
               style={{
-                color:"#111",
-                marginBottom:15,
+                color: "#111",
+                fontSize: 22,
+                margin: "0 0 10px",
               }}
             >
               {item.title}
             </h3>
 
-
             <p
               style={{
-                color:"#666",
-                lineHeight:1.8,
-                fontSize:16,
+                color: "#666",
+                lineHeight: 1.6,
+                fontSize: 15,
+                minHeight: 70,
               }}
             >
               {item.desc}
             </p>
 
-
             <Link href={item.link}>
-
               <button
                 style={{
-                  marginTop:25,
-                  background:"#3d6fa8",
-                  color:"#fff",
-                  border:"none",
-                  padding:"10px 22px",
-                  borderRadius:10,
-                  cursor:"pointer",
-                  fontWeight:600,
+                  marginTop: 18,
+                  background: "#3d6fa8",
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 18px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
                 }}
               >
                 Learn More →
               </button>
-
             </Link>
-
-
           </div>
-
         ))}
-
       </div>
-
     </section>
   );
 }
