@@ -37,62 +37,59 @@ export default function Navbar() {
         boxShadow: "0 2px 15px rgba(0,0,0,.08)",
       }}
     >
-      <div
+<div
   style={{
-    maxWidth: "1400px",
-    margin: "0 auto",
     width: "100%",
-    padding: "10px 24px",
+    padding: "14px 32px",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     boxSizing: "border-box",
   }}
 >
 
-        {/* Logo */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 15,
-          }}
-        >
-          <img
-  src="/logo.ico"
-  alt="OMTATVA DIGITALS"
+{/* Logo */}
+<div
   style={{
-    width: 58,
-    height: 58,
-    objectFit: "contain",
-  }}
-/>
-          <div>
-            <h2
-  style={{
-    margin: 0,
-    color: "#3d6fa8",
-    fontSize: "30px",
-    fontWeight: 800,
-    letterSpacing: 1,
-    lineHeight: 1.1,
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 0,
   }}
 >
-              OMTATVA DIGITALS
-            </h2>
+  <img
+    src="/logo.ico"
+    style={{
+      width: 58,
+      height: 58,
+      objectFit: "contain",
+    }}
+  />
 
-            <p
-  style={{
-    margin: "3px 0 0",
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 1.4,
-  }}
->
-              Driven by Stories • Powered by AI
-            </p>
-          </div>
-        </div>
+  <div>
+    <h2
+      style={{
+        margin: 0,
+        color: "#3d6fa8",
+        fontSize: "24px",
+        fontWeight: 800,
+        lineHeight: 1.1,
+      }}
+    >
+      OMTATVA DIGITALS
+    </h2>
+
+    <p
+      style={{
+        margin: "2px 0 0",
+        color: "#666",
+        fontSize: "13px",
+      }}
+    >
+      Driven by Stories • Powered by AI
+    </p>
+  </div>
+</div>
 
 
         {/* Menu */}
