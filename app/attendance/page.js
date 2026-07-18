@@ -6,14 +6,6 @@ import {
 onAuthStateChanged
 } from "firebase/auth";
 
-import {
-collection,
-addDoc,
-query,
-where,
-getDocs,
-updateDoc
-} from "firebase/firestore";
 
 
 import {
@@ -31,10 +23,18 @@ Cell
 } from "recharts";
 
 
+import { auth, db } from "@/lib/firebase";
+
 import {
-auth,
-db
-} from "@/lib/firebase";
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc,
+  getDoc
+} from "firebase/firestore";
 
 
 import AttendanceCalendar from "./AttendanceCalendar";
@@ -50,7 +50,15 @@ const [todayData,setTodayData]=useState(null);
 
 const [history,setHistory]=useState([]);
 
+const [attendanceRules,setAttendanceRules]=useState(null);
 
+const [locationStatus,setLocationStatus]=useState("");
+
+const [distance,setDistance]=useState(0);
+
+const [currentLocation,setCurrentLocation]=useState(null);
+
+const [insideOffice,setInsideOffice]=useState(false);
 const [stats,setStats]=useState({
 
 present:0,
@@ -71,96 +79,279 @@ new Date()
 .substring(0,10);
 
 
+useEffect(() => {
 
+  const unsubscribe = onAuthStateChanged(
+    auth,
+    async (currentUser) => {
 
+      if (!currentUser) {
+        window.location.href = "/login";
+        return;
+      }
 
-useEffect(()=>{
+      setUser(currentUser);
 
+      await loadAttendanceRules();
 
-const unsubscribe =
-onAuthStateChanged(
-auth,
-async(currentUser)=>{
+      await loadToday(currentUser.uid);
 
+      await loadHistory(currentUser.uid);
 
-if(!currentUser){
+      await checkOfficeRange();
 
-window.location.href="/login";
+    }
+  );
 
-return;
+  return () => unsubscribe();
+
+}, []);
+
+// =======================
+// LOAD ATTENDANCE RULES
+// =======================
+
+async function loadAttendanceRules(){
+
+try{
+
+const snap = await getDoc(
+doc(db,"settings","attendanceRules")
+);
+
+if(snap.exists()){
+
+setAttendanceRules(snap.data());
+
+}
+
+}catch(error){
+
+console.log(error);
+
+}
 
 }
 
 
-setUser(currentUser);
 
-
-await loadToday(
-currentUser.uid
-);
-
-
-await loadHistory(
-currentUser.uid
-);
-
-
-});
-
-
-return ()=>unsubscribe();
-
-
-},[]);
-
-
-
-
-
+// =======================
+// DATE HELPERS
+// =======================
 
 function convertDate(value){
 
-if(!value)
-return null;
-
+if(!value) return null;
 
 if(value.toDate)
 return value.toDate();
-
 
 return new Date(value);
 
 }
 
-
-
-
-
-
 function formatTime(value){
 
-const d=convertDate(value);
+const d = convertDate(value);
 
-
-if(!d)
-return "--";
-
+if(!d) return "--";
 
 return d.toLocaleTimeString([],{
-
 hour:"2-digit",
-
 minute:"2-digit"
-
 });
-
 
 }
 
 
 
+// =======================
+// GPS
+// =======================
+
+async function getCurrentLocation(){
+
+return new Promise((resolve,reject)=>{
+
+if(!navigator.geolocation){
+
+reject(new Error("Location not supported"));
+return;
+
+}
+
+navigator.geolocation.getCurrentPosition(
+
+(position)=>{
+
+resolve(position);
+
+},
+
+(error)=>{
+
+reject(error);
+
+},
+
+{
+
+enableHighAccuracy:true,
+
+timeout:10000,
+
+maximumAge:0
+
+}
+
+);
+
+});
+
+}
 
 
+
+// =======================
+// DISTANCE
+// =======================
+
+function calculateDistance(
+lat1,
+lon1,
+lat2,
+lon2
+){
+
+const R = 6371000;
+
+const dLat =
+(lat2-lat1) *
+Math.PI/180;
+
+const dLon =
+(lon2-lon1) *
+Math.PI/180;
+
+const a =
+
+Math.sin(dLat/2) *
+Math.sin(dLat/2)
+
++
+
+Math.cos(lat1*Math.PI/180)
+
+*
+
+Math.cos(lat2*Math.PI/180)
+
+*
+
+Math.sin(dLon/2)
+
+*
+
+Math.sin(dLon/2);
+
+const c =
+
+2 *
+
+Math.atan2(
+
+Math.sqrt(a),
+
+Math.sqrt(1-a)
+
+);
+
+return Math.round(R*c);
+
+}
+
+
+
+// =======================
+// CHECK OFFICE RANGE
+// =======================
+
+async function checkOfficeRange(){
+
+if(!attendanceRules){
+
+return false;
+
+}
+
+try{
+
+const position =
+await getCurrentLocation();
+
+const latitude =
+position.coords.latitude;
+
+const longitude =
+position.coords.longitude;
+
+const accuracy =
+position.coords.accuracy;
+
+setCurrentLocation({
+
+latitude,
+longitude,
+accuracy
+
+});
+
+const meter =
+calculateDistance(
+
+latitude,
+
+longitude,
+
+Number(attendanceRules.officeLatitude),
+
+Number(attendanceRules.officeLongitude)
+
+);
+
+setDistance(meter);
+
+const inside =
+meter <= attendanceRules.officeRadius;
+
+setInsideOffice(inside);
+
+setLocationStatus(
+
+inside
+?
+
+"Inside Office"
+
+:
+
+"Outside Office"
+
+);
+
+return inside;
+
+}catch(error){
+
+console.log(error);
+
+alert("Unable to fetch GPS");
+
+return false;
+
+}
+
+}
 
 async function loadToday(uid){
 
@@ -312,179 +503,13 @@ hours.toFixed(1)
 
 
 }
-function getCurrentLocation(){
-
-return new Promise((resolve,reject)=>{
 
 
-if(!navigator.geolocation){
-
-reject(
-"Location not supported"
-);
-
-return;
-
-}
-
-
-
-navigator.geolocation.getCurrentPosition(
-
-(position)=>{
-
-
-resolve({
-
-latitude:
-position.coords.latitude,
-
-
-longitude:
-position.coords.longitude
-
-});
-
-
-},
-
-
-(error)=>{
-
-reject(
-"Please allow location permission"
-);
-
-},
-
-
-{
-enableHighAccuracy:true,
-timeout:10000
-}
-
-
-);
-
-
-
-});
-
-
-}
-function calculateDistance(
-lat1,
-lon1,
-lat2,
-lon2
-){
-
-
-const R = 6371e3;
-
-
-const φ1 =
-lat1 * Math.PI/180;
-
-
-const φ2 =
-lat2 * Math.PI/180;
-
-
-const Δφ =
-(lat2-lat1)
-*
-Math.PI/180;
-
-
-const Δλ =
-(lon2-lon1)
-*
-Math.PI/180;
-
-
-
-const a =
-Math.sin(Δφ/2) *
-Math.sin(Δφ/2)
-+
-Math.cos(φ1) *
-Math.cos(φ2) *
-Math.sin(Δλ/2) *
-Math.sin(Δλ/2);
-
-
-
-const c =
-2 *
-Math.atan2(
-Math.sqrt(a),
-Math.sqrt(1-a)
-);
-
-
-
-return R*c;
-
-
-}
 async function punchIn(){
 
 try{
 
-
-if(!user)
-return;
-
-
-
-// OFFICE LOCATION
-
-const officeLatitude = 28.6139; 
-const officeLongitude = 77.2090;
-
-
-// allowed range
-
-const allowedRadius = 100;
-
-
-
-const location =
-await getCurrentLocation();
-
-
-
-const distance =
-calculateDistance(
-
-location.latitude,
-
-location.longitude,
-
-officeLatitude,
-
-officeLongitude
-
-);
-
-
-
-if(distance > allowedRadius){
-
-
-alert(
-`You are outside office area.
-Distance: ${Math.round(distance)} meters`
-);
-
-
-return;
-
-
-}
-
-
+if(!user) return;
 
 if(todayData){
 
@@ -494,49 +519,152 @@ return;
 
 }
 
+// Attendance Rules
 
+if(!attendanceRules){
+
+alert("Attendance Rules not found.");
+
+return;
+
+}
+
+const officeLatitude =
+Number(attendanceRules.officeLatitude);
+
+const officeLongitude =
+Number(attendanceRules.officeLongitude);
+
+const allowedRadius =
+Number(attendanceRules.officeRadius);
+
+// Current GPS
+
+const position =
+await getCurrentLocation();
+
+const latitude =
+position.coords.latitude;
+
+const longitude =
+position.coords.longitude;
+
+const accuracy =
+position.coords.accuracy;
+
+const meter =
+calculateDistance(
+
+latitude,
+
+longitude,
+
+officeLatitude,
+
+officeLongitude
+
+);
+
+// Update UI
+
+setDistance(meter);
+
+setCurrentLocation({
+
+latitude,
+longitude,
+accuracy
+
+});
+
+const inside =
+meter <= allowedRadius;
+
+setInsideOffice(inside);
+
+setLocationStatus(
+
+inside
+?
+"Inside Office"
+:
+"Outside Office"
+
+);
+
+// Stop if outside
+
+if(!inside){
+
+alert(
+
+`You are outside office range.
+
+Distance : ${meter} m`
+
+);
+
+return;
+
+}
+
+// Save Attendance
 
 await addDoc(
+
 collection(db,"attendance"),
+
 {
 
 userId:user.uid,
 
 employeeName:
-user.displayName || user.email,
+user.displayName || "",
 
 email:user.email,
 
-
 date:today,
-
 
 PunchIn:new Date(),
 
 PunchOut:null,
 
-
 totalHours:0,
 
+status:"Present",
 
-status:"Present"
+attendanceSource:"Mobile",
 
+latitude,
+
+longitude,
+
+accuracy,
+
+distanceFromOffice:meter,
+
+gpsStatus:
+
+inside
+?
+"Inside Office"
+:
+"Outside Office",
+
+createdAt:new Date()
 
 }
 
 );
 
-
-
 await loadToday(user.uid);
 
 await loadHistory(user.uid);
 
-
 alert("Punch In Successful");
 
-
 }
+
 catch(error){
 
 console.log(error);
@@ -546,7 +674,10 @@ alert(error.message);
 }
 
 
-}
+};
+
+
+
 
 
 
@@ -1517,14 +1648,8 @@ item.status
 
 </div>
 
-
-
-
-
-</main>
-
+  </main>
 </div>
-
 
 );
 
@@ -1533,11 +1658,7 @@ item.status
 
 
 
-
-
 // ================= COMPONENTS =================
-
-
 
 
 function StatCard({
