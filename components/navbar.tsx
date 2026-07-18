@@ -247,7 +247,6 @@ const link: CSSProperties = {
   transition: "0.25s",
 };
 
-
 const dropdown: CSSProperties = {
   position: "absolute",
   top: 40,
@@ -259,6 +258,7 @@ const dropdown: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
+  zIndex: 9999,
 };
 
 

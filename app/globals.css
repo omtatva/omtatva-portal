@@ -5,7 +5,7 @@
   row-gap: 35px;
 }
 
-
+@import "tailwindcss";
 @media(max-width:900px){
 
   .timesheet-grid {
