@@ -199,7 +199,7 @@ Configure attendance rules for all employees
 
 <button
 
-onClick={()=>window.location.href="/admin"}
+onClick={()=>window.location.href="/admin/attendance"}
 
 className="bg-[#3d6fa8] text-white px-5 py-3 rounded-xl font-semibold"
 

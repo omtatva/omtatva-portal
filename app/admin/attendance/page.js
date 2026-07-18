@@ -4,7 +4,7 @@ import {
 useEffect,
 useState
 } from "react";
-
+import { useRouter } from "next/navigation";
 
 import {
 collection,
@@ -25,7 +25,7 @@ db
 
 export default function AttendancePage(){
 
-
+const router = useRouter();
 const [attendance,setAttendance]=useState([]);
 
 
@@ -653,9 +653,6 @@ font-semibold
 
 
 
-
-
-
 {/* VIEW SWITCH */}
 
 
@@ -736,6 +733,14 @@ view==="calendar"
 📅 Calendar View
 
 </button>
+
+<button
+onClick={() => router.push("/admin/attendance-settings")}
+className="bg-[#3d6fa8] text-white px-5 py-3 rounded-xl"
+>
+⚙ Attendance Settings
+</button>
+
 
 
 

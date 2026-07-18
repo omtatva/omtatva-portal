@@ -594,7 +594,11 @@ inside
 
 // Stop if outside
 
-if(!inside){
+if(
+!inside &&
+attendanceRules.restrictOutsideOffice &&
+!attendanceRules.allowRemotePunch
+){
 
 alert(
 
@@ -669,7 +673,9 @@ catch(error){
 
 console.log(error);
 
-alert(error.message);
+alert(
+"Unable to get GPS location. Please enable location."
+);
 
 }
 
@@ -761,7 +767,31 @@ const hours=
 ).toFixed(2);
 
 
+const position =
+await getCurrentLocation();
 
+const latitude =
+position.coords.latitude;
+
+const longitude =
+position.coords.longitude;
+
+const accuracy =
+position.coords.accuracy;
+
+
+const meter =
+calculateDistance(
+
+latitude,
+
+longitude,
+
+Number(attendanceRules.officeLatitude),
+
+Number(attendanceRules.officeLongitude)
+
+);
 
 
 await updateDoc(
@@ -770,7 +800,15 @@ ref,
 
 PunchOut:end,
 
-totalHours:Number(hours)
+totalHours:Number(hours),
+
+punchOutLatitude:latitude,
+
+punchOutLongitude:longitude,
+
+punchOutAccuracy:accuracy,
+
+punchOutDistanceFromOffice:meter
 
 }
 
