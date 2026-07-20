@@ -5,6 +5,7 @@ useEffect,
 useState
 } from "react";
 import { useRouter } from "next/navigation";
+import AttendanceMap from "../../../components/attendanceMap";
 
 import {
 collection,
@@ -37,7 +38,9 @@ const [search,setSearch]=useState("");
 
 const [statusFilter,setStatusFilter]=useState("");
 
+const [gpsFilter,setGpsFilter]=useState("");
 
+const [sourceFilter,setSourceFilter]=useState("");
 
 const [view,setView]=useState("table");
 
@@ -50,7 +53,7 @@ new Date()
 
 
 const [selected,setSelected]=useState(null);
-
+const [showMap,setShowMap]=useState(false);
 useEffect(() => {
   loadAttendance();
 }, []);
@@ -196,10 +199,23 @@ statusFilter===""
 item.status===statusFilter;
 
 
+const gpsMatch =
+gpsFilter===""
+||
+item.gpsStatus===gpsFilter;
+
+
+const sourceMatch =
+sourceFilter===""
+||
+item.attendanceSource===sourceFilter;
+
 
 return(
 searchMatch &&
-statusMatch
+statusMatch &&
+gpsMatch &&
+sourceMatch
 );
 
 
@@ -619,9 +635,77 @@ Leave
 
 
 </select>
+<select
 
+value={gpsFilter}
 
+onChange={(e)=>
+setGpsFilter(e.target.value)
+}
 
+className="
+border
+border-[#eaf3ff]
+rounded-xl
+px-4
+py-3
+"
+
+>
+
+<option value="">
+All GPS Status
+</option>
+
+<option value="Inside Office">
+Inside Office
+</option>
+
+<option value="Outside Office">
+Outside Office
+</option>
+
+</select>
+
+<select
+
+value={sourceFilter}
+
+onChange={(e)=>
+setSourceFilter(e.target.value)
+}
+
+className="
+border
+border-[#eaf3ff]
+rounded-xl
+px-4
+py-3
+"
+
+>
+
+<option value="">
+All Sources
+</option>
+
+<option value="Mobile">
+Mobile
+</option>
+
+<option value="Web">
+Web
+</option>
+
+<option value="Biometric">
+Biometric
+</option>
+
+<option value="System">
+System
+</option>
+
+</select>
 
 
 <button
@@ -821,11 +905,21 @@ Hours
 Status
 </th>
 
+<th>
+GPS Status
+</th>
+
+<th>
+Distance
+</th>
+
+<th>
+Source
+</th>
 
 <th>
 Action
 </th>
-
 
 </tr>
 
@@ -996,15 +1090,104 @@ item.status || "Present"
 
 
 </td>
+<td>
 
+<span
+className={`
+px-3
+py-1
+rounded-full
+text-sm
+font-semibold
 
+${
+item.gpsStatus==="Inside Office"
 
+?
 
+"bg-green-100 text-green-700"
 
+:
 
+"bg-red-100 text-red-700"
+
+}
+
+`}
+>
+
+{
+item.gpsStatus || "--"
+}
+
+</span>
+
+</td>
 
 
 <td>
+
+{
+item.distanceFromOffice
+?
+`${Math.round(item.distanceFromOffice)} m`
+:
+"--"
+}
+
+</td>
+
+
+<td>
+
+<span
+className="
+bg-[#eaf3ff]
+text-[#3d6fa8]
+px-3
+py-1
+rounded-full
+text-sm
+font-semibold
+"
+>
+
+{
+item.attendanceSource || "System"
+}
+
+</span>
+
+</td>
+
+
+
+
+
+
+
+<td className="flex gap-2">
+
+<button
+
+onClick={()=>
+setSelected(item)
+}
+
+className="
+bg-[#3d6fa8]
+text-white
+px-4
+py-2
+rounded-lg
+font-semibold
+"
+
+>
+
+View
+
+</button>
 
 
 <button
@@ -1020,7 +1203,6 @@ px-4
 py-2
 rounded-lg
 font-semibold
-hover:bg-red-600
 "
 
 >
@@ -1028,7 +1210,6 @@ hover:bg-red-600
 Delete
 
 </button>
-
 
 </td>
 
@@ -1722,7 +1903,47 @@ selected.totalHours || 0
 
 </p>
 
+<p className="mb-3">
 
+<b>GPS Status:</b>
+
+{" "}
+
+{
+selected.gpsStatus || "--"
+}
+
+</p>
+
+
+<p className="mb-3">
+
+<b>Distance:</b>
+
+{" "}
+
+{
+selected.distanceFromOffice
+?
+`${Math.round(selected.distanceFromOffice)} m`
+:
+"--"
+}
+
+</p>
+
+
+<p className="mb-3">
+
+<b>Source:</b>
+
+{" "}
+
+{
+selected.attendanceSource || "System"
+}
+
+</p>
 
 
 <span className="

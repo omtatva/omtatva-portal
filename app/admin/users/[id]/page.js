@@ -27,19 +27,28 @@ loadUser();
 }, []);
 
 const loadUser = async () => {
+  try {
+    const userSnap = await getDoc(doc(db, "users", id));
+    const profileSnap = await getDoc(doc(db, "employeeProfiles", id));
 
-  const docRef = doc(db, "users", id);
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
 
-  const snap = await getDoc(docRef);
+      const profileData = profileSnap.exists()
+        ? profileSnap.data()
+        : {};
 
-if (snap.exists()) {
-  const data = snap.data();
+      setUser({
+        ...userData,
+        ...profileData,
+      });
 
-  setUser(data);
+      setPerformanceBand(userData.performance || " ");
+    }
 
-   setPerformanceBand(data.performance || " ");
-}
-
+  } catch (error) {
+    console.error("Error loading user:", error);
+  }
 };
 
 const saveUser = async () => {
@@ -129,19 +138,56 @@ const generatePDF = async () => {
     .from(element)
     .save();
 };
+const generateProfilePDF = async () => {
+
+const html2pdf =
+(await import("html2pdf.js")).default;
+
+
+const element =
+document.getElementById(
+"employee-profile"
+);
+
+
+html2pdf()
+.set({
+
+margin:0.5,
+
+filename:
+`${user.firstName}_${user.lastName}_Profile.pdf`,
+
+html2canvas:{
+scale:2
+},
+
+jsPDF:{
+unit:"in",
+format:"a4",
+orientation:"portrait"
+}
+
+})
+.from(element)
+.save();
+
+};
+
 
 return (
 
 <div
+id="employee-profile"
 style={{
-  width: "100%",
-maxWidth: "1800px",
-margin:"40px auto",
-padding:30,
+width:"100%",
+maxWidth:"1400px",
+margin:"30px auto",
+padding:"25px",
 background:"#fff",
-borderRadius:15,
- fontSize: "20px",
-boxShadow:"0 10px 30px rgba(0,0,0,.08)"
+borderRadius:"16px",
+fontSize:"16px",
+boxShadow:"0 5px 25px rgba(0,0,0,.08)"
 }}
 >
 
@@ -167,6 +213,7 @@ cursor:"pointer"
 >
 ← Dashboard
 </button>
+
 </div>
 
 <div
@@ -178,16 +225,16 @@ cursor:"pointer"
   }}
 >
   <img
-    src={user.photoURL || "/profile.png"}
-    alt="Profile"
-    style={{
-      width: 140,
-      height: 140,
-      borderRadius: "50%",
-      objectFit: "cover",
-      border: "5px solid #2563eb",
-    }}
-  />
+ src={user.profilePhoto || "/profile.png"}
+ alt="Profile"
+ style={{
+   width:140,
+   height:140,
+   borderRadius:"50%",
+   objectFit:"cover",
+   border:"5px solid #2563eb"
+ }}
+/>
 
   <div style={{ flex: 1 }}>
     <h1 style={{ marginBottom: 5 }}>
@@ -276,7 +323,7 @@ cursor:"pointer"
   )}
 </div>
 
-<hr/>
+
 <div
   style={{
     display: "grid",
@@ -304,6 +351,7 @@ cursor:"pointer"
 <h1>{user.totalHours || 0}</h1>
 <p>Working Hours</p>
 </div>
+
 <div style={cardStyle}>
 
   <h3>⭐ Performance</h3>
@@ -438,9 +486,25 @@ loadUser();
 Deactivate
 </button>
 
+<button
+style={blueBtn}
+onClick={generateProfilePDF}
+>
+📄 Download Profile
+</button>
 </div>
 
-<h2>Basic Information</h2>
+<div style={sectionCard}>
+
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>
+👤 Basic Information
+</h2>
+
+
 <div style={{ marginBottom: 20 }}>
   <label>First Name</label>
 
@@ -513,8 +577,17 @@ Deactivate
 
 <hr style={sectionDivider} />
 
-<h2>💼 Job Information</h2>
+</div>
+<div style={sectionCard}>
 
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>
+💼 Job Information</h2>
+
+<div></div>
 <div
   style={{
   display: "grid",
@@ -642,8 +715,14 @@ style={inputStyle}
 </div>
 
 <hr style={sectionDivider} />
+</div>
+<div style={sectionCard}>
 
-<h2>💻 Company Access</h2>
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>💻 Company Access</h2>
 
 <div
   style={{
@@ -765,8 +844,14 @@ style={inputStyle}
 </div>
 
 <hr style={sectionDivider} />
+</div>
+<div style={sectionCard}>
 
-<h2>🚨 Emergency Contact</h2>
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>🚨 Emergency Contact</h2>
 
 <div
   style={{
@@ -813,8 +898,16 @@ style={inputStyle}
 </div>
 
 <hr style={sectionDivider} />
+</div>
 
-<h2>🏠 Address</h2>
+
+<div style={sectionCard}>
+
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>🏠 Address</h2>
 
 <div
   style={{
@@ -888,11 +981,20 @@ style={inputStyle}
     style={inputStyle}
   />
 </div>
+</div>  {/* CLOSE ADDRESS GRID */}
 
-</div>   {/* <-- CLOSE THE ADDRESS GRID */}
 <hr style={sectionDivider} />
 
-<h2>📁 Documents & Assets</h2>
+</div>  {/* CLOSE ADDRESS sectionCard */}
+
+
+<div style={sectionCard}>
+
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>📁 Documents & Assets</h2>
 
 <div
   style={{
@@ -1063,11 +1165,17 @@ style={inputStyle}
 </div>
 
 </div>
-
-
 <hr style={{ margin: "50px 0" }} />
+</div>
 
-<h2>📝 HR Notes</h2>
+
+<div style={sectionCard}>
+
+<h2 style={{
+marginBottom:"25px",
+fontSize:"22px",
+color:"#111827"
+}}>📝 HR Notes</h2>
 
 <textarea
 disabled={!editMode}
@@ -1089,7 +1197,7 @@ fontSize:"19px"
 }}
 placeholder="Private HR Notes..."
 />
-
+</div>
 <h2 style={{ marginTop: "40px" }}>
 📅 Employee Timeline
 </h2>
@@ -1262,7 +1370,6 @@ marginTop:"20px"
           Close
         </button>
 
-        
       </div>
     </div>
   </div>
@@ -1271,6 +1378,7 @@ marginTop:"20px"
 
 );
 }
+
 const inputStyle = {
   width: "98%",
   padding: "14px 16px",
@@ -1356,4 +1464,12 @@ const grayBtn = {
   cursor: "pointer",
   fontWeight: "600",
    fontSize: "19px",
+};
+const sectionCard = {
+background:"#ffffff",
+padding:"30px",
+borderRadius:"16px",
+marginBottom:"30px",
+border:"1px solid #e5e7eb",
+boxShadow:"0 4px 12px rgba(0,0,0,.04)"
 };

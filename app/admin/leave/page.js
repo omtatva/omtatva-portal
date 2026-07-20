@@ -2,64 +2,165 @@
 
 import {
   collection,
-  getDocs,
+  onSnapshot,
   doc,
   updateDoc,
-addDoc,
-Timestamp
+  addDoc,
+  Timestamp
 } from "firebase/firestore";
+
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
+
 
 export default function LeaveAdminPage() {
 
 const [requests,setRequests]=useState([]);
-const [remarks, setRemarks] = useState({});
+const [remarks,setRemarks]=useState({});
+
+
 useEffect(()=>{
-loadRequests();
+
+const unsubscribe = loadRequests();
+
+return ()=>{
+ if(unsubscribe) unsubscribe();
+}
+
 },[]);
 
-const loadRequests=async()=>{
-const snapshot=await getDocs(
-collection(db,"leaveRequests")
-);
 
-const list=snapshot.docs.map(doc=>({
-id:doc.id,
-...doc.data()
+
+const loadRequests = () => {
+
+const unsubscribe = onSnapshot(
+collection(db,"leaveRequests"),
+
+(snapshot)=>{
+
+const list = snapshot.docs.map((item)=>({
+id:item.id,
+...item.data()
 }));
 
 setRequests(list);
 
+},
+
+(error)=>{
+
+console.log("Load Requests Error:",error);
+setRequests([]);
+
+}
+
+);
+
+return unsubscribe;
+
 };
+
+
+
 const updateLeaveStatus = async (id, status) => {
 
   try {
 
     const leave = requests.find(r => r.id === id);
 
+    if (!leave) {
+      alert("Leave record not found");
+      return;
+    }
+
+
+    // 1. Update leave status in Firestore
+
     await updateDoc(
       doc(db, "leaveRequests", id),
       {
-        status,
+        status: status,
+        approvedBy: auth.currentUser?.displayName || "Admin",
+        approvedAt: Timestamp.now(),
+        remarks: remarks[id] || ""
       }
     );
 
-    // Activity Log
-    await addDoc(collection(db, "activityLogs"), {
-      employeeName: leave.employeeName,
-      uid: leave.uid,
-      activity: `Leave ${status}`,
-      type: "Leave",
-      description: `${leave.leaveType} (${leave.fromDate} - ${leave.toDate})`,
-      createdAt: Timestamp.now(),
-    });
 
-    alert("Status Updated");
+    // 2. Send email through Cloud Run
 
-    loadRequests();
+    await fetch(
+      "YOUR_CLOUD_RUN_EMAIL_API_URL",
+      {
+        method: "POST",
 
-  } catch (error) {
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+          to: leave.email,
+
+          employeeName:
+          leave.employeeName,
+
+          leaveType:
+          leave.leaveType,
+
+          status: status,
+
+          fromDate:
+          leave.fromDate,
+
+          toDate:
+          leave.toDate,
+
+          approvedBy:
+          auth.currentUser?.displayName || "Admin",
+
+          remarks:
+          remarks[id] || ""
+
+        })
+
+      }
+    );
+
+
+    // 3. Activity Log
+
+    await addDoc(
+      collection(db,"activityLogs"),
+      {
+
+        employeeName:
+        leave.employeeName,
+
+        uid:
+        leave.uid,
+
+        activity:
+        `Leave ${status}`,
+
+        type:
+        "Leave",
+
+        description:
+        `${leave.leaveType} (${leave.fromDate} - ${leave.toDate})`,
+
+        createdAt:
+        Timestamp.now()
+
+      }
+    );
+
+
+    alert("Status Updated & Email Sent");
+
+
+  }
+  catch(error){
 
     console.log(error);
 
@@ -68,6 +169,7 @@ const updateLeaveStatus = async (id, status) => {
   }
 
 };
+
 
 
 
@@ -156,7 +258,7 @@ borderCollapse:"collapse"
 
 <tbody>
 
-{requests.map((item) => (
+{requests && requests.map((item) => (
 
 <tr key={item.id}>
 

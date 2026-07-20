@@ -503,7 +503,23 @@ hours.toFixed(1)
 
 
 }
+function getAttendanceSource(){
 
+const ua = navigator.userAgent;
+
+
+if(
+/Android|iPhone|iPad|iPod/i.test(ua)
+){
+
+return "Mobile";
+
+}
+
+
+return "Web";
+
+}
 
 async function punchIn(){
 
@@ -637,7 +653,15 @@ totalHours:0,
 
 status:"Present",
 
-attendanceSource:"Mobile",
+attendanceSource:getAttendanceSource(),
+
+sourceDetails:{
+
+deviceType:getAttendanceSource(),
+
+userAgent:navigator.userAgent
+
+},
 
 latitude,
 
@@ -681,9 +705,6 @@ alert(
 
 
 };
-
-
-
 
 
 
@@ -792,7 +813,16 @@ Number(attendanceRules.officeLatitude),
 Number(attendanceRules.officeLongitude)
 
 );
+const inside =
+meter <= Number(attendanceRules.officeRadius);
 
+
+const punchOutGpsStatus =
+inside
+?
+"Inside Office"
+:
+"Outside Office";
 
 await updateDoc(
 ref,
@@ -808,7 +838,9 @@ punchOutLongitude:longitude,
 
 punchOutAccuracy:accuracy,
 
-punchOutDistanceFromOffice:meter
+punchOutDistanceFromOffice:meter,
+
+punchOutGpsStatus:punchOutGpsStatus
 
 }
 
@@ -976,7 +1008,148 @@ todayData
 
 </section>
 
+{/* GPS STATUS CARD */}
 
+<section className="
+bg-white
+rounded-3xl
+border
+border-[#eaf3ff]
+shadow-sm
+p-6
+mb-6
+">
+
+<div className="flex justify-between items-center mb-5">
+
+<h2 className="
+text-xl
+font-bold
+text-[#111]
+">
+📍 GPS Status
+</h2>
+
+<div
+className={`
+px-4
+py-2
+rounded-xl
+font-semibold
+${
+insideOffice
+?
+"bg-green-100 text-green-700"
+:
+"bg-red-100 text-red-700"
+}
+`}
+>
+
+{
+locationStatus || "Checking..."
+}
+
+</div>
+
+</div>
+
+
+<div className="
+grid
+md:grid-cols-3
+gap-5
+">
+
+
+<div className="
+bg-[#f8fbff]
+rounded-2xl
+p-5
+">
+
+<p className="text-sm text-[#555]">
+Distance From Office
+</p>
+
+<h3 className="
+text-2xl
+font-bold
+mt-2
+">
+
+{
+distance
+?
+`${Math.round(distance)} m`
+:
+"--"
+}
+
+</h3>
+
+</div>
+
+
+
+<div className="
+bg-[#f8fbff]
+rounded-2xl
+p-5
+">
+
+<p className="text-sm text-[#555]">
+GPS Accuracy
+</p>
+
+<h3 className="
+text-2xl
+font-bold
+mt-2
+">
+
+{
+currentLocation?.accuracy
+?
+`${Math.round(
+currentLocation.accuracy
+)} m`
+:
+"--"
+}
+
+</h3>
+
+</div>
+
+
+
+<div className="
+bg-[#f8fbff]
+rounded-2xl
+p-5
+">
+
+<p className="text-sm text-[#555]">
+Attendance Source
+</p>
+
+<h3 className="
+text-2xl
+font-bold
+mt-2
+">
+
+Mobile
+
+</h3>
+
+</div>
+
+
+</div>
+
+</section>
 
 
 

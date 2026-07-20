@@ -9,15 +9,24 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
+    "cors": "^2.8.6",
     "date-fns": "^4.4.0",
+    "express": "^5.2.1",
     "firebase": "^12.15.0",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "leaflet": "^1.9.4",
     "next": "16.2.9",
     "nodemailer": "^9.0.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-easy-crop": "^6.2.2",
+    "react-hot-toast": "^2.6.0",
+    "react-leaflet": "^5.0.0",
+    "react-phone-number-input": "^3.4.17",
+    "react-select": "^5.10.2",
     "recharts": "^3.9.2",
     "xlsx": "^0.18.5"
   },
@@ -30,5 +39,22 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omtatva/omtatva-portal.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/omtatva/omtatva-portal/issues"
+  },
+  "homepage": "https://github.com/omtatva/omtatva-portal#readme"
 }

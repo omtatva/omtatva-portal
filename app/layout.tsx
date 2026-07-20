@@ -1,5 +1,7 @@
 import Navbar from "@/components/navbar";
 import "./globals.css";
+import "react-phone-number-input/style.css";
+import { Toaster } from "react-hot-toast";
 export default function RootLayout({
   children,
 }: {
@@ -26,6 +28,11 @@ export default function RootLayout({
     }}
   >
     {children}
+
+    <Toaster
+  position="top-right"
+  reverseOrder={false}
+/>
   </main>
 </body>
     </html>

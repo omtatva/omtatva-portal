@@ -5,7 +5,7 @@ import {
   collection,
   addDoc,
   Timestamp,
-  getDocs,
+  onSnapshot,
   query,
   where,
 } from "firebase/firestore";
@@ -19,8 +19,17 @@ const [reason, setReason] = useState("");
 const [myLeaves, setMyLeaves] = useState([]);
 
 useEffect(() => {
-  
-  loadMyLeaves();
+
+const unsubscribe = auth.onAuthStateChanged((user)=>{
+
+if(user){
+loadMyLeaves();
+}
+
+});
+
+return ()=>unsubscribe();
+
 }, []);
 useEffect(() => {
   if (fromDate && toDate) {
@@ -45,66 +54,98 @@ const submitLeave = async () => {
     return;
   }
 
+
+  // Mandatory field validation
+  if (
+    !leaveType ||
+    !fromDate ||
+    !toDate ||
+    !reason.trim()
+  ) {
+    alert("Please fill all required fields");
+    return;
+  }
+
+
+  if (totalDays <= 0) {
+    alert("Please select a valid date range");
+    return;
+  }
+
+
   try {
 
-await addDoc(collection(db, "leaveRequests"), {
-  uid: user.uid,
-  employeeName: user.displayName,
-  email: user.email,
-  leaveType,
-  fromDate,
-  toDate,
-  totalDays,
-  reason,
-  status: "Pending",
-  appliedOn: Timestamp.now(),
-});
+    await addDoc(collection(db, "leaveRequests"), {
+      uid: user.uid,
+      employeeName: user.displayName || user.email,
+      email: user.email,
+      leaveType,
+      fromDate,
+      toDate,
+      totalDays,
+      reason,
+      status: "Pending",
+      appliedOn: Timestamp.now(),
+    });
 
-await addDoc(collection(db, "activityLogs"), {
-  uid: user.uid,
-  employeeName: user.displayName || user.email,
-  activity: "Applied for Leave",
-  type: "Leave",
-  description: `${leaveType} (${fromDate} - ${toDate})`,
-  createdAt: Timestamp.now(),
-});
+
+    await addDoc(collection(db, "activityLogs"), {
+      uid: user.uid,
+      employeeName: user.displayName || user.email,
+      activity: "Applied for Leave",
+      type: "Leave",
+      description: `${leaveType} (${fromDate} - ${toDate})`,
+      createdAt: Timestamp.now(),
+    });
+
 
     alert("Leave Request Submitted");
+
 
     setLeaveType("");
     setFromDate("");
     setToDate("");
     setReason("");
+    setTotalDays(0);
 
-    loadMyLeaves();
+
+    await loadMyLeaves();
+
 
   } catch (error) {
 
     console.error(error);
-
     alert("Failed to submit");
 
   }
 
 };
-const loadMyLeaves = async () => {
+const loadMyLeaves = () => {
+
   const user = auth.currentUser;
 
   if (!user) return;
+
 
   const q = query(
     collection(db, "leaveRequests"),
     where("uid", "==", user.uid)
   );
 
-  const snapshot = await getDocs(q);
 
-  const list = snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  const unsubscribe = onSnapshot(q, (snapshot) => {
 
-  setMyLeaves(list);
+    const list = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    setMyLeaves(list);
+
+  });
+
+
+  return unsubscribe;
 };
 
 const casualLeave = 12;
@@ -219,9 +260,10 @@ marginTop:30
 <label>Leave Type</label>
 
 <select
-value={leaveType}
-onChange={(e)=>setLeaveType(e.target.value)}
-style={inputStyle}
+  required
+  value={leaveType}
+  onChange={(e)=>setLeaveType(e.target.value)}
+  style={inputStyle}
 >
 
 <option value="">Select</option>
@@ -245,10 +287,11 @@ style={inputStyle}
 <label>From Date</label>
 
 <input
-type="date"
-value={fromDate}
-onChange={(e)=>setFromDate(e.target.value)}
-style={inputStyle}
+  type="date"
+  required
+  value={fromDate}
+  onChange={(e)=>setFromDate(e.target.value)}
+  style={inputStyle}
 />
 
 </div>
@@ -258,10 +301,11 @@ style={inputStyle}
 <label>To Date</label>
 
 <input
-type="date"
-value={toDate}
-onChange={(e)=>setToDate(e.target.value)}
-style={inputStyle}
+  type="date"
+  required
+  value={toDate}
+  onChange={(e)=>setToDate(e.target.value)}
+  style={inputStyle}
 />
 
 </div>
@@ -289,10 +333,11 @@ gridColumn:"1 / span 2"
 <label>Reason</label>
 
 <textarea
-rows={6}
-value={reason}
-onChange={(e)=>setReason(e.target.value)}
-style={inputStyle}
+  required
+  rows={6}
+  value={reason}
+  onChange={(e)=>setReason(e.target.value)}
+  style={inputStyle}
 />
 
 </div>
