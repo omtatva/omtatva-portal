@@ -5,7 +5,14 @@ useEffect,
 useState
 } from "react";
 import { useRouter } from "next/navigation";
-import AttendanceMap from "../../../components/attendanceMap";
+import dynamic from "next/dynamic";
+
+const AttendanceMap = dynamic(
+()=>import("../../../components/attendanceMap"),
+{
+ ssr:false
+}
+);
 
 import {
 collection,
@@ -13,9 +20,6 @@ getDocs,
 doc,
 deleteDoc
 } from "firebase/firestore";
-
-
-import * as XLSX from "xlsx";
 
 
 import {
@@ -307,70 +311,59 @@ item.date===date
 
 }
 
+let XLSX;
+
+async function exportExcel(){
+
+  const XLSX = await import("xlsx");
+
+  const data =
+  filteredAttendance.map(item=>({
+
+    Employee:
+    item.employeeName || item.email,
+
+    Date:
+    item.date,
+
+    PunchIn:
+    formatTime(item.PunchIn),
+
+    PunchOut:
+    formatTime(item.PunchOut),
+
+    Hours:
+    item.totalHours || 0,
+
+    Status:
+    item.status
+
+  }));
 
 
+  const worksheet =
+  XLSX.utils.json_to_sheet(data);
 
 
-function exportExcel(){
+  const workbook =
+  XLSX.utils.book_new();
 
 
-const data =
-filteredAttendance.map(item=>({
-
-Employee:
-item.employeeName || item.email,
-
-Date:
-item.date,
-
-PunchIn:
-formatTime(item.PunchIn),
-
-PunchOut:
-formatTime(item.PunchOut),
-
-Hours:
-item.totalHours || 0,
-
-Status:
-item.status
-
-}));
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Attendance"
+  );
 
 
-
-const worksheet =
-XLSX.utils.json_to_sheet(data);
-
-
-
-const workbook =
-XLSX.utils.book_new();
-
-
-
-XLSX.utils.book_append_sheet(
-
-workbook,
-
-worksheet,
-
-"Attendance"
-
-);
-
-
-
-XLSX.writeFile(
-
-workbook,
-
-"attendance-report.xlsx"
-
-);
-
+  XLSX.writeFile(
+    workbook,
+    "attendance-report.xlsx"
+  );
 
 }
+
+
 
 return (
 

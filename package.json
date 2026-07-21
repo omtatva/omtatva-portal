@@ -45,16 +45,15 @@
   "directories": {
     "lib": "lib"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/omtatva/omtatva-portal.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/omtatva/omtatva-portal/issues"
-  },
-  "homepage": "https://github.com/omtatva/omtatva-portal#readme"
+"repository": {
+  "type": "git",
+  "url": "git+https://github.com/omtatva/omtatva-portal.git"
+},
+"keywords": [],
+"author": "",
+"license": "ISC",
+"bugs": {
+  "url": "https://github.com/omtatva/omtatva-portal/issues"
+},
+"homepage": "https://github.com/omtatva/omtatva-portal#readme"
 }
