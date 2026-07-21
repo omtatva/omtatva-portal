@@ -57,7 +57,7 @@ const [locationStatus,setLocationStatus]=useState("");
 const [distance,setDistance]=useState(0);
 
 const [currentLocation,setCurrentLocation]=useState(null);
-
+const [attendanceSource, setAttendanceSource] = useState("Loading...");
 const [insideOffice,setInsideOffice]=useState(false);
 const [stats,setStats]=useState({
 
@@ -91,14 +91,17 @@ useEffect(() => {
       }
 
       setUser(currentUser);
+setAttendanceSource(getAttendanceSource());
+console.log("Source:", getAttendanceSource());
+console.log("UserAgent:", navigator.userAgent);
+      const rules = await loadAttendanceRules();
 
-      await loadAttendanceRules();
+await loadToday(currentUser.uid);
+await loadHistory(currentUser.uid);
 
-      await loadToday(currentUser.uid);
-
-      await loadHistory(currentUser.uid);
-
-      await checkOfficeRange();
+if (rules) {
+  await checkOfficeRange(rules);
+}
 
     }
   );
@@ -111,28 +114,24 @@ useEffect(() => {
 // LOAD ATTENDANCE RULES
 // =======================
 
-async function loadAttendanceRules(){
+async function loadAttendanceRules() {
+  try {
+    const snap = await getDoc(
+      doc(db, "settings", "attendanceRules")
+    );
 
-try{
+    if (snap.exists()) {
+      const rules = snap.data();
+      setAttendanceRules(rules);
+      return rules;
+    }
 
-const snap = await getDoc(
-doc(db,"settings","attendanceRules")
-);
-
-if(snap.exists()){
-
-setAttendanceRules(snap.data());
-
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
 }
-
-}catch(error){
-
-console.log(error);
-
-}
-
-}
-
 
 
 // =======================
@@ -276,81 +275,46 @@ return Math.round(R*c);
 // CHECK OFFICE RANGE
 // =======================
 
-async function checkOfficeRange(){
+async function checkOfficeRange(rules) {
+  if (!rules) return false;
 
-if(!attendanceRules){
+  try {
+    const position = await getCurrentLocation();
 
-return false;
+    const latitude = position.coords.latitude;
+    const longitude = position.coords.longitude;
+    const accuracy = position.coords.accuracy;
 
-}
+    setCurrentLocation({
+      latitude,
+      longitude,
+      accuracy,
+    });
 
-try{
+    const meter = calculateDistance(
+      latitude,
+      longitude,
+      Number(rules.officeLatitude),
+      Number(rules.officeLongitude)
+    );
 
-const position =
-await getCurrentLocation();
+    setDistance(meter);
 
-const latitude =
-position.coords.latitude;
+    const inside = meter <= Number(rules.officeRadius);
 
-const longitude =
-position.coords.longitude;
+    setInsideOffice(inside);
 
-const accuracy =
-position.coords.accuracy;
+    setLocationStatus(
+      inside ? "Inside Office" : "Outside Office"
+    );
 
-setCurrentLocation({
+    return inside;
 
-latitude,
-longitude,
-accuracy
-
-});
-
-const meter =
-calculateDistance(
-
-latitude,
-
-longitude,
-
-Number(attendanceRules.officeLatitude),
-
-Number(attendanceRules.officeLongitude)
-
-);
-
-setDistance(meter);
-
-const inside =
-meter <= attendanceRules.officeRadius;
-
-setInsideOffice(inside);
-
-setLocationStatus(
-
-inside
-?
-
-"Inside Office"
-
-:
-
-"Outside Office"
-
-);
-
-return inside;
-
-}catch(error){
-
-console.log(error);
-
-alert("Unable to fetch GPS");
-
-return false;
-
-}
-
+  } catch (error) {
+    console.log(error);
+    alert("Unable to fetch GPS");
+    return false;
+  }
 }
 
 async function loadToday(uid){
@@ -503,130 +467,88 @@ hours.toFixed(1)
 
 
 }
-function getAttendanceSource(){
+function getAttendanceSource() {
+  const ua = navigator.userAgent;
 
-const ua = navigator.userAgent;
+  console.log("User Agent:", ua);
 
+  if (/Android/i.test(ua)) return "Android Mobile";
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Windows/i.test(ua)) return "Windows Laptop";
+  if (/Macintosh|Mac OS X/i.test(ua)) return "MacBook";
+  if (/Linux/i.test(ua)) return "Linux Laptop";
 
-if(
-/Android|iPhone|iPad|iPod/i.test(ua)
-){
-
-return "Mobile";
-
+  return "Unknown Device";
 }
 
 
-return "Web";
+async function punchIn() {
+  try {
 
-}
+    if (!user) return;
 
-async function punchIn(){
+    if (todayData) {
+      alert("Already punched in today");
+      return;
+    }
 
-try{
+    // Always fetch latest attendance rules
+    const snap = await getDoc(
+      doc(db, "settings", "attendanceRules")
+    );
 
-if(!user) return;
+    if (!snap.exists()) {
+      alert("Attendance Rules not found.");
+      return;
+    }
 
-if(todayData){
+    const attendanceRules = snap.data();
 
-alert("Already punched in today");
+    const officeLatitude = Number(attendanceRules.officeLatitude);
+    const officeLongitude = Number(attendanceRules.officeLongitude);
+    const allowedRadius = Number(attendanceRules.officeRadius);
 
-return;
+    // Current GPS
+    const position = await getCurrentLocation();
 
-}
+    const latitude = position.coords.latitude;
+    const longitude = position.coords.longitude;
+    const accuracy = position.coords.accuracy;
 
-// Attendance Rules
+    const meter = calculateDistance(
+      latitude,
+      longitude,
+      officeLatitude,
+      officeLongitude
+    );
 
-if(!attendanceRules){
+    setDistance(meter);
 
-alert("Attendance Rules not found.");
+    setCurrentLocation({
+      latitude,
+      longitude,
+      accuracy,
+    });
 
-return;
+    const inside = meter <= allowedRadius;
 
-}
+    setInsideOffice(inside);
 
-const officeLatitude =
-Number(attendanceRules.officeLatitude);
+    setLocationStatus(
+      inside ? "Inside Office" : "Outside Office"
+    );
 
-const officeLongitude =
-Number(attendanceRules.officeLongitude);
+    if (
+      !inside &&
+      attendanceRules.restrictOutsideOffice &&
+      !attendanceRules.allowRemotePunch
+    ) {
+      alert(`You are outside office range.\n\nDistance: ${meter} m`);
+      return;
+    }
 
-const allowedRadius =
-Number(attendanceRules.officeRadius);
 
-// Current GPS
-
-const position =
-await getCurrentLocation();
-
-const latitude =
-position.coords.latitude;
-
-const longitude =
-position.coords.longitude;
-
-const accuracy =
-position.coords.accuracy;
-
-const meter =
-calculateDistance(
-
-latitude,
-
-longitude,
-
-officeLatitude,
-
-officeLongitude
-
-);
-
-// Update UI
-
-setDistance(meter);
-
-setCurrentLocation({
-
-latitude,
-longitude,
-accuracy
-
-});
-
-const inside =
-meter <= allowedRadius;
-
-setInsideOffice(inside);
-
-setLocationStatus(
-
-inside
-?
-"Inside Office"
-:
-"Outside Office"
-
-);
-
-// Stop if outside
-
-if(
-!inside &&
-attendanceRules.restrictOutsideOffice &&
-!attendanceRules.allowRemotePunch
-){
-
-alert(
-
-`You are outside office range.
-
-Distance : ${meter} m`
-
-);
-
-return;
-
-}
 
 // Save Attendance
 
@@ -1134,14 +1056,8 @@ p-5
 Attendance Source
 </p>
 
-<h3 className="
-text-2xl
-font-bold
-mt-2
-">
-
-Mobile
-
+<h3 className="text-2xl font-bold mt-2">
+  {attendanceSource}
 </h3>
 
 </div>

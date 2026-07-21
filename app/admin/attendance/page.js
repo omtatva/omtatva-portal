@@ -54,10 +54,15 @@ const [calendarDate,setCalendarDate]=useState(
 new Date()
 );
 
-
-
 const [selected,setSelected]=useState(null);
 const [showMap,setShowMap]=useState(false);
+const [mapRecord,setMapRecord]=useState(null);
+
+// Sorting
+const [sortBy,setSortBy]=useState("date");
+const [sortOrder,setSortOrder]=useState("desc");
+const [currentPage,setCurrentPage]=useState(1);
+const recordsPerPage=10;
 useEffect(() => {
   loadAttendance();
 }, []);
@@ -173,60 +178,84 @@ return value;
 
 
 
+const filteredAttendance = attendance
+.filter((item) => {
 
+  const name =
+    item.employeeName ||
+    item.email ||
+    "";
 
+  const searchMatch =
+    name
+      .toLowerCase()
+      .includes(search.toLowerCase());
 
+  const statusMatch =
+    !statusFilter ||
+    item.status === statusFilter;
 
-const filteredAttendance =
-attendance.filter(item=>{
+  const gpsMatch =
+    !gpsFilter ||
+    item.gpsStatus === gpsFilter;
 
+  const sourceMatch =
+    !sourceFilter ||
+    item.attendanceSource === sourceFilter;
 
-const name =
-item.employeeName ||
-item.email ||
-"";
+  return (
+    searchMatch &&
+    statusMatch &&
+    gpsMatch &&
+    sourceMatch
+  );
 
+})
+.sort((a,b)=>{
 
+  if(sortBy==="employee"){
 
-const searchMatch =
-name
-.toLowerCase()
-.includes(
-search.toLowerCase()
-);
+    const x=(a.employeeName||"").toLowerCase();
+    const y=(b.employeeName||"").toLowerCase();
 
+    return sortOrder==="asc"
+      ? x.localeCompare(y)
+      : y.localeCompare(x);
 
+  }
 
-const statusMatch =
-statusFilter===""
-||
-item.status===statusFilter;
+  if(sortBy==="hours"){
 
+    return sortOrder==="asc"
+      ? (a.totalHours||0)-(b.totalHours||0)
+      : (b.totalHours||0)-(a.totalHours||0);
 
-const gpsMatch =
-gpsFilter===""
-||
-item.gpsStatus===gpsFilter;
+  }
 
+  if(sortBy==="date"){
 
-const sourceMatch =
-sourceFilter===""
-||
-item.attendanceSource===sourceFilter;
+    return sortOrder==="asc"
+      ? a.date.localeCompare(b.date)
+      : b.date.localeCompare(a.date);
 
+  }
 
-return(
-searchMatch &&
-statusMatch &&
-gpsMatch &&
-sourceMatch
-);
-
+  return 0;
 
 });
 
+const totalPages=Math.ceil(
+filteredAttendance.length/recordsPerPage
+);
 
+const paginatedAttendance=
+filteredAttendance.slice(
 
+(currentPage-1)*recordsPerPage,
+
+currentPage*recordsPerPage
+
+);
 
 
 function changeMonth(value){
@@ -317,28 +346,50 @@ async function exportExcel(){
 
   const XLSX = await import("xlsx");
 
-  const data =
-  filteredAttendance.map(item=>({
+  const data = filteredAttendance.map((item) => ({
+  "Employee ID": item.employeeId || "-",
+  "Employee Name": item.employeeName || item.email,
+  "Email": item.email || "-",
 
-    Employee:
-    item.employeeName || item.email,
+  "Date": item.date,
 
-    Date:
-    item.date,
+  "Punch In": formatTime(item.PunchIn),
+  "Punch Out": formatTime(item.PunchOut),
 
-    PunchIn:
-    formatTime(item.PunchIn),
+  "Working Hours": item.totalHours || 0,
 
-    PunchOut:
-    formatTime(item.PunchOut),
+  "Status": item.status || "-",
 
-    Hours:
-    item.totalHours || 0,
+  "GPS Status": item.gpsStatus || "-",
 
-    Status:
-    item.status
+  "Distance From Office (m)": item.distanceFromOffice
+    ? Math.round(item.distanceFromOffice)
+    : "-",
 
-  }));
+  "Attendance Source": item.attendanceSource || "-",
+
+  "Latitude": item.latitude || "-",
+
+  "Longitude": item.longitude || "-",
+
+  "GPS Accuracy (m)": item.accuracy
+    ? Math.round(item.accuracy)
+    : "-",
+
+  "Punch Out GPS Status": item.punchOutGpsStatus || "-",
+
+  "Punch Out Distance (m)": item.punchOutDistanceFromOffice
+    ? Math.round(item.punchOutDistanceFromOffice)
+    : "-",
+
+  "Punch Out Latitude": item.punchOutLatitude || "-",
+
+  "Punch Out Longitude": item.punchOutLongitude || "-",
+
+  "Punch Out Accuracy (m)": item.punchOutAccuracy
+    ? Math.round(item.punchOutAccuracy)
+    : "-",
+}));
 
 
   const worksheet =
@@ -374,10 +425,10 @@ bg-white
 
 
 <main className="
-max-w-[1280px]
-mx-auto
-px-5
-py-8
+w-full
+px-4
+lg:px-8
+py-6
 ">
 
 
@@ -537,195 +588,87 @@ x=>x.status==="Leave"
 
 
 
+{/* FILTER BAR */}
 
+<div className="bg-white border border-[#eaf3ff] rounded-3xl p-6 shadow-sm mb-7">
 
-
-
-{/* FILTER AREA */}
-
-
-<div className="
-bg-white
-border
-border-[#eaf3ff]
-rounded-3xl
-p-6
-shadow-sm
-mb-7
-">
-
-
-<div className="
-flex
-flex-col
-lg:flex-row
-gap-4
-">
-
+<div className="grid lg:grid-cols-8 gap-4">
 
 <input
-
-placeholder="Search employee..."
-
+placeholder="🔍 Search employee..."
 value={search}
-
-onChange={(e)=>
-setSearch(e.target.value)
-}
-
-className="
-flex-1
-border
-border-[#eaf3ff]
-rounded-xl
-px-4
-py-3
-outline-none
-"
-
+onChange={(e)=>setSearch(e.target.value)}
+className="lg:col-span-2 border border-[#d7e8fb] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#3d6fa8]"
 />
 
-
-
-
 <select
-
 value={statusFilter}
-
-onChange={(e)=>
-setStatusFilter(e.target.value)
-}
-
-className="
-border
-border-[#eaf3ff]
-rounded-xl
-px-4
-py-3
-"
-
+onChange={(e)=>setStatusFilter(e.target.value)}
+className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 >
-
-
-<option value="">
-All Status
-</option>
-
-
-<option value="Present">
-Present
-</option>
-
-
-<option value="Absent">
-Absent
-</option>
-
-
-<option value="Leave">
-Leave
-</option>
-
-
+<option value="">Status</option>
+<option value="Present">Present</option>
+<option value="Absent">Absent</option>
+<option value="Leave">Leave</option>
 </select>
-<select
 
+<select
 value={gpsFilter}
-
-onChange={(e)=>
-setGpsFilter(e.target.value)
-}
-
-className="
-border
-border-[#eaf3ff]
-rounded-xl
-px-4
-py-3
-"
-
+onChange={(e)=>setGpsFilter(e.target.value)}
+className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 >
-
-<option value="">
-All GPS Status
-</option>
-
-<option value="Inside Office">
-Inside Office
-</option>
-
-<option value="Outside Office">
-Outside Office
-</option>
-
+<option value="">GPS</option>
+<option value="Inside Office">Inside Office</option>
+<option value="Outside Office">Outside Office</option>
 </select>
 
 <select
-
 value={sourceFilter}
-
-onChange={(e)=>
-setSourceFilter(e.target.value)
-}
-
-className="
-border
-border-[#eaf3ff]
-rounded-xl
-px-4
-py-3
-"
-
+onChange={(e)=>setSourceFilter(e.target.value)}
+className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 >
-
-<option value="">
-All Sources
-</option>
-
-<option value="Mobile">
-Mobile
-</option>
-
-<option value="Web">
-Web
-</option>
-
-<option value="Biometric">
-Biometric
-</option>
-
-<option value="System">
-System
-</option>
-
+<option value="">Source</option>
+<option value="Laptop">Laptop</option>
+<option value="Mobile">Mobile</option>
+<option value="Web">Web</option>
+<option value="Biometric">Biometric</option>
 </select>
 
+<select
+value={sortBy}
+onChange={(e)=>setSortBy(e.target.value)}
+className="border border-[#d7e8fb] rounded-xl px-4 py-3"
+>
+<option value="date">Sort : Date</option>
+<option value="employee">Sort : Employee</option>
+<option value="hours">Sort : Hours</option>
+</select>
+
+<select
+value={sortOrder}
+onChange={(e)=>setSortOrder(e.target.value)}
+className="border border-[#d7e8fb] rounded-xl px-4 py-3"
+>
+<option value="desc">Newest</option>
+<option value="asc">Oldest</option>
+</select>
+
+<div className="flex gap-2">
 
 <button
-
 onClick={exportExcel}
-
-className="
-bg-[#3d6fa8]
-text-white
-px-5
-py-3
-rounded-xl
-font-semibold
-"
-
+className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold"
 >
-
-⬇ Export Excel
-
+⬇ Excel
 </button>
 
 
-</div>
-
 
 </div>
 
+</div>
+
+</div>
 
 
 
@@ -822,7 +765,99 @@ className="bg-[#3d6fa8] text-white px-5 py-3 rounded-xl"
 
 
 </div>
+<div className="grid grid-cols-2 lg:grid-cols-5 gap-5 mb-6">
 
+<div className="bg-green-50 border border-green-200 rounded-2xl p-5">
+
+<p className="text-green-600 text-sm font-medium">
+Present
+</p>
+
+<h2 className="text-3xl font-bold mt-2">
+
+{
+filteredAttendance.filter(
+x=>x.status==="Present"
+).length
+}
+
+</h2>
+
+</div>
+
+<div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+
+<p className="text-red-600 text-sm font-medium">
+Absent
+</p>
+
+<h2 className="text-3xl font-bold mt-2">
+
+{
+filteredAttendance.filter(
+x=>x.status==="Absent"
+).length
+}
+
+</h2>
+
+</div>
+
+<div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5">
+
+<p className="text-yellow-700 text-sm font-medium">
+Late
+</p>
+
+<h2 className="text-3xl font-bold mt-2">
+
+{
+filteredAttendance.filter(
+x=>x.status==="Late"
+).length
+}
+
+</h2>
+
+</div>
+
+<div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
+
+<p className="text-blue-600 text-sm font-medium">
+Inside Office
+</p>
+
+<h2 className="text-3xl font-bold mt-2">
+
+{
+filteredAttendance.filter(
+x=>x.gpsStatus==="Inside Office"
+).length
+}
+
+</h2>
+
+</div>
+
+<div className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
+
+<p className="text-purple-600 text-sm font-medium">
+Remote
+</p>
+
+<h2 className="text-3xl font-bold mt-2">
+
+{
+filteredAttendance.filter(
+x=>x.gpsStatus==="Outside Office"
+).length
+}
+
+</h2>
+
+</div>
+
+</div>
 {/* TABLE VIEW */}
 
 {
@@ -852,378 +887,302 @@ Attendance Records
 
 
 <div className="
-overflow-x-auto
-">
-
-
-<table className="
 w-full
-text-left
+overflow-x-auto
+rounded-2xl
+border
+border-[#eaf3ff]
 ">
 
+<table className="min-w-[1400px] w-full whitespace-nowrap">
 
-<thead>
+<thead className="bg-[#f8fbff] sticky top-0 z-10">
+<tr className="text-gray-700 uppercase text-xs tracking-wide">
 
-<tr className="
-border-b
-text-[#444]
-">
+<th className="px-4 py-4 text-left whitespace-nowrap">#</th>
 
+<th className="px-4 py-4 text-left whitespace-nowrap">Employee</th>
 
-<th className="py-4">Employee ID</th>
-<th>Employee</th>
+<th className="px-4 py-4 text-left whitespace-nowrap">Employee ID</th>
 
+<th className="px-4 py-4 text-left whitespace-nowrap">Date</th>
 
-<th>
-Date
-</th>
+<th className="px-4 py-4 text-left whitespace-nowrap">Punch In</th>
 
+<th className="px-4 py-4 text-left whitespace-nowrap">Punch Out</th>
 
-<th>
-Punch In
-</th>
+<th className="px-4 py-4 text-center">Hours</th>
 
+<th className="px-4 py-4 text-left whitespace-nowrap">Status</th>
 
-<th>
-Punch Out
-</th>
+<th className="px-4 py-4 text-left whitespace-nowrap">GPS</th>
 
+<th className="px-4 py-4 text-left whitespace-nowrap">Distance</th>
 
-<th>
-Hours
-</th>
+<th className="px-4 py-4 text-left whitespace-nowrap">Source</th>
 
-
-<th>
-Status
-</th>
-
-<th>
-GPS Status
-</th>
-
-<th>
-Distance
-</th>
-
-<th>
-Source
-</th>
-
-<th>
-Action
-</th>
+<th className="px-4 py-4 text-center">Action</th>
 
 </tr>
 
 </thead>
 
-
-
-
-
 <tbody>
 
-
-{
-filteredAttendance.length===0
-
-?
+{filteredAttendance.length===0 ? (
 
 <tr>
 
 <td
-
-colSpan="7"
-
-className="
-text-center
-py-10
-text-[#444]
-"
-
+colSpan={12}
+className="text-center py-16 text-gray-500"
 >
 
-No Attendance Found
+No Attendance Records Found
 
 </td>
 
 </tr>
 
+) : (
 
-:
-
-
-filteredAttendance.map(item=>(
-
+filteredAttendance.map((item,index)=>(
 
 <tr
-
 key={item.id}
-
-className="
-border-b
-hover:bg-[#eaf3ff]
-transition
-"
-
+className="border-b even:bg-[#fbfdff] hover:bg-[#eef7ff] transition-all duration-200"
 >
 
-
-<td>{item.employeeId || "-"}</td>
-
-<td className="py-4 font-semibold">
-  {item.employeeName || item.email || "Employee"}
+<td className="px-4 py-4 font-semibold text-gray-500">
+{index+1}
 </td>
 
+<td className="px-4 py-4">
 
+<div className="flex items-center gap-3">
 
-<td>
+<div className="w-10 h-10 rounded-full bg-[#3d6fa8] text-white flex items-center justify-center font-bold">
+
+{(item.employeeName||item.email||"E")
+.charAt(0)
+.toUpperCase()}
+
+</div>
+
+<div>
+
+<p className="font-semibold text-[#111]">
+
+{item.employeeName || "Employee"}
+
+</p>
+
+<p className="text-xs text-gray-500">
+
+{item.email}
+
+</p>
+
+</div>
+
+</div>
+
+</td>
+
+<td className="px-4 py-4">
+
+<span className="font-medium">
+
+{item.employeeId || "--"}
+
+</span>
+
+</td>
+
+<td className="px-4 py-4">
 
 {item.date}
 
 </td>
 
+<td className="px-4 py-4">
 
-
-
-
-<td>
-
-{
-formatTime(
-item.PunchIn
-)
-}
+{formatTime(item.PunchIn)}
 
 </td>
 
+<td className="px-4 py-4">
 
-
-
-
-<td>
-
-{
-formatTime(
-item.PunchOut
-)
-}
+{formatTime(item.PunchOut)}
 
 </td>
 
+<td className="px-4 py-4 text-center font-semibold">
 
-
-
-
-<td>
-
-{
-item.totalHours || 0
-}
-
- hrs
+{item.totalHours || 0} hrs
 
 </td>
 
-
-
-
-
-
-<td>
-
+<td className="px-4 py-4">
 
 <span
+className={`px-3 py-1 rounded-full text-xs font-bold
 
-className={`
-
-px-3
-py-1
-rounded-full
-text-sm
-font-semibold
-
-
-${
-item.status==="Present"
-
-?
-
-"bg-green-100 text-green-700"
-
-
-:
-
-item.status==="Absent"
-
-
-?
-
-"bg-red-100 text-red-700"
-
-
-:
-
-"bg-yellow-100 text-yellow-700"
-
-}
-
-`}
-
->
-
-
-{
-item.status || "Present"
-}
-
-
-</span>
-
-
-</td>
-<td>
-
-<span
-className={`
-px-3
-py-1
-rounded-full
-text-sm
-font-semibold
-
-${
-item.gpsStatus==="Inside Office"
-
-?
-
-"bg-green-100 text-green-700"
-
-:
-
-"bg-red-100 text-red-700"
-
-}
-
+${item.status==="Present"
+?"bg-green-100 text-green-700"
+:item.status==="Absent"
+?"bg-red-100 text-red-700"
+:"bg-yellow-100 text-yellow-700"}
 `}
 >
 
-{
-item.gpsStatus || "--"
-}
+{item.status}
 
 </span>
 
 </td>
 
-
-<td>
-
-{
-item.distanceFromOffice
-?
-`${Math.round(item.distanceFromOffice)} m`
-:
-"--"
-}
-
-</td>
-
-
-<td>
+<td className="px-4 py-4">
 
 <span
-className="
-bg-[#eaf3ff]
-text-[#3d6fa8]
-px-3
-py-1
-rounded-full
-text-sm
-font-semibold
-"
+className={`px-3 py-1 rounded-full text-xs font-bold
+
+${item.gpsStatus==="Inside Office"
+?"bg-green-100 text-green-700"
+:"bg-red-100 text-red-700"}
+`}
 >
 
-{
-item.attendanceSource || "System"
-}
+{item.gpsStatus || "--"}
 
 </span>
 
 </td>
 
+<td className="px-4 py-4">
 
-
-
-
-
-
-<td className="flex gap-2">
-
-<button
-
-onClick={()=>
-setSelected(item)
-}
-
-className="
-bg-[#3d6fa8]
-text-white
-px-4
-py-2
-rounded-lg
-font-semibold
-"
-
->
-
-View
-
-</button>
-
-
-<button
-
-onClick={()=>
-deleteAttendance(item.id)
-}
-
-className="
-bg-red-500
-text-white
-px-4
-py-2
-rounded-lg
-font-semibold
-"
-
->
-
-Delete
-
-</button>
+{item.distanceFromOffice
+?`${Math.round(item.distanceFromOffice)} m`
+:"--"}
 
 </td>
 
+<td className="px-4 py-4">
 
+<span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">
 
+{item.attendanceSource || "System"}
+
+</span>
+
+</td>
+
+<td className="px-4 py-4">
+
+<div className="flex justify-center gap-2">
+
+<button
+onClick={()=>setSelected(item)}
+className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+>
+
+👁 View
+
+</button>
+
+<button
+onClick={()=>deleteAttendance(item.id)}
+className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm"
+>
+
+🗑 Delete
+
+</button>
+
+</div>
+
+</td>
 
 </tr>
 
-
 ))
 
-
-}
-
+)}
 
 </tbody>
 
-
 </table>
+<div className="flex justify-between items-center mt-6">
 
+<p className="text-gray-500">
 
+Showing
+
+{" "}
+
+{Math.min(
+(currentPage-1)*recordsPerPage+1,
+filteredAttendance.length
+)}
+
+-
+
+{Math.min(
+currentPage*recordsPerPage,
+filteredAttendance.length
+)}
+
+of
+
+{filteredAttendance.length}
+
+records
+
+</p>
+
+<div className="flex gap-2">
+
+<button
+
+disabled={currentPage===1}
+
+onClick={()=>setCurrentPage(p=>p-1)}
+
+className="px-4 py-2 rounded-lg border disabled:opacity-40"
+
+>
+
+Previous
+
+</button>
+
+<button
+
+className="px-4 py-2 bg-[#3d6fa8] text-white rounded-lg"
+
+>
+
+{currentPage}
+
+</button>
+
+<button
+
+disabled={currentPage===totalPages}
+
+onClick={()=>setCurrentPage(p=>p+1)}
+
+className="px-4 py-2 rounded-lg border disabled:opacity-40"
+
+>
+
+Next
+
+</button>
+
+</div>
+
+</div>
 </div>
 
 
@@ -1749,229 +1708,255 @@ Absent
 )
 
 }
+{showMap && mapRecord && (
 
+<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+
+  <div className="bg-white rounded-3xl shadow-2xl w-[90%] max-w-5xl overflow-hidden">
+
+    <div className="flex justify-between items-center px-6 py-5 border-b">
+
+      <h2 className="text-2xl font-bold">
+        Employee Location
+      </h2>
+
+      <button
+        onClick={()=>{
+          setShowMap(false);
+          setMapRecord(null);
+        }}
+        className="text-2xl"
+      >
+        ✕
+      </button>
+
+    </div>
+
+    <div className="h-[600px]">
+
+      <AttendanceMap
+        latitude={mapRecord.latitude}
+        longitude={mapRecord.longitude}
+      />
+
+    </div>
+
+  </div>
+
+</div>
+
+)}
 </main>
 </div>
 );
 
-{
-selected && (
+// {
+// {selected && (
 
-<div className="
-fixed
-inset-0
-bg-black/30
-flex
-items-center
-justify-center
-z-50
-">
+// <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 
+// <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden">
 
-<div className="
-bg-white
-rounded-3xl
-p-7
-w-[350px]
-shadow-xl
-">
+// {/* Header */}
 
+// <div className="bg-[#3d6fa8] text-white px-8 py-6 flex justify-between items-center">
 
-<div className="
-flex
-justify-between
-items-center
-mb-5
-">
+// <div>
 
+// <h2 className="text-2xl font-bold">
+// Attendance Details
+// </h2>
 
-<h2 className="
-text-xl
-font-bold
-text-[#111]
-">
+// <p className="text-blue-100 text-sm mt-1">
+// Employee Attendance Information
+// </p>
 
-Attendance Details
+// </div>
 
-</h2>
+// <button
+// onClick={()=>setSelected(null)}
+// className="text-2xl hover:rotate-90 transition"
+// >
+// ✕
+// </button>
 
+// </div>
 
-<button
+// {/* Body */}
 
-onClick={()=>
-setSelected(null)
-}
+// <div className="p-8">
 
-className="
-text-[#444]
-text-xl
-"
+// <div className="flex items-center gap-5 mb-8">
 
->
+// <div className="w-20 h-20 rounded-full bg-[#3d6fa8] text-white flex items-center justify-center text-3xl font-bold">
 
-✕
+// {(selected.employeeName || selected.email || "E")
+// .charAt(0)
+// .toUpperCase()}
 
-</button>
+// </div>
 
+// <div>
 
-</div>
+// <h3 className="text-2xl font-bold">
 
+// {selected.employeeName || "Employee"}
 
+// </h3>
 
+// <p className="text-gray-500">
 
-<p className="mb-3">
+// {selected.email}
 
-<b>Date:</b>
+// </p>
 
-{" "}
+// <p className="text-sm text-gray-400">
 
-{selected.date}
+// Employee ID : {selected.employeeId || "--"}
 
-</p>
+// </p>
 
+// </div>
 
+// </div>
 
+// <div className="grid md:grid-cols-2 gap-5">
 
-<p className="mb-3">
+// <Card
+// title="📅 Date"
+// value={selected.date}
+// />
 
-<b>Employee:</b>
+// <Card
+// title="🟢 Status"
+// value={selected.status}
+// />
 
-{" "}
+// <Card
+// title="🕘 Punch In"
+// value={formatTime(selected.PunchIn)}
+// />
 
-{
-selected.employeeName ||
-selected.email
-}
+// <Card
+// title="🕔 Punch Out"
+// value={formatTime(selected.PunchOut)}
+// />
 
-</p>
+// <Card
+// title="⏱ Working Hours"
+// value={`${selected.totalHours || 0} hrs`}
+// />
 
+// <Card
+// title="💻 Source"
+// value={selected.attendanceSource || "System"}
+// />
 
+// <Card
+// title="📍 GPS Status"
+// value={selected.gpsStatus || "--"}
+// />
 
+// <Card
+// title="📏 Distance"
+// value={
+// selected.distanceFromOffice
+// ? `${Math.round(selected.distanceFromOffice)} m`
+// : "--"
+// }
+// />
 
-<p className="mb-3">
+// </div>
 
-<b>Punch In:</b>
+// {/* Coordinates */}
 
-{" "}
+// <div className="mt-8">
 
-{
-formatTime(
-selected.PunchIn
-)
-}
+// <h3 className="font-bold text-lg mb-3">
+// GPS Coordinates
+// </h3>
 
-</p>
+// <div className="grid md:grid-cols-2 gap-5">
 
+// <Card
+// title="Latitude"
+// value={selected.latitude || "--"}
+// />
 
+// <Card
+// title="Longitude"
+// value={selected.longitude || "--"}
+// />
 
+// </div>
 
-<p className="mb-3">
+// </div>
 
-<b>Punch Out:</b>
+// {/* Buttons */}
 
-{" "}
+// <div className="flex gap-3 mt-8">
 
-{
-formatTime(
-selected.PunchOut
-)
-}
+// <button
+// onClick={()=>{
+// setMapRecord(selected);
+// setShowMap(true);
+// }}
+// className="flex-1 bg-[#3d6fa8] text-white rounded-xl py-3 font-semibold hover:bg-[#315c8c]"
+// >
 
-</p>
+// 🗺 View on Map
 
+// </button>
 
+// <button
+// onClick={()=>setSelected(null)}
+// className="flex-1 border border-gray-300 rounded-xl py-3 font-semibold hover:bg-gray-50"
+// >
 
+// Close
 
-<p className="mb-3">
+// </button>
 
-<b>Total Hours:</b>
+// </div>
 
-{" "}
+// </div>
 
-{
-selected.totalHours || 0
-}
+// </div>
 
- hrs
+// </div>
 
-</p>
+// )}
 
-<p className="mb-3">
-
-<b>GPS Status:</b>
-
-{" "}
-
-{
-selected.gpsStatus || "--"
-}
-
-</p>
-
-
-<p className="mb-3">
-
-<b>Distance:</b>
-
-{" "}
-
-{
-selected.distanceFromOffice
-?
-`${Math.round(selected.distanceFromOffice)} m`
-:
-"--"
-}
-
-</p>
-
-
-<p className="mb-3">
-
-<b>Source:</b>
-
-{" "}
-
-{
-selected.attendanceSource || "System"
-}
-
-</p>
-
-
-<span className="
-bg-[#eaf3ff]
-text-[#3d6fa8]
-px-4
-py-2
-rounded-full
-font-semibold
-">
-
-{
-selected.status
-}
-
-
-</span>
-
-
-</div>
-
-
-</div>
-
-)
-
-}
-
+// }
 }
 function StatCard({
 icon,
 title,
 value
 }){
+function Card({title,value}){
 
+return(
+
+<div className="bg-[#f8fbff] border border-[#eaf3ff] rounded-2xl p-5">
+
+<p className="text-sm text-gray-500">
+
+{title}
+
+</p>
+
+<h3 className="text-lg font-bold text-[#111] mt-2 break-all">
+
+{value}
+
+</h3>
+
+</div>
+
+);
+
+}
 return (
 
 <div className="

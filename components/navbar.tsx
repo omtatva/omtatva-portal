@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useState, useEffect, CSSProperties } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "../lib/firebase";
-
+import { useRef } from "react";
 export default function Navbar() {
   const [platformOpen, setPlatformOpen] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-
+const navRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -26,8 +26,29 @@ export default function Navbar() {
       console.log("Logout error:", error);
     }
   };
+useEffect(() => {
+  function handleClickOutside(event: MouseEvent) {
+    if (
+      navRef.current &&
+      event.target instanceof Node &&
+      !navRef.current.contains(event.target)
+    ) {
+      setPlatformOpen(false);
+      setSolutionOpen(false);
+    }
+  }
+
+  document.addEventListener("mousedown", handleClickOutside);
+
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, []);
+
 
   return (
+
+
     <nav
       style={{
         position: "sticky",
@@ -93,17 +114,17 @@ export default function Navbar() {
 
 
         {/* Menu */}
-        <div
-          style={{
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 26,
-  flex: 1,
-}}
-     
-        >
-
+<div
+  ref={navRef}
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 26,
+    flex: 1,
+     height: 60,  
+  }}
+>
           <Link href="/#top" style={link}>
             Home
           </Link>
@@ -111,14 +132,21 @@ export default function Navbar() {
 
           {/* Platform */}
           <div
-            style={{ position: "relative" }}
-            onMouseEnter={() => setPlatformOpen(true)}
-            onMouseLeave={() => setPlatformOpen(false)}
-          >
+  style={{
+    position: "relative",
+    
+  }}
+>
 
-            <span style={link}>
-              Platform ▼
-            </span>
+            <span
+  style={link}
+  onClick={() => {
+  setPlatformOpen(!platformOpen);
+  setSolutionOpen(false);
+}}
+>
+  Platform ▼
+</span>
 
 
             {platformOpen && (
@@ -146,15 +174,22 @@ export default function Navbar() {
 
 
           {/* Solutions */}
-          <div
-            style={{ position:"relative" }}
-            onMouseEnter={() => setSolutionOpen(true)}
-            onMouseLeave={() => setSolutionOpen(false)}
-          >
+                   <div
+  style={{
+    position: "relative",
 
-            <span style={link}>
-              Solutions ▼
-            </span>
+  }}
+>
+
+  <span
+    style={link}
+    onClick={() => {
+      setSolutionOpen(!solutionOpen);
+      setPlatformOpen(false);
+    }}
+  >
+    Solutions ▼
+  </span>
 
 
             {solutionOpen && (
@@ -176,8 +211,6 @@ export default function Navbar() {
             )}
 
           </div>
-
-
 
         </div>
 
@@ -249,8 +282,9 @@ const link: CSSProperties = {
 
 const dropdown: CSSProperties = {
   position: "absolute",
-  top: 40,
+  top: "100%",
   left: 0,
+  marginTop: 8,
   width: 220,
   background: "#fff",
   borderRadius: 12,
