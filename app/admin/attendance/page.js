@@ -1081,14 +1081,7 @@ ${item.gpsStatus==="Inside Office"
 
 <div className="flex justify-center gap-2">
 
-<button
-onClick={()=>setSelected(item)}
-className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
->
 
-👁 View
-
-</button>
 
 <button
 onClick={()=>deleteAttendance(item.id)}

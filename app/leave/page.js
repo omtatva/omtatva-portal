@@ -172,286 +172,463 @@ const pendingLeave = myLeaves.filter(
 return (
 
 <div
-  style={{
-    width: "100%",
-    maxWidth: "1800px",
-    margin: "30px auto",
-    padding: "40px",
-    background: "#ffffff",
-    borderRadius: "22px",
-    boxShadow: "0 12px 35px rgba(37,99,235,.08)",
-    fontSize: "20px",
-fontWeight: "700",
-  }}
->
-
-<div
 style={{
-display:"grid",
-gridTemplateColumns:"repeat(4,1fr)",
-gap:"25px",
-marginBottom:"45px"
+width:"100%",
+maxWidth:"100%",
+padding:"20px",
+background:"#F5F7FB",
+minHeight:"100vh",
 }}
 >
 
-<div style={card}>
-<h3>Casual Leave</h3>
-<h1>{casualLeave-approvedCasual}</h1>
-<p>Remaining</p>
-</div>
 
-<div style={card}>
-<h3>Sick Leave</h3>
-<h1>{sickLeave-approvedSick}</h1>
-<p>Remaining</p>
-</div>
+{/* Header */}
 
-<div style={card}>
-<h3>Paid Leave</h3>
-<h1>{paidLeave-approvedPaid}</h1>
-<p>Remaining</p>
-</div>
-
-<div style={card}>
-<h3>Pending</h3>
-<h1>{pendingLeave}</h1>
-<p>Requests</p>
-</div>
-
-</div>
-
-<div style={{ marginBottom: 35 }}>
+<div
+style={{
+background:"#fff",
+padding:"30px",
+borderRadius:"24px",
+marginBottom:"25px",
+boxShadow:"0 10px 30px rgba(0,0,0,.06)"
+}}
+>
 
 <h1
 style={{
-fontSize: "42px",
-fontWeight: 800,
-color: "#0f172a",
-marginBottom: 8,
+fontSize:"36px",
+fontWeight:800,
+color:"#1e3a8a",
+margin:0
 }}
 >
 🏖 Leave Management
 </h1>
 
+
 <p
 style={{
-fontSize: 17,
-color: "#64748b",
+marginTop:"10px",
+color:"#64748b",
+fontSize:"16px"
 }}
 >
-Apply for leave and monitor approval status.
+Apply leave, track approval status and manage your leave balance.
 </p>
 
+
 </div>
+
+
+
+{/* Leave Cards */}
 
 <div
 style={{
 display:"grid",
-gridTemplateColumns:"repeat(2,minmax(320px,1fr))",
-columnGap:"30px",
-rowGap:"25px",
-gap:20,
-marginTop:30
+gridTemplateColumns:
+"repeat(auto-fit,minmax(220px,1fr))",
+gap:"20px",
+marginBottom:"25px"
 }}
 >
 
-<div>
 
+<LeaveCard
+title="Casual Leave"
+value={casualLeave-approvedCasual}
+color="#2563eb"
+/>
+
+
+<LeaveCard
+title="Sick Leave"
+value={sickLeave-approvedSick}
+color="#16a34a"
+/>
+
+
+<LeaveCard
+title="Paid Leave"
+value={paidLeave-approvedPaid}
+color="#9333ea"
+/>
+
+
+<LeaveCard
+title="Pending Requests"
+value={pendingLeave}
+color="#f59e0b"
+/>
+
+
+</div>
+
+
+
+
+
+{/* Apply Leave Form */}
+
+<div
+style={{
+background:"#fff",
+padding:"30px",
+borderRadius:"24px",
+boxShadow:"0 10px 30px rgba(0,0,0,.06)",
+marginBottom:"30px"
+}}
+>
+
+
+<h2
+style={{
+fontSize:"26px",
+fontWeight:700,
+marginBottom:"25px"
+}}
+>
+📝 Apply New Leave
+</h2>
+
+
+
+<div
+style={{
+display:"grid",
+gridTemplateColumns:
+"repeat(auto-fit,minmax(280px,1fr))",
+gap:"20px"
+}}
+>
+
+
+<div>
 <label>Leave Type</label>
 
 <select
-  required
-  value={leaveType}
-  onChange={(e)=>setLeaveType(e.target.value)}
-  style={inputStyle}
+value={leaveType}
+onChange={(e)=>setLeaveType(e.target.value)}
+style={inputStyle}
 >
 
-<option value="">Select</option>
+<option value="">
+Select Leave
+</option>
 
 <option>Casual Leave</option>
-
 <option>Sick Leave</option>
-
 <option>Paid Leave</option>
-
 <option>Work From Home</option>
-
 <option>Emergency Leave</option>
 
 </select>
 
 </div>
 
-<div>
 
+
+
+<div>
 <label>From Date</label>
 
 <input
-  type="date"
-  required
-  value={fromDate}
-  onChange={(e)=>setFromDate(e.target.value)}
-  style={inputStyle}
+type="date"
+value={fromDate}
+onChange={(e)=>setFromDate(e.target.value)}
+style={inputStyle}
 />
 
 </div>
 
-<div>
 
+
+
+<div>
 <label>To Date</label>
 
 <input
-  type="date"
-  required
-  value={toDate}
-  onChange={(e)=>setToDate(e.target.value)}
-  style={inputStyle}
+type="date"
+value={toDate}
+onChange={(e)=>setToDate(e.target.value)}
+style={inputStyle}
 />
 
 </div>
 
-<div
-style={{
-gridColumn:"1 / span 2"
-}}
->
-  <label>Total Days</label>
 
-  <input
-    value={totalDays}
-    disabled
-    style={inputStyle}
-  />
+
+
+<div>
+
+<label>Total Days</label>
+
+<input
+value={totalDays}
+disabled
+style={inputStyle}
+/>
+
 </div>
 
+
+</div>
+
+
+
 <div
 style={{
-gridColumn:"1 / span 2"
+marginTop:"20px"
 }}
 >
 
-<label>Reason</label>
+<label>
+Reason
+</label>
+
 
 <textarea
-  required
-  rows={6}
-  value={reason}
-  onChange={(e)=>setReason(e.target.value)}
-  style={inputStyle}
+rows={5}
+value={reason}
+onChange={(e)=>setReason(e.target.value)}
+style={{
+...inputStyle,
+resize:"none"
+}}
 />
 
-</div>
 
 </div>
+
+
 
 <button
-  onClick={submitLeave}
-  style={{
-    marginTop:30,
-    padding:"16px 38px",
+onClick={submitLeave}
+style={{
+marginTop:"25px",
+padding:"14px 35px",
 background:"#2563eb",
-fontSize:"20px",
-fontWeight:"700",
+color:"#fff",
+border:"none",
 borderRadius:"12px",
-boxShadow:"0 8px 20px rgba(37,99,235,.25)",
-    color:"#fff",
-    border:"none",
-    borderRadius:10,
-    cursor:"pointer",
-    fontWeight:"bold"
-  }}
+fontSize:"18px",
+fontWeight:700,
+cursor:"pointer"
+}}
 >
 
-📨 Submit Leave Request
+📨 Submit Request
 
 </button>
 
-<hr style={{ margin: "40px 0" }} />
 
-<h2>📋 My Leave Requests</h2>
+</div>
+
+
+
+
+
+
+{/* History Table */}
 
 <div
 style={{
-marginTop:30,
 background:"#fff",
-borderRadius:18,
-padding:20,
-boxShadow:"0 6px 18px rgba(0,0,0,.06)"
+padding:"30px",
+borderRadius:"24px",
+boxShadow:"0 10px 30px rgba(0,0,0,.06)",
+overflowX:"auto"
 }}
 >
+
+
+<h2
+style={{
+fontSize:"26px",
+fontWeight:700,
+marginBottom:"20px"
+}}
+>
+📋 Leave History
+</h2>
+
+
 
 <table
 style={{
 width:"100%",
 borderCollapse:"collapse",
+minWidth:"900px"
 }}
 >
-  <thead>
+
+<thead>
+
 <tr>
-<th style={th}>Leave Type</th>
-<th style={th}>From</th>
-<th style={th}>To</th>
-<th style={th}>Reason</th>
-<th style={th}>Status</th>
-<th style={th}>Approved By</th>
-<th style={th}>Approved On</th>
+
+<th style={th}>
+Type
+</th>
+
+<th style={th}>
+From
+</th>
+
+<th style={th}>
+To
+</th>
+
+<th style={th}>
+Days
+</th>
+
+<th style={th}>
+Reason
+</th>
+
+<th style={th}>
+Status
+</th>
+
 </tr>
+
 </thead>
 
-  <tbody>
-{myLeaves.map((leave) => (
+
+
+<tbody>
+
+
+{
+myLeaves.map((leave)=>(
+
+
 <tr key={leave.id}>
 
-<td style={td}>{leave.leaveType}</td>
-
-<td style={td}>{leave.fromDate}</td>
-
-<td style={td}>{leave.toDate}</td>
-
-<td style={td}>{leave.reason}</td>
 
 <td style={td}>
-  <span
-    style={{
-      display: "inline-block",
-      padding: "6px 14px",
-      borderRadius: "20px",
-      fontWeight: "600",
-      fontSize: "14px",
-      background:
-        leave.status === "Approved"
-          ? "#dcfce7"
-          : leave.status === "Rejected"
-          ? "#fee2e2"
-          : "#fef3c7",
-      color:
-        leave.status === "Approved"
-          ? "#15803d"
-          : leave.status === "Rejected"
-          ? "#dc2626"
-          : "#b45309",
-    }}
-  >
-    {leave.status}
-  </span>
+{leave.leaveType}
 </td>
 
-<td style={td}>
-{leave.approvedBy || "-"}
-</td>
 
 <td style={td}>
-{leave.approvedAt?.toDate?.().toLocaleDateString() || "-"}
+{leave.fromDate}
 </td>
+
+
+<td style={td}>
+{leave.toDate}
+</td>
+
+
+<td style={td}>
+{leave.totalDays}
+</td>
+
+
+<td style={td}>
+{leave.reason}
+</td>
+
+
+<td style={td}>
+
+<span
+style={{
+padding:"6px 15px",
+borderRadius:"20px",
+background:
+leave.status==="Approved"
+?"#dcfce7"
+:
+leave.status==="Rejected"
+?"#fee2e2"
+:"#fef3c7"
+}}
+>
+
+{leave.status}
+
+</span>
+
+</td>
+
 
 </tr>
-))}
+
+
+))
+
+}
+
+
 </tbody>
+
+
 </table>
+
+
 </div>
+
+
+
 </div>
 );
 
+}
+
+function LeaveCard({
+  title,
+  value,
+  color,
+}) {
+
+  return (
+    <div
+      style={{
+        background:"#ffffff",
+        padding:"25px",
+        borderRadius:"20px",
+        borderLeft:`6px solid ${color}`,
+        boxShadow:"0 8px 25px rgba(0,0,0,.06)",
+      }}
+    >
+
+      <h3
+        style={{
+          color:"#64748b",
+          fontSize:"18px",
+          marginBottom:"10px"
+        }}
+      >
+        {title}
+      </h3>
+
+
+      <h1
+        style={{
+          fontSize:"38px",
+          fontWeight:800,
+          color:color,
+          margin:0
+        }}
+      >
+        {value}
+      </h1>
+
+
+      <p
+        style={{
+          color:"#94a3b8",
+          marginTop:"8px"
+        }}
+      >
+        Remaining
+      </p>
+
+
+    </div>
+  );
 }
 const inputStyle = {
 width:"100%",

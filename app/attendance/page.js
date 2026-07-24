@@ -829,68 +829,125 @@ value:stats.absent
 
 
 return (
-
 <div className="
+w-full
 flex
 flex-col
-md:flex-row
-md:justify-between
 gap-4
-items-start
-md:items-center
 ">
-
 
 <main className="
 w-full
-max-w-screen-xl
-mx-auto
+max-w-full
 px-4
+sm:px-6
+lg:px-8
 py-4
-overflow-hidden
+overflow-x-auto
+overflow-y-auto
 ">
-
-
 {/* TOP HEADER */}
-<section className="
-bg-[#eaf3ff]
-rounded-2xl
-p-6
+{/* TOP HEADER */}
+
+<section
+className="
+bg-white
+rounded-3xl
+p-8
 mb-6
 border
-border-[#66a8e0]
-">
+border-[#eaf3ff]
+shadow-sm
+"
+>
 
-
-<div className="
+<div
+className="
 flex
 justify-between
 items-center
-">
-
+flex-wrap
+gap-5
+"
+>
 
 <div>
 
-
-<h1 className="
-text-3xl
-font-bold
-text-[#111]
-">
-
-Attendance Dashboard
-
+<h1
+className="
+text-5xl
+font-extrabold
+text-[#111111]
+tracking-tight
+"
+>
+📅 Attendance Dashboard
 </h1>
 
 
-<p className="
-text-[#444]
-mt-2
-">
-
-Employee attendance management system
-
+<p
+className="
+text-lg
+text-[#444444]
+mt-3
+"
+>
+Track attendance, working hours, GPS verification and employee presence.
 </p>
+
+
+<div
+className="
+flex
+gap-3
+mt-5
+flex-wrap
+"
+>
+
+<span
+className="
+bg-[#eaf3ff]
+text-[#3d6fa8]
+px-5
+py-2
+rounded-full
+font-semibold
+"
+>
+📍 GPS Enabled
+</span>
+
+
+<span
+className="
+bg-[#eaf3ff]
+text-[#3d6fa8]
+px-5
+py-2
+rounded-full
+font-semibold
+"
+>
+🕒 Real Time Tracking
+</span>
+
+
+<span
+className="
+bg-[#eaf3ff]
+text-[#3d6fa8]
+px-5
+py-2
+rounded-full
+font-semibold
+"
+>
+🏢 Office Attendance
+</span>
+
+
+</div>
 
 
 </div>
@@ -898,26 +955,65 @@ Employee attendance management system
 
 
 
-<div className="
+<div
+className="
 bg-[#3d6fa8]
 text-white
-px-6
-py-3
-rounded-xl
-font-semibold
-">
+px-8
+py-5
+rounded-2xl
+shadow-md
+text-center
+min-w-[220px]
+"
+>
 
+
+<p
+className="
+text-sm
+opacity-80
+"
+>
+Today's Status
+</p>
+
+
+<h2
+className="
+text-2xl
+font-bold
+mt-2
+"
+>
 
 {
 todayData
 
 ?
 
-"🟢 Present Today"
+"🟢 Present"
 
 :
 
 "⚪ Not Checked"
+
+}
+
+</h2>
+
+
+{
+todayData?.PunchIn &&
+
+<p
+className="
+text-sm
+mt-2
+"
+>
+Punch In: {formatTime(todayData.PunchIn)}
+</p>
 
 }
 
@@ -926,7 +1022,6 @@ todayData
 
 
 </div>
-
 
 </section>
 

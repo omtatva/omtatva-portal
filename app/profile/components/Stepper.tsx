@@ -12,7 +12,6 @@ export default function Stepper({
 
   const steps = [
     { key: "personal", title: "Personal" },
-    { key: "account", title: "Account" },
     { key: "address", title: "Address" },
     { key: "emergency", title: "Emergency" },
     { key: "employment", title: "Employment" },

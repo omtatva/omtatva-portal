@@ -170,7 +170,7 @@ const filteredUsers = users.filter((user) => {
 return (
 <div
 style={{
-  width: "100%",
+  width: "90%",
   maxWidth: "100%",
   boxSizing: "border-box",
   padding: "30px 40px",
@@ -463,7 +463,7 @@ Reset
   >
     <table
       style={{
-        width:"100%",
+        width:"90%",
 minWidth:"1600px",
         borderCollapse: "collapse",
       }}
@@ -637,7 +637,7 @@ const td = {
 };
 
 const blueBtn = {
-background: "#2563eb",
+background: "#3d6fa8",
 color: "#fff",
 border: "none",
 padding: "8px 12px",

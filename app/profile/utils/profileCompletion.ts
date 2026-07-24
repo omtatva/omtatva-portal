@@ -11,13 +11,6 @@ export const sectionCompleted = (
         profile.personalEmail
       );
 
-    case "account":
-      return (
-        profile.employeeId &&
-        profile.department &&
-        profile.designation
-      );
-
     case "address":
       return (
         profile.address &&

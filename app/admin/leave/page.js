@@ -184,34 +184,65 @@ background: "#f5f8fc",
 }}
 >
 
-<h1>🏖 Leave Requests</h1>
-<button
-        onClick={() => (window.location.href = "/admin")}
-        style={{
-          background: "#2563eb",
-          color: "#fff",
-          border: "none",
-          padding:"12px 28px",
-          fontSize:"15px",
-          fontWeight:"600",
-          borderRadius: "10px",
-          cursor: "pointer",
-          fontWeight: "600",
-        }}
-      >
-        ← Dashboard
-      </button>
-<p
+{/* Header */}
+
+<div
 style={{
-color:"#64748b",
-marginBottom:30
+display:"flex",
+justifyContent:"space-between",
+alignItems:"center",
+width:"100%",
+marginBottom:"30px",
 }}
 >
 
-Approve or Reject employee leave requests.
+<div>
 
+<h1
+style={{
+fontSize:"42px",
+fontWeight:"800",
+margin:0,
+color:"#0f172a",
+}}
+>
+🏖 Leave Requests
+</h1>
+
+
+<p
+style={{
+color:"#64748b",
+fontSize:"18px",
+marginTop:"10px",
+}}
+>
+Approve or Reject employee leave requests.
 </p>
 
+</div>
+
+
+
+<button
+onClick={() => (window.location.href = "/admin")}
+style={{
+background:"#3d6fa8",
+color:"#fff",
+border:"none",
+padding:"14px 30px",
+fontSize:"16px",
+fontWeight:"700",
+borderRadius:"12px",
+cursor:"pointer",
+boxShadow:"0 8px 20px rgba(30,58,138,.25)",
+}}
+>
+← Dashboard
+</button>
+
+
+</div>
 <div
 style={{
 background:"#fff",
@@ -438,7 +469,7 @@ Reject
 
 const th={
 padding:"18px",
-background:"#2563eb",
+background:"#3d6fa8",
 color:"#fff",
 fontSize:"15px",
 fontWeight:"700",

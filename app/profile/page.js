@@ -5,7 +5,6 @@ import { ProfileProvider } from "./ProfileContext";
 import Stepper from "./components/Stepper";
 
 import PersonalInfo from "./components/PersonalInfo";
-import AccountDetails from "./components/AccountDetails";
 import AddressDetails from "./components/AddressDetails";
 import EmergencyContact from "./components/EmergencyContact";
 import EmploymentDetails from "./components/EmploymentDetails";
@@ -44,50 +43,44 @@ export default function ProfilePage() {
         <PersonalInfo next={() => setStep(1)} />
       )}
 
+
       {step === 1 && (
-        <AccountDetails
+        <AddressDetails
           back={() => setStep(0)}
           next={() => setStep(2)}
         />
       )}
 
       {step === 2 && (
-        <AddressDetails
+        <EmergencyContact
           back={() => setStep(1)}
           next={() => setStep(3)}
         />
       )}
 
       {step === 3 && (
-        <EmergencyContact
+        <EmploymentDetails
           back={() => setStep(2)}
           next={() => setStep(4)}
         />
       )}
 
-      {step === 4 && (
-        <EmploymentDetails
+      {step ===4 && (
+        <BankDetails
           back={() => setStep(3)}
           next={() => setStep(5)}
         />
       )}
 
       {step === 5 && (
-        <BankDetails
+        <DocumentUpload
           back={() => setStep(4)}
           next={() => setStep(6)}
         />
       )}
 
       {step === 6 && (
-        <DocumentUpload
-          back={() => setStep(5)}
-          next={() => setStep(7)}
-        />
-      )}
-
-      {step === 7 && (
-        <ReviewSubmit back={() => setStep(6)} />
+        <ReviewSubmit back={() => setStep(5)} />
       )}
     </div>
     </ProfileProvider>

@@ -32,6 +32,7 @@ const [myTimesheets, setMyTimesheets] = useState([]);
 const [myAttendance, setMyAttendance] = useState([]);
 const [userName, setUserName] = useState("");
 const [userData, setUserData] = useState(null);
+const [upcomingHolidays,setUpcomingHolidays]=useState([]);
 
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -139,18 +140,61 @@ const cardStyle = {
   boxShadow: "0 10px 30px rgba(0,0,0,.06)",
   transition: ".3s",
 };
+useEffect(()=>{
 
+loadUpcomingHolidays();
+
+},[]);
+
+
+
+const loadUpcomingHolidays=async()=>{
+
+
+const snapshot =
+await getDocs(
+collection(db,"holidays")
+);
+
+
+
+const today=new Date();
+
+
+const holidays=snapshot.docs
+.map(doc=>({
+
+id:doc.id,
+...doc.data()
+
+}))
+.filter(item=>{
+
+return new Date(item.date)>=today;
+
+})
+.sort((a,b)=>{
+
+return new Date(a.date)-new Date(b.date);
+
+})
+.slice(0,5);
+
+
+
+setUpcomingHolidays(holidays);
+
+
+};
 
 return (
 <div
-style={{
-  width: "100%",
-maxWidth: "1900px",
-margin: "30px auto",
-padding: "20px",
-background: "#f8fafc",
-minHeight: "100vh",
-}}
+  style={{
+    width: "100%",
+    padding: "8px",
+    background: "#F5F7FB",
+    minHeight: "100%",
+  }}
 >
 {/* Header */}
 <div
@@ -175,9 +219,8 @@ minHeight: "100vh",
         fontWeight: 700,
       }}
     >
-      Welcome Back,
-      <br />
-      {userName}
+      👋 Welcome Back
+    
     </h1>
 
     <p
@@ -496,144 +539,100 @@ borderRadius:15
 >
 No Announcements Yet
 </div>
+<div className="holiday-section">
 
-<h2 style={{marginTop:35}}>
-📅 Upcoming Holidays
-</h2>
+    <div className="holiday-header">
+        <h2>🎉 Upcoming Holidays</h2>
+        <p>Plan your upcoming days off</p>
+    </div>
 
+
+    <div className="holiday-marquee">
+
+        <div className="holiday-track">
+
+        {
+        upcomingHolidays.map(item=>(
+
+            <span key={item.id}>
+                🎉 {item.name || item.holidayName}
+                &nbsp; 📅 {item.date}
+                &nbsp;&nbsp; | &nbsp;&nbsp;
+            </span>
+
+        ))
+        }
+
+        </div>
+
+    </div>
+
+
+
+    <div className="holiday-list">
+
+    {
+    upcomingHolidays.length===0
+
+    ?
+
+    <p>No upcoming holidays</p>
+
+    :
+
+    upcomingHolidays.map(item=>(
+
+        <div className="holiday-card" key={item.id}>
+
+
+            <div className="holiday-icon">
+                🎊
+            </div>
+
+
+            <div className="holiday-info">
+
+                <h3>
+                {item.name || item.holidayName}
+                </h3>
+
+                <p>
+                📅 {item.date}
+                </p>
+
+            </div>
+
+
+            <span className="holiday-category">
+
+            {item.category || item.type}
+
+            </span>
+
+
+        </div>
+
+    ))
+
+    }
+
+    </div>
+
+
+</div>
+
+
+</div>
+
+</div>
 <div
-style={{
-marginTop:15,
-padding:"20px",
-background:"#f8fafc",
-borderRadius:15
-}}
+  style={actionCard}
+  onClick={() => router.push("/workspace")}
 >
-No Upcoming Holidays
+    <h3>🤖 AI Workspace</h3>
+    <p>Open AI Tools</p>
 </div>
 
-</div>
-
-</div>
-
-
-{/* Communication & AI Workspace */}
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 2fr",
-    gap: "20px",
-    marginBottom: "30px",
-  }}
->
-  {/* Slack */}
-  <div
-    style={{
-      background: "#fff",
-      padding: "25px",
-      borderRadius: "15px",
-      boxShadow: "0 5px 20px rgba(0,0,0,0.08)",
-    }}
-  >
-    <h2>💬 Communication</h2>
-
-
-    <a
-      href="https://app.slack.com/client"
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        display: "block",
-        marginTop: "20px",
-        textDecoration: "none",
-        background: "#4A154B",
-        color: "#fff",
-        padding: "18px",
-        borderRadius: "12px",
-        textAlign: "center",
-        fontWeight: "600",
-        fontSize: "16px",
-      }}
-    >
-      Open Slack
-    </a>
-
-    <p
-      style={{
-        marginTop: "15px",
-        color: "#64748b",
-        textAlign: "center",
-      }}
-    >
-      Team Chat • Huddles • Meetings
-    </p>
-  </div>
-
-  {/* AI Workspace */}
-  <div
-    style={{
-      background: "#fff",
-      padding: "25px",
-      borderRadius: "15px",
-      boxShadow: "0 5px 20px rgba(0,0,0,0.08)",
-    }}
-  >
-    <h2>🤖 AI Workspace</h2>
-    
-    <button
-      onClick={() =>
-        (window.location.href = "/workspace/Frameo")
-      }
-      style={{
-        marginTop: "20px",
-        background: "#2563eb",
-        color: "#fff",
-        border: "none",
-        padding: "15px 25px",
-        borderRadius: "10px",
-        cursor: "pointer",
-        fontWeight: "600",
-        fontSize: "16px",
-      }}
-    >
-      🚀 Frameo Workspace
-    </button>
-
-      <a
-      href="https://higgsfield.ai/"
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        display: "block",
-        marginTop: "20px",
-        textDecoration: "none",
-        background: "#2563eb",
-        color: "#fff",
-        padding: "18px",
-        borderRadius: "12px",
-        textAlign: "center",
-        fontWeight: "600",
-        fontSize: "16px",
-      }}
-    >
-      🚀 higgsfield Workspace
-    </a>
-
-    <p
-      style={{
-        marginTop: "15px",
-        color: "#64748b",
-        lineHeight: "1.6",
-      }}
-    >
-      Access Frameo AI, project resources,
-      production workflows, prompt libraries,
-      assets and company tools from one place.
-    </p>
-  </div>
-</div>
-
-  
 
 </div>
 

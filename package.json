@@ -15,9 +15,11 @@
     "express": "^5.2.1",
     "firebase": "^12.15.0",
     "html2pdf.js": "^0.14.0",
+    "india-state-city": "^1.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "leaflet": "^1.9.4",
+    "lucide-react": "^1.26.0",
     "next": "16.2.9",
     "nodemailer": "^9.0.3",
     "react": "19.2.4",
@@ -45,15 +47,15 @@
   "directories": {
     "lib": "lib"
   },
-"repository": {
-  "type": "git",
-  "url": "git+https://github.com/omtatva/omtatva-portal.git"
-},
-"keywords": [],
-"author": "",
-"license": "ISC",
-"bugs": {
-  "url": "https://github.com/omtatva/omtatva-portal/issues"
-},
-"homepage": "https://github.com/omtatva/omtatva-portal#readme"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omtatva/omtatva-portal.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/omtatva/omtatva-portal/issues"
+  },
+  "homepage": "https://github.com/omtatva/omtatva-portal#readme"
 }

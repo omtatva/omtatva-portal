@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/components/LogoutButton.js"  ],
+, "app/components/LogoutButton.js", "app/admin/users/[id]/page.js"  ],
   "exclude": ["node_modules"]
 }

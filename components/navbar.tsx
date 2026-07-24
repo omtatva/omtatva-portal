@@ -5,10 +5,16 @@ import { useState, useEffect, CSSProperties } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { useRef } from "react";
+
+import { usePathname } from "next/navigation";
 export default function Navbar() {
   const [platformOpen, setPlatformOpen] = useState(false);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+const pathname = usePathname();
+
+
+
 const navRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -45,7 +51,18 @@ useEffect(() => {
   };
 }, []);
 
+const hideNavbar =
+  pathname.startsWith("/dashboard") ||
+  pathname.startsWith("/attendance") ||
+  pathname.startsWith("/leave") ||
+  pathname.startsWith("/timesheet") ||
+  pathname.startsWith("/documents") ||
+  pathname.startsWith("/admin")  ||
+  pathname.startsWith("/settings");
 
+if (hideNavbar) {
+  return null;
+}
   return (
 
 
@@ -74,7 +91,7 @@ useEffect(() => {
   style={{
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: 18,
     flexShrink: 0,
   }}
 >
@@ -111,7 +128,6 @@ useEffect(() => {
     </p>
   </div>
 </div>
-
 
         {/* Menu */}
 <div

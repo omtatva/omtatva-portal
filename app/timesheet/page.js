@@ -8,6 +8,7 @@ export default function TimesheetPage() {
   const [client, setClient] = useState("");
   const [episode, setEpisode] = useState("");
   const [task, setTask] = useState("");
+  const [minutes, setMinutes] = useState("");
   const [tool, setTool] = useState("");
   const [hours, setHours] = useState("");
   const [status, setStatus] = useState("Completed");
@@ -21,7 +22,7 @@ export default function TimesheetPage() {
       return;
     }
 
-    if (!client || !task || !hours) {
+    if (!client || !task || !hours || !minutes) {
       alert("Please fill required fields");
       return;
     }
@@ -37,6 +38,7 @@ export default function TimesheetPage() {
         task,
         aiTool: tool,
         hours: Number(hours),
+        minutesWorked: Number(minutes),
         status,
         notes,
 
@@ -51,6 +53,7 @@ export default function TimesheetPage() {
       setTask("");
       setTool("");
       setHours("");
+      setMinutes("");
       setStatus("Completed");
       setNotes("");
 
@@ -63,11 +66,11 @@ export default function TimesheetPage() {
   return (
   <div
     style={{
-      width: "95%",
-      maxWidth: "1800px",
-      margin: "50px auto",
-      padding: "40px",
-    }}
+    width: "100%",
+    padding: "8px",
+    background: "#F5F7FB",
+    minHeight: "100%",
+  }}
   >
 
     {/* Header */}
@@ -166,7 +169,7 @@ export default function TimesheetPage() {
 
       <input
         style={inputStyle}
-        placeholder="Episode Number"
+        placeholder="Episode Name"
         value={episode}
         onChange={(e)=>setEpisode(e.target.value)}
       />
@@ -231,6 +234,8 @@ export default function TimesheetPage() {
       <option>Seedance 2.0</option>
       <option>Higgsfield</option>
       <option>Frameo AI</option>
+      <option>Premier Pro</option>
+      <option>FCP</option>
 
       </select>
 
@@ -258,7 +263,24 @@ export default function TimesheetPage() {
 
       </div>
 
+        {/*MINUTES*/}
+        <div>
 
+<label style={labelStyle}>
+Minutes Worked *
+</label>
+
+
+<input
+type="number"
+min="0"
+placeholder="Example: 45"
+style={inputStyle}
+value={minutes}
+onChange={(e)=>setMinutes(e.target.value)}
+/>
+
+</div>
 
       {/* Status */}
 
@@ -393,7 +415,9 @@ export default function TimesheetPage() {
     <th style={thStyle}>
       Hours
     </th>
-
+      <th style={thStyle}>
+Minutes
+</th>
     <th style={thStyle}>
       Status
     </th>
@@ -427,6 +451,9 @@ export default function TimesheetPage() {
       <td style={tdStyle}>
         {item.hours}
       </td>
+      <td style={tdStyle}>
+{item.minutesWorked || 0} min
+</td>
 
       <td style={tdStyle}>
         {item.status}
