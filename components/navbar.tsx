@@ -1,4 +1,4 @@
-// 
+
 
 "use client";
 
@@ -80,6 +80,7 @@ export default function Navbar() {
 
   const hideNavbar =
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/workspace") ||
     pathname.startsWith("/attendance") ||
     pathname.startsWith("/leave") ||
     pathname.startsWith("/timesheet") ||

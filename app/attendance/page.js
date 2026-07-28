@@ -873,14 +873,7 @@ gap-5
 
 <div>
 
-<h1
-className="
-text-5xl
-font-extrabold
-text-[#111111]
-tracking-tight
-"
->
+<h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#111111] tracking-tight">
 📅 Attendance Dashboard
 </h1>
 
@@ -955,18 +948,7 @@ font-semibold
 
 
 
-<div
-className="
-bg-[#3d6fa8]
-text-white
-px-8
-py-5
-rounded-2xl
-shadow-md
-text-center
-min-w-[220px]
-"
->
+<div className="bg-[#3d6fa8] text-white px-6 sm:px-8 py-5 rounded-2xl shadow-md text-center w-full sm:w-auto sm:min-w-[220px]">
 
 
 <p

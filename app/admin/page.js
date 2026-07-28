@@ -322,7 +322,7 @@ export default function AdminPage() {
             ["💰 Payroll", "/admin/payroll"],
             ["📋 Timesheets", "/admin/timesheet"],
             ["📄 Documents", "/admin/documents"],
-            ["📊 Reports", "/admin/reports"],
+            ["📊 Reports", "/admin/tools-report"],
             ["🎬 AI Production", "/admin/production"],
             ["📅 Holidays", "/admin/holidays"],
           ].map(([title, link]) => (
