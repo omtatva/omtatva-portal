@@ -13,7 +13,7 @@
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",
     "express": "^5.2.1",
-    "firebase": "^12.15.0",
+    "firebase": "^12.16.0",
     "html2pdf.js": "^0.14.0",
     "india-state-city": "^1.0.3",
     "jspdf": "^4.2.1",
