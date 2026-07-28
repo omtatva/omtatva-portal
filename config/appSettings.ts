@@ -29,7 +29,7 @@ media: {
   users: [
     {
       name: "Main Admin",
-      email: "admin@omtavta.com",
+      email: "admin@omtatvadigitals.com",
       role: "Super Admin",
       permissions: [
         "Dashboard",

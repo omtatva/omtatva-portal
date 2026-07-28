@@ -662,7 +662,7 @@ const loadAnnouncements = async () => {
       })}
     </div>
   )}
-</div>
+
 
           <div className="holiday-section">
             <div className="holiday-header">
@@ -700,6 +700,7 @@ const loadAnnouncements = async () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
   );
 }
