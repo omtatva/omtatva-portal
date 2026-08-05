@@ -18,7 +18,9 @@ import {
 collection,
 getDocs,
 doc,
-deleteDoc
+getDoc,
+deleteDoc,
+updateDoc
 } from "firebase/firestore";
 
 
@@ -46,6 +48,8 @@ const [gpsFilter,setGpsFilter]=useState("");
 
 const [sourceFilter,setSourceFilter]=useState("");
 
+const [showOnlyRequests,setShowOnlyRequests]=useState(false);
+
 const [view,setView]=useState("table");
 
 
@@ -58,17 +62,74 @@ const [selected,setSelected]=useState(null);
 const [showMap,setShowMap]=useState(false);
 const [mapRecord,setMapRecord]=useState(null);
 
+// Punch In/Out correction popup — edits an existing record only,
+// there is no "add new record" flow.
+const [editRecord,setEditRecord]=useState(null);
+const [editPunchIn,setEditPunchIn]=useState("");
+const [editPunchOut,setEditPunchOut]=useState("");
+const [savingEdit,setSavingEdit]=useState(false);
+
 // Sorting
 const [sortBy,setSortBy]=useState("date");
 const [sortOrder,setSortOrder]=useState("desc");
 const [currentPage,setCurrentPage]=useState(1);
 const recordsPerPage=10;
+
+const todayStr = new Date().toISOString().substring(0, 10);
+
 useEffect(() => {
   loadAttendance();
 }, []);
 
+// Determines Present / Late / Absent / Incomplete — mirrors the logic
+// used on the employee-facing AttendancePage.js, based on Firestore
+// settings/attendanceRules (officeStartTime + graceMinutes).
+// Firestore's raw "status" field is only ever "Present" or "Absent" —
+// "Late"/"Incomplete" are always computed here, never stored directly.
+function getDisplayStatus(item, rules) {
+  if (item.status === "Absent") {
+    return "Absent";
+  }
+
+  const punch = item.PunchIn?.toDate
+    ? item.PunchIn.toDate()
+    : item.PunchIn
+    ? new Date(item.PunchIn)
+    : null;
+
+  if (!punch) {
+    return item.status || "Present";
+  }
+
+  // Punched in, day already over, no punch-out — flag it instead of
+  // silently counting it as Present.
+  const punchOut = item.PunchOut?.toDate
+    ? item.PunchOut.toDate()
+    : item.PunchOut
+    ? new Date(item.PunchOut)
+    : null;
+
+  if (!punchOut && item.date !== todayStr) {
+    return "Incomplete";
+  }
+
+  const officeStartTime = rules?.officeStartTime || "10:00";
+  const graceMinutes = Number(rules?.graceMinutes ?? 15);
+
+  const [officeHour, officeMinute] = officeStartTime.split(":").map(Number);
+
+  const cutoff = new Date(punch);
+  cutoff.setHours(officeHour, officeMinute + graceMinutes, 0, 0);
+
+  return punch > cutoff ? "Late" : "Present";
+}
+
 async function loadAttendance() {
   try {
+    // Attendance rules (needed to compute Late status)
+    const rulesSnap = await getDoc(doc(db, "settings", "attendanceRules"));
+    const rules = rulesSnap.exists() ? rulesSnap.data() : null;
+
     // Attendance records
     const attendanceSnap = await getDocs(
       collection(db, "attendance")
@@ -86,7 +147,7 @@ async function loadAttendance() {
       usersMap[doc.id] = doc.data();
     });
 
-    // Merge user details into attendance
+    // Merge user details into attendance + compute displayStatus
     const list = attendanceSnap.docs.map((doc) => {
       const attendance = doc.data();
       const employee = usersMap[attendance.userId] || {};
@@ -103,6 +164,7 @@ async function loadAttendance() {
           employee.email ||
           attendance.email ||
           "--",
+        displayStatus: getDisplayStatus(attendance, rules),
       };
     });
 
@@ -144,6 +206,82 @@ id
 loadAttendance();
 
 
+}
+
+
+// =======================
+// PUNCH IN/OUT CORRECTION POPUP
+// =======================
+
+function toDateTimeLocalValue(value) {
+  const d = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  if (!d) return "";
+  // datetime-local input needs "YYYY-MM-DDTHH:MM" in local time
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function openEditPopup(item) {
+  setEditRecord(item);
+  setEditPunchIn(toDateTimeLocalValue(item.PunchIn));
+
+  // If the employee has already reported the time they left via the
+  // "Report Missed Punch-Out" popup, pre-fill it here so Admin doesn't
+  // have to ask them again — Admin still reviews and confirms by
+  // hitting Save.
+  const requested = item.correctionRequest?.status === "Pending"
+    ? item.correctionRequest.requestedPunchOut
+    : null;
+
+  setEditPunchOut(toDateTimeLocalValue(requested || item.PunchOut));
+}
+
+function closeEditPopup() {
+  setEditRecord(null);
+  setEditPunchIn("");
+  setEditPunchOut("");
+}
+
+async function saveEditPopup() {
+  if (!editRecord) return;
+
+  if (!editPunchIn) {
+    alert("Punch In time is required.");
+    return;
+  }
+
+  const start = new Date(editPunchIn);
+  const end = editPunchOut ? new Date(editPunchOut) : null;
+
+  if (end && end <= start) {
+    alert("Punch Out must be after Punch In.");
+    return;
+  }
+
+  try {
+    setSavingEdit(true);
+
+    const updates = {
+      PunchIn: start,
+      PunchOut: end,
+      totalHours: end ? Number(((end - start) / (1000 * 60 * 60)).toFixed(2)) : 0,
+      correctedBy: "Admin",
+      correctedAt: new Date(),
+      correctionRequest: null,
+    };
+
+    await updateDoc(doc(db, "attendance", editRecord.id), updates);
+
+    closeEditPopup();
+    await loadAttendance();
+  } catch (error) {
+    console.log(error);
+    alert("Could not save changes.");
+  } finally {
+    setSavingEdit(false);
+  }
 }
 
 
@@ -193,7 +331,7 @@ const filteredAttendance = attendance
 
   const statusMatch =
     !statusFilter ||
-    item.status === statusFilter;
+    item.displayStatus === statusFilter;
 
   const gpsMatch =
     !gpsFilter ||
@@ -203,11 +341,16 @@ const filteredAttendance = attendance
     !sourceFilter ||
     item.attendanceSource === sourceFilter;
 
+  const requestMatch =
+    !showOnlyRequests ||
+    item.correctionRequest?.status === "Pending";
+
   return (
     searchMatch &&
     statusMatch &&
     gpsMatch &&
-    sourceMatch
+    sourceMatch &&
+    requestMatch
   );
 
 })
@@ -358,7 +501,9 @@ async function exportExcel(){
 
   "Working Hours": item.totalHours || 0,
 
-  "Status": item.status || "-",
+  "Extra Hours": item.extraHours || 0,
+
+  "Status": item.displayStatus || "-",
 
   "GPS Status": item.gpsStatus || "-",
 
@@ -509,7 +654,51 @@ font-semibold
 
 
 
+{/* PENDING CORRECTION REQUESTS ALERT */}
 
+{
+attendance.filter(x=>x.correctionRequest?.status==="Pending").length > 0 && (
+
+<section className="bg-orange-50 border border-orange-200 rounded-3xl p-6 mb-7 flex items-center justify-between flex-wrap gap-4">
+
+<div className="flex items-center gap-3">
+
+<span className="text-3xl">📩</span>
+
+<div>
+
+<p className="font-bold text-[#111] text-lg">
+
+{attendance.filter(x=>x.correctionRequest?.status==="Pending").length}{" "}
+punch-out request{attendance.filter(x=>x.correctionRequest?.status==="Pending").length>1?"s":""} waiting for review
+
+</p>
+
+<p className="text-sm text-[#666]">
+
+Employees reported a missed punch-out time — review and confirm each one.
+
+</p>
+
+</div>
+
+</div>
+
+<button
+onClick={()=>{
+setShowOnlyRequests(true);
+setView("table");
+}}
+className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-xl font-semibold"
+>
+Review Requests
+</button>
+
+</section>
+
+)
+
+}
 
 
 {/* SUMMARY CARDS */}
@@ -519,7 +708,7 @@ font-semibold
 grid
 grid-cols-1
 sm:grid-cols-2
-xl:grid-cols-4
+xl:grid-cols-5
 gap-5
 mb-7
 ">
@@ -545,7 +734,39 @@ title="Present"
 
 value={
 attendance.filter(
-x=>x.status==="Present"
+x=>x.displayStatus==="Present"
+).length
+}
+
+/>
+
+
+
+<StatCard
+
+icon="🟡"
+
+title="Late"
+
+value={
+attendance.filter(
+x=>x.displayStatus==="Late"
+).length
+}
+
+/>
+
+
+
+<StatCard
+
+icon="⚠️"
+
+title="Incomplete"
+
+value={
+attendance.filter(
+x=>x.displayStatus==="Incomplete"
 ).length
 }
 
@@ -561,23 +782,7 @@ title="Absent"
 
 value={
 attendance.filter(
-x=>x.status==="Absent"
-).length
-}
-
-/>
-
-
-
-<StatCard
-
-icon="🟡"
-
-title="Leave"
-
-value={
-attendance.filter(
-x=>x.status==="Leave"
+x=>x.displayStatus==="Absent"
 ).length
 }
 
@@ -608,8 +813,9 @@ className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 >
 <option value="">Status</option>
 <option value="Present">Present</option>
+<option value="Late">Late</option>
+<option value="Incomplete">Incomplete</option>
 <option value="Absent">Absent</option>
-<option value="Leave">Leave</option>
 </select>
 
 <select
@@ -652,6 +858,17 @@ className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 <option value="desc">Newest</option>
 <option value="asc">Oldest</option>
 </select>
+
+<button
+onClick={()=>setShowOnlyRequests(prev=>!prev)}
+className={`rounded-xl px-4 py-3 font-semibold text-sm ${
+showOnlyRequests
+? "bg-orange-500 text-white"
+: "bg-orange-50 text-orange-700 border border-orange-200"
+}`}
+>
+📩 {showOnlyRequests ? "Showing Requests Only" : "Show Only Requests"}
+</button>
 
 <div className="flex gap-2">
 
@@ -777,7 +994,7 @@ Present
 
 {
 filteredAttendance.filter(
-x=>x.status==="Present"
+x=>x.displayStatus==="Present"
 ).length
 }
 
@@ -795,7 +1012,7 @@ Absent
 
 {
 filteredAttendance.filter(
-x=>x.status==="Absent"
+x=>x.displayStatus==="Absent"
 ).length
 }
 
@@ -813,7 +1030,7 @@ Late
 
 {
 filteredAttendance.filter(
-x=>x.status==="Late"
+x=>x.displayStatus==="Late"
 ).length
 }
 
@@ -913,6 +1130,8 @@ border-[#eaf3ff]
 
 <th className="px-4 py-4 text-center">Hours</th>
 
+<th className="px-4 py-4 text-center">Extra</th>
+
 <th className="px-4 py-4 text-left whitespace-nowrap">Status</th>
 
 <th className="px-4 py-4 text-left whitespace-nowrap">GPS</th>
@@ -934,7 +1153,7 @@ border-[#eaf3ff]
 <tr>
 
 <td
-colSpan={12}
+colSpan={13}
 className="text-center py-16 text-gray-500"
 >
 
@@ -1023,20 +1242,28 @@ className="border-b even:bg-[#fbfdff] hover:bg-[#eef7ff] transition-all duration
 
 </td>
 
+<td className="px-4 py-4 text-center font-semibold text-green-700">
+
+{item.extraHours || 0} hrs
+
+</td>
+
 <td className="px-4 py-4">
 
 <span
 className={`px-3 py-1 rounded-full text-xs font-bold
 
-${item.status==="Present"
+${item.displayStatus==="Present"
 ?"bg-green-100 text-green-700"
-:item.status==="Absent"
+:item.displayStatus==="Absent"
 ?"bg-red-100 text-red-700"
+:item.displayStatus==="Incomplete"
+?"bg-orange-100 text-orange-700"
 :"bg-yellow-100 text-yellow-700"}
 `}
 >
 
-{item.status}
+{item.displayStatus}
 
 </span>
 
@@ -1079,9 +1306,23 @@ ${item.gpsStatus==="Inside Office"
 
 <td className="px-4 py-4">
 
-<div className="flex justify-center gap-2">
+<div className="flex justify-center gap-2 items-center">
 
+{item.correctionRequest?.status === "Pending" && (
+  <span
+    title={item.correctionRequest?.note || "Employee reported a missed punch-out time"}
+    className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap"
+  >
+    📩 Requested
+  </span>
+)}
 
+<button
+onClick={()=>openEditPopup(item)}
+className="bg-[#3d6fa8] hover:bg-[#325d8d] text-white px-4 py-2 rounded-lg text-sm"
+>
+✏️ Update
+</button>
 
 <button
 onClick={()=>deleteAttendance(item.id)}
@@ -1562,7 +1803,7 @@ transition
 
 
 ${
-record?.status==="Present"
+record?.displayStatus==="Present"
 
 ?
 
@@ -1571,7 +1812,7 @@ record?.status==="Present"
 
 :
 
-record?.status==="Late"
+record?.displayStatus==="Late"
 
 
 ?
@@ -1581,7 +1822,15 @@ record?.status==="Late"
 
 :
 
-record?.status==="Absent"
+record?.displayStatus==="Incomplete"
+
+?
+
+"bg-orange-100 text-orange-700"
+
+:
+
+record?.displayStatus==="Absent"
 
 
 ?
@@ -1635,6 +1884,7 @@ flex
 gap-5
 mt-6
 text-sm
+flex-wrap
 ">
 
 
@@ -1667,6 +1917,23 @@ mr-2
 "></span>
 
 Late
+
+</div>
+
+
+
+<div>
+
+<span className="
+inline-block
+w-3
+h-3
+rounded-full
+bg-orange-400
+mr-2
+"></span>
+
+Incomplete
 
 </div>
 
@@ -1739,217 +2006,104 @@ Absent
 </div>
 
 )}
+
+{/* PUNCH IN/OUT UPDATE POPUP */}
+
+{editRecord && (
+
+<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+
+  <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+
+    <div className="flex justify-between items-center px-6 py-5 border-b">
+
+      <div>
+        <h2 className="text-xl font-bold">Update Attendance</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          {editRecord.employeeName || editRecord.email} — {editRecord.date}
+        </p>
+      </div>
+
+      <button
+        onClick={closeEditPopup}
+        className="text-2xl leading-none"
+      >
+        ✕
+      </button>
+
+    </div>
+
+    <div className="p-6 flex flex-col gap-4">
+
+      <div>
+        <label className="text-sm font-semibold text-gray-600">
+          Punch In
+        </label>
+        <input
+          type="datetime-local"
+          value={editPunchIn}
+          onChange={(e)=>setEditPunchIn(e.target.value)}
+          className="w-full border border-[#d7e8fb] rounded-xl px-4 py-3 mt-1"
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-semibold text-gray-600">
+          Punch Out
+        </label>
+        <input
+          type="datetime-local"
+          value={editPunchOut}
+          onChange={(e)=>setEditPunchOut(e.target.value)}
+          className="w-full border border-[#d7e8fb] rounded-xl px-4 py-3 mt-1"
+        />
+        {editRecord.correctionRequest?.status === "Pending" && (
+          <p className="text-xs text-orange-600 mt-1">
+            📩 Employee reported this time
+            {editRecord.correctionRequest?.note
+              ? ` — "${editRecord.correctionRequest.note}"`
+              : ""}
+          </p>
+        )}
+      </div>
+
+      <div className="flex gap-3 mt-2">
+
+        <button
+          onClick={saveEditPopup}
+          disabled={savingEdit}
+          className="flex-1 bg-[#3d6fa8] hover:bg-[#325d8d] text-white py-3 rounded-xl font-semibold disabled:bg-gray-300"
+        >
+          {savingEdit ? "Saving..." : "Save"}
+        </button>
+
+        <button
+          onClick={closeEditPopup}
+          className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold"
+        >
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+)}
 </main>
 </div>
 );
 
-// {
-// {selected && (
-
-// <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-
-// <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden">
-
-// {/* Header */}
-
-// <div className="bg-[#3d6fa8] text-white px-8 py-6 flex justify-between items-center">
-
-// <div>
-
-// <h2 className="text-2xl font-bold">
-// Attendance Details
-// </h2>
-
-// <p className="text-blue-100 text-sm mt-1">
-// Employee Attendance Information
-// </p>
-
-// </div>
-
-// <button
-// onClick={()=>setSelected(null)}
-// className="text-2xl hover:rotate-90 transition"
-// >
-// ✕
-// </button>
-
-// </div>
-
-// {/* Body */}
-
-// <div className="p-8">
-
-// <div className="flex items-center gap-5 mb-8">
-
-// <div className="w-20 h-20 rounded-full bg-[#3d6fa8] text-white flex items-center justify-center text-3xl font-bold">
-
-// {(selected.employeeName || selected.email || "E")
-// .charAt(0)
-// .toUpperCase()}
-
-// </div>
-
-// <div>
-
-// <h3 className="text-2xl font-bold">
-
-// {selected.employeeName || "Employee"}
-
-// </h3>
-
-// <p className="text-gray-500">
-
-// {selected.email}
-
-// </p>
-
-// <p className="text-sm text-gray-400">
-
-// Employee ID : {selected.employeeId || "--"}
-
-// </p>
-
-// </div>
-
-// </div>
-
-// <div className="grid md:grid-cols-2 gap-5">
-
-// <Card
-// title="📅 Date"
-// value={selected.date}
-// />
-
-// <Card
-// title="🟢 Status"
-// value={selected.status}
-// />
-
-// <Card
-// title="🕘 Punch In"
-// value={formatTime(selected.PunchIn)}
-// />
-
-// <Card
-// title="🕔 Punch Out"
-// value={formatTime(selected.PunchOut)}
-// />
-
-// <Card
-// title="⏱ Working Hours"
-// value={`${selected.totalHours || 0} hrs`}
-// />
-
-// <Card
-// title="💻 Source"
-// value={selected.attendanceSource || "System"}
-// />
-
-// <Card
-// title="📍 GPS Status"
-// value={selected.gpsStatus || "--"}
-// />
-
-// <Card
-// title="📏 Distance"
-// value={
-// selected.distanceFromOffice
-// ? `${Math.round(selected.distanceFromOffice)} m`
-// : "--"
-// }
-// />
-
-// </div>
-
-// {/* Coordinates */}
-
-// <div className="mt-8">
-
-// <h3 className="font-bold text-lg mb-3">
-// GPS Coordinates
-// </h3>
-
-// <div className="grid md:grid-cols-2 gap-5">
-
-// <Card
-// title="Latitude"
-// value={selected.latitude || "--"}
-// />
-
-// <Card
-// title="Longitude"
-// value={selected.longitude || "--"}
-// />
-
-// </div>
-
-// </div>
-
-// {/* Buttons */}
-
-// <div className="flex gap-3 mt-8">
-
-// <button
-// onClick={()=>{
-// setMapRecord(selected);
-// setShowMap(true);
-// }}
-// className="flex-1 bg-[#3d6fa8] text-white rounded-xl py-3 font-semibold hover:bg-[#315c8c]"
-// >
-
-// 🗺 View on Map
-
-// </button>
-
-// <button
-// onClick={()=>setSelected(null)}
-// className="flex-1 border border-gray-300 rounded-xl py-3 font-semibold hover:bg-gray-50"
-// >
-
-// Close
-
-// </button>
-
-// </div>
-
-// </div>
-
-// </div>
-
-// </div>
-
-// )}
-
-// }
 }
 function StatCard({
 icon,
 title,
 value
 }){
-function Card({title,value}){
 
-return(
-
-<div className="bg-[#f8fbff] border border-[#eaf3ff] rounded-2xl p-5">
-
-<p className="text-sm text-gray-500">
-
-{title}
-
-</p>
-
-<h3 className="text-lg font-bold text-[#111] mt-2 break-all">
-
-{value}
-
-</h3>
-
-</div>
-
-);
-
-}
 return (
 
 <div className="
@@ -2012,9 +2166,29 @@ mt-2
 
 }
 
+function Card({title,value}){
 
+return(
 
+<div className="bg-[#f8fbff] border border-[#eaf3ff] rounded-2xl p-5">
 
+<p className="text-sm text-gray-500">
+
+{title}
+
+</p>
+
+<h3 className="text-lg font-bold text-[#111] mt-2 break-all">
+
+{value}
+
+</h3>
+
+</div>
+
+);
+
+}
 // "use client";
 
 // import { useEffect, useState } from "react";
@@ -2138,7 +2312,7 @@ mt-2
 // <button
 //         onClick={() => (window.location.href = "/admin")}
 //         style={{
-//           background: "#2563eb",
+//           background: "#3d6fa8",
 //           color: "#fff",
 //           border: "none",
 //           padding: "10px 20px",

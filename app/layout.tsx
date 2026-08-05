@@ -3,7 +3,7 @@ import Navbar from "@/components/navbar";
 import "./globals.css";
 import "react-phone-number-input/style.css";
 import { Toaster } from "react-hot-toast";
-
+import ThemeSync from "@/components/ThemeSync";
 export const metadata: Metadata = {
   title: "OMTATVA DIGITALS | AI Production & HR Platform",
   description:
@@ -19,33 +19,24 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body
         style={{
           margin: 0,
           padding: 0,
-          background: "#f8fbff",
+          background: "var(--bg-color)",
+          color: "var(--text-color)",
           fontFamily: "Inter, sans-serif",
           overflowX: "hidden",
         }}
       >
+        <ThemeSync />
         <Navbar />
-
-        <main
-          style={{
-            width: "100%",
-            padding: 0,
-            margin: 0,
-          }}
-        >
+        <main style={{ width: "100%", padding: 0, margin: 0 }}>
           {children}
-
           <Toaster position="top-right" reverseOrder={false} />
         </main>
       </body>

@@ -143,7 +143,7 @@ const inputStyle = {
 };
 
 const button = {
-  background: "#2563eb",
+  background: "#3d6fa8",
   color: "#fff",
   border: "none",
   padding: "14px 30px",

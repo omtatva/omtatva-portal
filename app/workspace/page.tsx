@@ -39,7 +39,7 @@ export default function WorkspacePage() {
       icon: "🚀",
       description: "Internal AI Workspace",
       badge: "Internal",
-      color: "#2563eb",
+      color: "#3d6fa8",
       action: () => openTool("Frameo Workspace", () => (window.location.href = "/workspace/Frameo")),
     },
     {
@@ -118,6 +118,23 @@ export default function WorkspacePage() {
         <p className="text-base sm:text-lg text-[#444444] mt-3">
           All your communication and AI production tools, in one place.
         </p>
+
+        <button
+      onClick={() => (window.location.href = "/dashboard")}
+       className="ml-auto"
+      style={{
+        padding: "13px 24px",
+        background: "#3d6fa8",
+        color: "#fff",
+        border: "none",
+        borderRadius: 10,
+        fontWeight: 700,
+        fontSize: 14.5,
+        cursor: "pointer",
+      }}
+    >
+      ← Dashboard
+    </button>
       </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -204,7 +221,7 @@ export default function WorkspacePage() {
 //       icon: "🚀",
 //       description: "Internal AI Workspace",
 //       badge: "Internal",
-//       color: "#2563eb",
+//       color: "#3d6fa8",
 //       action: () => (window.location.href = "/workspace/Frameo"),
 //     },
 //     {

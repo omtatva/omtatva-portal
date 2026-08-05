@@ -7,6 +7,40 @@
 
 @import "tailwindcss";
 
+/* =========================================================
+   THEME VARIABLES
+   Set by ThemeSync.tsx via data-theme on <html>, driven by
+   settings/appearance.theme in Firestore.
+   ========================================================= */
+
+:root {
+  --bg-color: #f8fbff;
+  --text-color: #0f172a;
+  --text-muted: #64748b;
+  --card-bg: #ffffff;
+  --border-color: #eaf3ff;
+  --hover-bg: #eff6ff;
+  --icon-bg: #f1f5f9;
+  --table-row-alt: #f8fafc;
+}
+
+[data-theme="dark"] {
+  --bg-color: #0f172a;
+  --text-color: #e2e8f0;
+  --text-muted: #94a3b8;
+  --card-bg: #1e293b;
+  --border-color: #334155;
+  --hover-bg: #263449;
+  --icon-bg: #263449;
+  --table-row-alt: #1a2537;
+}
+
+body {
+  background: var(--bg-color);
+  color: var(--text-color);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
 .stats-card {
   transition: all 0.3s ease;
 }
@@ -46,7 +80,8 @@ html {
 }
 
 .employee-card{
-  background:white;
+  background: var(--card-bg);
+  color: var(--text-color);
   padding:25px;
   border-radius:18px;
   box-shadow:0 8px 20px rgba(0,0,0,.08);
@@ -58,7 +93,7 @@ html {
   align-items:center;
   padding:15px;
   margin-top:15px;
-  background:#f8fafc;
+  background: var(--table-row-alt);
   border-radius:12px;
   flex-wrap: wrap;
   gap: 8px;
@@ -66,6 +101,7 @@ html {
 
 .holiday-item h3{
   margin:0;
+  color: var(--text-color);
 }
 
 .holiday-item span{
@@ -79,7 +115,8 @@ html {
 /* Upcoming Holiday Section */
 
 .holiday-section{
-  background:white;
+  background: var(--card-bg);
+  color: var(--text-color);
   border-radius:22px;
   padding:25px;
   box-shadow: 0 10px 30px rgba(0,0,0,.08);
@@ -92,7 +129,7 @@ html {
 }
 
 .holiday-header p{
-  color:#64748b;
+  color: var(--text-muted);
   margin-top:5px;
 }
 
@@ -136,7 +173,7 @@ html {
 .holiday-card{
   display:flex;
   align-items:center;
-  background:#f8fafc;
+  background: var(--table-row-alt);
   padding:18px;
   border-radius:16px;
   transition:.3s;
@@ -169,11 +206,12 @@ html {
 .holiday-info h3{
   margin:0;
   font-size:17px;
+  color: var(--text-color);
 }
 
 .holiday-info p{
   margin:5px 0 0;
-  color:#64748b;
+  color: var(--text-muted);
 }
 
 .holiday-category{
@@ -189,16 +227,17 @@ html {
 
 .dashboard-layout {
   display: flex;
-  background: #f5f7fb;
+  background: var(--bg-color);
   min-height: 100vh;
 }
 
 .dashboard-content {
-  margin-left: 280px;
-  width: calc(100% - 280px);
+  margin-left: var(--sidebar-width, 260px);
+  width: calc(100% - var(--sidebar-width, 260px));
   padding: 35px;
   transition: margin-left 0.3s ease, width 0.3s ease;
 }
+ 
 
 /* ===== SIDEBAR ===== */
 
@@ -206,16 +245,16 @@ html {
   position: fixed;
   top:72px;
   left:0;
-  width: 280px;
+  width:260px;
   height:calc(100vh - 72px);
-  background: #fff;
-  border-right:1px solid #EAF3FF;
-  transition: transform .3s ease;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border-color);
+  transition:all .2s ease;
   overflow-y:auto;
   z-index:999;
-  padding: 25px;
-  display: flex;
-  flex-direction: column;
+  padding:25px;
+  display:flex;
+  flex-direction:column;
 }
 
 .sidebarLogo{
@@ -235,13 +274,13 @@ html {
 .sidebarLogo h2{
   margin:0;
   font-size:20px;
-  color:#0f172a;
+  color: var(--text-color);
   font-weight:700;
 }
 
 .sidebarLogo p{
   margin-top:4px;
-  color:#64748b;
+  color: var(--text-muted);
   font-size:13px;
 }
 
@@ -260,23 +299,23 @@ html {
   top: 14px;
   left: 16px;
   z-index: 1001;
-  background: #fff;
-  border: 1px solid #EAF3FF;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   cursor: pointer;
   padding: 10px;
   border-radius: 12px;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 15px rgba(0,0,0,.08);
-  color: #0f172a;
+  color: var(--text-color);
 }
 
 .mobileSidebarToggle:hover{
-  background: #eff6ff;
+  background: var(--hover-bg);
 }
 
 .menuTitle{
-  color:#94a3b8;
+  color: var(--text-muted);
   font-size:12px;
   font-weight:700;
   letter-spacing:1px;
@@ -296,14 +335,14 @@ html {
   gap:14px;
   padding:14px 16px;
   border-radius:14px;
-  color:#334155;
+  color: var(--text-color);
   text-decoration:none;
   transition:.25s;
   font-weight:500;
 }
 
 .sidebar nav a:hover{
-  background:#eff6ff;
+  background: var(--hover-bg);
   color:#3d6fa8;
   transform:translateX(5px);
 }
@@ -318,7 +357,7 @@ html {
   width:36px;
   height:36px;
   border-radius:12px;
-  background:#f1f5f9;
+  background: var(--icon-bg);
   display:flex;
   justify-content:center;
   align-items:center;
@@ -330,7 +369,7 @@ html {
 }
 
 .sidebarFooter{
-  border-top:1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   padding-top:20px;
   margin-top: auto;
 }
@@ -357,11 +396,11 @@ html {
 
 .userCard h4{
   margin:0;
-  color:#0f172a;
+  color: var(--text-color);
 }
 
 .userCard span{
-  color:#64748b;
+  color: var(--text-muted);
   font-size:13px;
 }
 
@@ -392,8 +431,8 @@ html {
   position: sticky;
   top: 0;
   height: 72px;
-  background: #fff;
-  border-bottom: 1px solid #EAF3FF;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -493,4 +532,247 @@ html {
     margin-right: 0;
     margin-bottom: 10px;
   }
+}
+
+/* =========================================================
+   ADMIN TABLE PAGES (Leave / WFH / Payroll etc.)
+   ========================================================= */
+
+.admin-tabs{
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-tab-btn{
+  padding: 12px 26px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  background: var(--icon-bg);
+  color: var(--text-color);
+}
+
+.admin-tab-btn.active{
+  background: #3d6fa8;
+  color: #fff;
+}
+
+.admin-table-wrap{
+  margin-top: 25px;
+  overflow-x: auto;
+  padding: 0;
+}
+
+.admin-table{
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.admin-table thead tr{
+  background: #3d6fa8;
+}
+
+.admin-table th{
+  padding: 18px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-table td{
+  padding: 18px;
+  color: var(--text-color);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.status-pill{
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.admin-remarks-input{
+  width: 100%;
+  min-width: 160px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  resize: none;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.greenBtn{
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.redBtn{
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* ---- Tablet: keep it a normal scrollable table ---- */
+
+@media (max-width: 900px) {
+
+  .admin-table{
+    min-width: 700px;
+  }
+
+}
+
+/* ---- Phone: drop the table grid entirely, stack each row
+   as a labeled card. No horizontal scrolling needed. ---- */
+
+@media (max-width: 480px) {
+
+  .admin-table,
+  .admin-table thead,
+  .admin-table tbody,
+  .admin-table th,
+  .admin-table td,
+  .admin-table tr{
+    display: block;
+    width: 100%;
+  }
+
+  .admin-table{
+    min-width: 0;
+  }
+
+  .admin-table thead{
+    display: none; /* labels come from data-label on each td instead */
+  }
+
+  .admin-table tr{
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 10px 14px;
+    background: var(--card-bg);
+  }
+
+  .admin-table td{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    text-align: right;
+    white-space: normal;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 0;
+  }
+
+  .admin-table td:last-child{
+    border-bottom: none;
+  }
+
+  .admin-table td::before{
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  .admin-remarks-input{
+    min-width: 0;
+  }
+
+}
+
+/* =========================================================
+   ANNOUNCEMENTS PAGE
+   ========================================================= */
+
+.announcement-input{
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 14.5px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.announcement-composer-footer{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.announcement-card{
+  background: var(--card-bg);
+  color: var(--text-color);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.05);
+}
+
+.announcement-card-inner{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.announcement-delete-btn{
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+
+  .announcement-composer-footer button:last-child{
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .announcement-card{
+    padding: 16px 18px;
+  }
+
+  .announcement-card-inner{
+    flex-direction: column;
+  }
+
+  .announcement-delete-btn{
+    align-self: flex-end;
+  }
+
 }

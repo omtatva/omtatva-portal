@@ -21,6 +21,25 @@ export default function DashboardLayout({
         overflow: "hidden",
       }}
     >
+      {/* Main content's left margin mirrors the desktop sidebar width
+          (260px open / 80px collapsed) so content never sits under it.
+          On mobile the Sidebar turns into an off-canvas drawer instead
+          (see Sidebar.tsx's mobileOpen/backdrop), so that margin no
+          longer applies there — it's zeroed out below, and padding
+          shrinks too so content isn't cramped on small screens. */}
+      <style jsx>{`
+        .dash-main {
+          margin-left: ${sidebarOpen ? "260px" : "80px"};
+          padding: 20px;
+        }
+        @media (max-width: 768px) {
+          .dash-main {
+            margin-left: 0 !important;
+            padding: 14px !important;
+          }
+        }
+      `}</style>
+
       {/* Top Navbar */}
       <DashboardNavbar
         sidebarOpen={sidebarOpen}
@@ -35,39 +54,26 @@ export default function DashboardLayout({
           overflow: "hidden",
         }}
       >
-
         <Sidebar open={sidebarOpen} />
 
-
         <main
+          className="dash-main"
           style={{
             flex: 1,
-
-            marginLeft: sidebarOpen ? "260px" : "80px",
-
             transition: "margin-left 0.3s ease",
-
-            padding: "20px",
-
-            backgroundColor:
-              appSettings.colors.background,
-
-            backgroundImage:
-              appSettings.branding.backgroundImage
-                ? `url(${appSettings.branding.backgroundImage})`
-                : "none",
-
+            backgroundColor: appSettings.colors.background,
+            backgroundImage: appSettings.branding.backgroundImage
+              ? `url(${appSettings.branding.backgroundImage})`
+              : "none",
             backgroundSize: "cover",
-
             backgroundPosition: "center",
-
             overflowY: "auto",
+            boxSizing: "border-box",
           }}
         >
           {children}
         </main>
-
       </div>
-    </div>
+     </div>
   );
 }

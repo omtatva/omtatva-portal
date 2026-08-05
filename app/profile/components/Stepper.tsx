@@ -79,7 +79,7 @@ export default function Stepper({
                 background: completed
                   ? "#16a34a"
                   : active
-                  ? "#2563eb"
+                  ? "#3d6fa8"
                   : "#dbeafe",
                 color: "#fff",
                 display: "flex",
@@ -104,7 +104,7 @@ export default function Stepper({
                 color: completed
                   ? "#16a34a"
                   : active
-                  ? "#2563eb"
+                  ? "#3d6fa8"
                   : "#64748b",
               }}
             >

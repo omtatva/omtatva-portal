@@ -144,7 +144,7 @@ const deleteAsset = async (id) => {
 <button
         onClick={() => (window.location.href = "/admin")}
         style={{
-          background: "#2563eb",
+          background: "#3d6fa8",
           color: "#fff",
           border: "none",
           padding: "10px 20px",
@@ -297,7 +297,7 @@ const deleteAsset = async (id) => {
           onClick={assignAsset}
           style={{
             marginTop: "30px",
-            background: "#2563eb",
+            background: "#3d6fa8",
             color: "#fff",
             border: "none",
             padding: "15px 30px",

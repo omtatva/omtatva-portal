@@ -48,6 +48,9 @@ const [loading,setLoading]=useState(true);
 const [editMode,setEditMode]=useState(false);
 
 
+const [saving,setSaving]=useState(false);
+
+
 const [showLOI,setShowLOI]=useState(false);
 
 
@@ -67,7 +70,6 @@ const [performance,setPerformance]=useState("");
 
 const currentDate =
 new Date().toLocaleDateString("en-IN");
-
 
 
 
@@ -268,6 +270,9 @@ const saveEmployee=async()=>{
 try{
 
 
+setSaving(true);
+
+
 await setDoc(
 
 doc(
@@ -316,6 +321,18 @@ id
 {
 
 
+firstName:
+employee.firstName || "",
+
+
+lastName:
+employee.lastName || "",
+
+
+phone:
+employee.phone || "",
+
+
 department:
 employee.department || "",
 
@@ -329,9 +346,12 @@ employee.role || "employee",
 
 
 status:
-employee.status || "active",
+employee.status || "inactive",          // ⬅ changed default
 
+hrApprovalStatus:                          // ⬅ NEW
+employee.hrApprovalStatus || "Pending",
 
+performance: performance,
 updatedAt:
 serverTimestamp()
 
@@ -375,6 +395,13 @@ console.log(error);
 toast.error(
 "Update failed"
 );
+
+
+}
+finally{
+
+
+setSaving(false);
 
 
 }
@@ -425,121 +452,142 @@ return (
 
 
 <div
+style={{
+background: "linear-gradient(135deg,  #1b5291,#3d6fa8)",
+borderRadius: "20px",
+padding: "30px",
+color: "#fff",
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+marginBottom: "30px",
+boxShadow: "0 10px 30px rgba(37,99,235,.25)",
+flexWrap: "wrap",
+gap: "20px",
+}}
+>
+{/* Left Side */}
+<div
+style={{
+display: "flex",
+alignItems: "center",
+gap: "25px",
+flexWrap: "wrap",
+}}
+>
+<img
+  src={
+    employee.profilePhoto ||
+    employee.photoURL ||
+    employee.documents?.photo ||
+    "/profile.png"
+  }
+  alt="Profile"
+style={{
+width: "110px",
+height: "110px",
+borderRadius: "50%",
+objectFit: "cover",
+border: "5px solid rgba(255,255,255,.9)",
+background: "#fff",
+}}
+/>
+
+<div>
+<h1
+style={{
+margin: 0,
+fontSize: "34px",
+fontWeight: "700",
+}}
+>
+{employee.firstName} {employee.lastName}
+</h1>
+
+<p
+style={{
+margin: "8px 0",
+fontSize: "18px",
+opacity: ".95",
+}}
+>
+{employee.designation || "Employee"}
+</p>
+
+<div
+style={{
+display: "flex",
+gap: "10px",
+flexWrap: "wrap",
+marginTop: "12px",
+}}
+>
+<span
+style={{
+background: "rgba(255,255,255,.15)",
+padding: "8px 14px",
+borderRadius: "25px",
+fontSize: "14px",
+}}
+>
+🆔 {employee.employeeId || "-"}
+</span>
+
+<span
+style={{
+background: "rgba(255,255,255,.15)",
+padding: "8px 14px",
+borderRadius: "25px",
+fontSize: "14px",
+}}
+>
+🏢 {employee.department || "-"}
+</span>
+
+<span
   style={{
-    background: "linear-gradient(135deg,  #1b5291,#3d6fa8)",
-    borderRadius: "20px",
-    padding: "30px",
+    padding: "8px 16px",
+    borderRadius: "25px",
+    fontSize: "14px",
+    fontWeight: "600",
+    background:
+      (employee.hrApprovalStatus || "Pending") === "Approved"
+        ? "#16a34a"
+        : (employee.hrApprovalStatus || "Pending") === "Rejected"
+        ? "#dc2626"
+        : "#f59e0b",
     color: "#fff",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "30px",
-    boxShadow: "0 10px 30px rgba(37,99,235,.25)",
-    flexWrap: "wrap",
-    gap: "20px",
   }}
 >
-  {/* Left Side */}
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "25px",
-    }}
-  >
-    <img
-      src={employee.profilePhoto || "/profile.png"}
-      alt="Profile"
-      style={{
-        width: "110px",
-        height: "110px",
-        borderRadius: "50%",
-        objectFit: "cover",
-        border: "5px solid rgba(255,255,255,.9)",
-        background: "#fff",
-      }}
-    />
+  {(employee.hrApprovalStatus || "Pending") === "Approved"
+    ? "🟢 Approved"
+    : (employee.hrApprovalStatus || "Pending") === "Rejected"
+    ? "🔴 Rejected"
+    : "🟡 Pending"}
+</span>
+</div>
+</div>
+</div>
 
-    <div>
-      <h1
-        style={{
-          margin: 0,
-          fontSize: "34px",
-          fontWeight: "700",
-        }}
-      >
-        {employee.firstName} {employee.lastName}
-      </h1>
+{/* Right Side */}
+<div
+style={{
+display: "flex",
+flexDirection: "column",
+alignItems: "flex-end",
+gap: "12px",
+}}
+>
 
-      <p
-        style={{
-          margin: "8px 0",
-          fontSize: "18px",
-          opacity: ".95",
-        }}
-      >
-        {employee.designation || "Employee"}
-      </p>
+<div
+style={{
+display:"flex",
+gap:"10px",
+flexWrap:"wrap",
+justifyContent:"flex-end"
+}}
+>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          flexWrap: "wrap",
-          marginTop: "12px",
-        }}
-      >
-        <span
-          style={{
-            background: "rgba(255,255,255,.15)",
-            padding: "8px 14px",
-            borderRadius: "25px",
-            fontSize: "14px",
-          }}
-        >
-          🆔 {employee.employeeId || "-"}
-        </span>
-
-        <span
-          style={{
-            background: "rgba(255,255,255,.15)",
-            padding: "8px 14px",
-            borderRadius: "25px",
-            fontSize: "14px",
-          }}
-        >
-          🏢 {employee.department || "-"}
-        </span>
-
-        <span
-          style={{
-            background:
-              employee.status === "active"
-                ? "#16a34a"
-                : "#dc2626",
-            padding: "8px 16px",
-            borderRadius: "25px",
-            fontSize: "14px",
-            fontWeight: "600",
-          }}
-        >
-          {employee.status === "active"
-            ? "🟢 Active"
-            : "🔴 Inactive"}
-        </span>
-      </div>
-    </div>
-  </div>
-
-  {/* Right Side */}
-  <div
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "flex-end",
-      gap: "12px",
-    }}
-  >
 <button
 onClick={()=>window.location.href="/admin/users"}
 style={{
@@ -556,17 +604,700 @@ cursor:"pointer"
 ← Dashboard
 </button>
 
-    <div
-      style={{
-        textAlign: "right",
-        fontSize: "14px",
-        opacity: ".95",
-      }}
-    >
-      <div>📧 {employee.email}</div>
-      <div>📱 {employee.phone || "-"}</div>
-    </div>
-  </div>
+{!editMode && (
+<button
+onClick={()=>setEditMode(true)}
+style={{
+padding:"15px 28px",
+fontSize:"15px",
+borderRadius:12,
+border:"none",
+background:"#16a34a",
+color:"#fff",
+fontWeight:700,
+cursor:"pointer"
+}}
+>
+✏️ Edit Employee
+</button>
+)}
+
+{editMode && (
+<>
+<button
+onClick={saveEmployee}
+disabled={saving}
+style={{
+padding:"15px 28px",
+fontSize:"15px",
+borderRadius:12,
+border:"none",
+background: saving ? "#93c5fd" : "#16a34a",
+color:"#fff",
+fontWeight:700,
+cursor: saving ? "default" : "pointer"
+}}
+>
+{saving ? "Saving..." : "💾 Save Changes"}
+</button>
+
+<button
+onClick={()=>{
+setEditMode(false);
+loadEmployee();
+}}
+style={{
+padding:"15px 28px",
+fontSize:"15px",
+borderRadius:12,
+border:"none",
+background:"#dc2626",
+color:"#fff",
+fontWeight:700,
+cursor:"pointer"
+}}
+>
+Cancel
+</button>
+</>
+)}
+
+</div>
+
+<div
+style={{
+textAlign: "right",
+fontSize: "14px",
+opacity: ".95",
+}}
+>
+<div>📧 {employee.email}</div>
+<div>📱 {employee.phone || "-"}</div>
+</div>
+</div>
+</div>
+
+
+{/* PERSONAL INFORMATION */}
+
+<div style={sectionCard}>
+
+<h2>
+👤 Personal Information
+</h2>
+
+<div style={grid}>
+
+<Field
+label="First Name"
+value={employee.firstName || ""}
+edit={editMode}
+onChange={(v)=>
+updateField(
+"firstName",
+v
+)
+}
+/>
+
+<Field
+label="Last Name"
+value={employee.lastName || ""}
+edit={editMode}
+onChange={(v)=>
+updateField(
+"lastName",
+v
+)
+}
+/>
+
+<Field
+label="Personal Email"
+value={employee.email || ""}
+edit={false}
+/>
+
+<Field
+label="Phone"
+value={employee.phone || ""}
+edit={editMode}
+onChange={(v)=>
+updateField(
+"phone",
+v
+)
+}
+/>
+
+<Field
+label="Date of Birth"
+type="date"
+value={employee.dob || ""}
+edit={editMode}
+onChange={(v)=>
+updateField(
+"dob",
+v
+)
+}
+/>
+
+<div>
+
+<label>
+Gender
+</label>
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.gender || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"gender",
+e.target.value
+)
+
+}
+
+>
+
+<option value="">
+Select
+</option>
+
+<option>
+Male
+</option>
+
+<option>
+Female
+</option>
+
+<option>
+Other
+</option>
+
+</select>
+
+</div>
+
+<Field
+label="Blood Group"
+value={employee.bloodGroup || ""}
+edit={editMode}
+onChange={(v)=>
+updateField(
+"bloodGroup",
+v
+)
+}
+/>
+
+</div>
+
+</div>
+
+
+
+{/* EMPLOYMENT DETAILS */}
+
+<div style={sectionCard}>
+
+<h2>
+💼 Employment Details
+</h2>
+
+
+
+<div style={grid}>
+
+
+
+
+<div>
+
+<label>
+Department
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.department || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"department",
+e.target.value
+)
+
+}
+
+>
+
+
+
+<option value="">
+Select
+</option>
+
+<option>
+Production
+</option>
+
+<option>
+IT
+</option>
+<option>
+HR
+</option>
+
+<option>
+Marketing
+</option>
+
+<option>
+Management
+</option>
+
+<option>
+Operations
+</option>
+
+<option>
+Creative
+</option>
+
+
+</select>
+
+</div>
+
+
+
+
+
+
+<div>
+
+<label>
+Designation
+</label>
+
+
+<input
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.designation || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"designation",
+e.target.value
+)
+
+}
+
+/>
+
+
+</div>
+
+
+
+<div>
+
+<label>
+Role
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.role || "employee"
+}
+
+onChange={(e)=>
+
+updateField(
+"role",
+e.target.value
+)
+
+}
+
+>
+
+
+<option value="employee">
+Employee
+</option>
+
+<option value="head">
+Head
+</option>
+
+<option value="HR Admin">
+HR
+</option>
+
+<option value="Admin">
+Admin
+</option>
+
+<option value="Super Admin">
+Super Admin
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+<div>
+
+<label>
+Reporting Manager
+</label>
+
+
+<input
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.reportingManager || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"reportingManager",
+e.target.value
+)
+
+}
+
+/>
+
+
+</div>
+
+
+
+
+
+
+
+<div>
+
+<label>
+Employment Type
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.employmentType || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"employmentType",
+e.target.value
+)
+
+}
+
+>
+
+
+<option value="">
+Select
+</option>
+
+
+<option>
+Permanent
+</option>
+
+<option>
+Contract
+</option>
+
+<option>
+Intern
+</option>
+
+<option>
+Freelancer
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+
+<div>
+
+<label>
+Work Mode
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.workMode || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"workMode",
+e.target.value
+)
+
+}
+
+>
+
+
+<option>
+Office
+</option>
+
+<option>
+Hybrid
+</option>
+
+<option>
+Remote
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+
+
+
+<div>
+
+<label>
+Office Location
+</label>
+
+
+<input
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.officeLocation || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"officeLocation",
+e.target.value
+)
+
+}
+
+/>
+
+
+</div>
+
+
+
+
+
+
+<div>
+
+<label>
+Joining Date
+</label>
+
+
+<input
+
+type="date"
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.joiningDate || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"joiningDate",
+e.target.value
+)
+
+}
+
+/>
+
+
+</div>
+
+
+
+
+
+
+
+<div>
+
+<label>
+Notice Period
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.noticePeriod || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"noticePeriod",
+e.target.value
+)
+
+}
+
+>
+<option>
+NA
+</option>
+
+<option>
+15 Days
+</option>
+
+<option>
+30 Days
+</option>
+
+<option>
+60 Days
+</option>
+
+<option>
+90 Days
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+
+
+
+<div>
+
+<label>
+Official Email
+</label>
+
+
+<input
+
+style={{
+...input,
+background:"#f3f4f6"
+}}
+
+value={
+employee.officialEmail || ""
+}
+
+disabled
+
+/>
+
+
+</div>
+</div>
 </div>
 
 
@@ -591,7 +1322,6 @@ edit={editMode}
 onChange={(v)=>
 updateField(
 "currentAddressLine1",
-v
 )
 }
 />
@@ -1292,116 +2022,112 @@ style={documentBtn}
 
 
 
-
 {/* HR MANAGEMENT */}
 
-
-
 <div style={sectionCard}>
-
 
 <h2>
 🧑‍💼 HR Management
 </h2>
 
-
-
 <div style={grid}>
 
+<div>
 
-<Field
+<label>
+HR Approval Status
+</label>
 
-label="Performance Rating"
+<select
+disabled={!editMode}
+style={input}
+value={employee.hrApprovalStatus || "Pending"}
+onChange={(e)=>{
 
-value={performance}
+const newStatus = e.target.value;
 
-edit={editMode}
+updateField("hrApprovalStatus", newStatus);
 
-onChange={(v)=>
+if(newStatus === "Approved"){
 
-setPerformance(v)
-
-}
-
-/>
-
-
-
-<Field
-
-label="Verification Status"
-
-value={
-employee.verificationStatus
-}
-
-edit={editMode}
-
-onChange={(v)=>
-
-updateField(
-"verificationStatus",
-v
-)
+updateField("verificationStatus","Verified");
+updateField("status","active");
 
 }
 
-/>
+else if(newStatus === "Rejected"){
 
-
-
-<Field
-
-label="Employee Status"
-
-value={
-employee.status
-}
-
-edit={editMode}
-
-onChange={(v)=>
-
-updateField(
-"status",
-v
-)
+updateField("verificationStatus","Rejected");
+updateField("status","inactive");
 
 }
 
-/>
+else{
 
-
-
-<Field
-
-label="HR Approved"
-
-value={
-employee.hrApproved
-?
-"Yes"
-:
-"No"
-}
-
-edit={editMode}
-
-onChange={(v)=>
-
-updateField(
-"hrApproved",
-v==="Yes"
-)
+updateField("verificationStatus","Pending");
+updateField("status","inactive");
 
 }
 
-/>
+}}
+>
 
+<option value="Pending">
+🟡 Pending
+</option>
+
+<option value="Approved">
+🟢 Approved
+</option>
+
+<option value="Rejected">
+🔴 Rejected
+</option>
+
+</select>
 
 </div>
 
+<div>
 
+<label>
+Verification Status
+</label>
+
+<input
+style={{
+...input,
+background:"#f3f4f6"
+}}
+value={employee.verificationStatus || "Pending"}
+disabled
+/>
+
+</div>
+
+<div>
+
+<label>
+Employee Status
+</label>
+
+<input
+style={{
+...input,
+background:"#f3f4f6",
+color:
+employee.status === "active"
+? "#16a34a"
+: "#dc2626",
+fontWeight:"700"
+}}
+value={employee.status || "inactive"}
+disabled
+/>
+
+</div>
+
+</div>
 
 <div
 style={{
@@ -1409,47 +2135,25 @@ marginTop:"25px"
 }}
 >
 
-
 <label>
-
 HR Notes
-
 </label>
 
-
 <textarea
-
 disabled={!editMode}
-
-value={
-employee.hrNotes || ""
-}
-
+value={employee.hrNotes || ""}
 onChange={(e)=>
-
 updateField(
 "hrNotes",
 e.target.value
 )
-
 }
-
 style={textareaStyle}
-
 />
 
-
 </div>
 
-
 </div>
-
-
-
-
-
-
-
 
 
 {/* COMPANY ASSETS */}
@@ -1651,7 +2355,88 @@ employee.updatedAt
 
 </div>
 
+<div
+  style={{
+    background:"#fff",
+    borderRadius:"18px",
+    padding:"25px",
+    marginBottom:"30px",
+    boxShadow:"0 6px 18px rgba(0,0,0,.08)"
+  }}
+>
 
+<h2 style={{marginBottom:"20px"}}>
+⭐ Employee Performance
+</h2>
+
+<div
+style={{
+display:"flex",
+justifyContent:"space-between",
+alignItems:"center",
+flexWrap:"wrap",
+gap:"20px"
+}}
+>
+
+<div>
+
+<h1
+style={{
+margin:0,
+fontSize:"34px",
+color:
+performance==="Excellent"
+?"#16a34a"
+:performance==="Very Good"
+?"#15803d"
+:performance==="Good"
+?"#2563eb"
+:performance==="Average"
+?"#d97706"
+:"#dc2626"
+}}
+>
+{performance || "Not Rated"}
+</h1>
+
+<p style={{color:"#6b7280"}}>
+Current Employee Performance
+</p>
+
+</div>
+
+<div>
+
+<select
+disabled={!editMode}
+style={{
+padding:"12px 20px",
+borderRadius:"10px",
+fontSize:"16px",
+border:"1px solid #ddd",
+minWidth:"220px"
+}}
+value={performance}
+onChange={(e)=>setPerformance(e.target.value)}
+>
+
+<option value="">Select Rating</option>
+<option value="Excellent">🌟 Excellent</option>
+<option value="Very Good">✅ Very Good</option>
+<option value="Good">👍 Good</option>
+<option value="Average">⚠️ Average</option>
+<option value="Needs Improvement">
+❌ Needs Improvement
+</option>
+
+</select>
+
+</div>
+
+</div>
+
+</div>
 
 
 {/* HR QUICK ACTIONS */}
@@ -1915,6 +2700,7 @@ style={modalOverlay}
 style={{
 background:"#fff",
 width:"900px",
+maxWidth:"95vw",
 padding:"30px",
 borderRadius:"15px"
 }}
@@ -2029,7 +2815,9 @@ value,
 
 edit,
 
-onChange
+onChange,
+
+type
 
 }){
 
@@ -2043,6 +2831,8 @@ return (
 
 
 <input
+
+type={type || "text"}
 
 disabled={!edit}
 
@@ -2114,9 +2904,14 @@ border:
 
 borderRadius:"10px",
 
-fontSize:"16px"
+fontSize:"16px",
+
+boxSizing:"border-box"
 
 };
+
+
+const input = inputStyle;
 
 
 
@@ -2133,7 +2928,9 @@ border:
 
 borderRadius:"10px",
 
-fontSize:"16px"
+fontSize:"16px",
+
+boxSizing:"border-box"
 
 };
 
@@ -2141,7 +2938,7 @@ fontSize:"16px"
 
 const buttonBlue={
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -2201,7 +2998,7 @@ fontWeight:700
 
 const documentBtn={
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -2229,7 +3026,11 @@ justifyContent:"center",
 
 alignItems:"center",
 
-zIndex:9999
+zIndex:9999,
+
+padding:"20px",
+
+boxSizing:"border-box"
 
 };
 
@@ -2243,1481 +3044,8 @@ padding:"30px",
 
 borderRadius:"15px",
 
-width:"450px"
+width:"450px",
+
+maxWidth:"95vw"
 
 };
-
-
-
-// "use client";
-// import LetterOfIntent from "../components/LetterOfIntent";
-
-// import { useEffect, useState } from "react";
-// import { useParams } from "next/navigation";
-// import {
-//   doc,
-//   getDoc,
-//   updateDoc,
-// } from "firebase/firestore";
-// import { db } from "../../../../lib/firebase";
-
-// export default function EmployeePage() {
-
-// const { id } = useParams();
-
-// const [user,setUser] = useState(null);
-// const [editMode, setEditMode] = useState(false);
-// const [showLOI, setShowLOI] = useState(false);
-// const [showPreview, setShowPreview] = useState(false);
-// const [joiningDate, setJoiningDate] = useState("");
-// const [designation, setDesignation] = useState("");
-// const [performanceBand, setPerformanceBand] = useState("");
-// const currentDate = new Date().toLocaleDateString("en-IN");
-// useEffect(() => {
-// loadUser();
-// }, []);
-
-// const loadUser = async () => {
-//   try {
-//     const userSnap = await getDoc(doc(db, "users", id));
-//     const profileSnap = await getDoc(doc(db, "employeeProfiles", id));
-
-//     if (userSnap.exists()) {
-//       const userData = userSnap.data();
-
-//       const profileData = profileSnap.exists()
-//         ? profileSnap.data()
-//         : {};
-//        console.log("USER DATA", userData);
-//   console.log("PROFILE DATA", profileData);
-//       setUser({
-//         ...userData,
-//         ...profileData,
-//       });
-      
-//       setPerformanceBand(userData.performance || " ");
-//     }
-
-//   } catch (error) {
-//     console.error("Error loading user:", error);
-//   }
-// };
-
-// const saveUser = async () => {
-
-//   await updateDoc(doc(db, "users", id), user);
-
-//   alert("Employee Updated Successfully");
-
-//   setEditMode(false);
-
-// };
-// const handleResumeUpload = async (e) => {
-//   const file = e.target.files[0];
-//   if (!file) return;
-
-//   const { getStorage, ref, uploadBytes, getDownloadURL } =
-//     await import("firebase/storage");
-
-//   const storage = getStorage();
-
-//   const storageRef = ref(
-//     storage,
-//     `resumes/${id}/${file.name}`
-//   );
-  
-// console.log("URL ID:", id);
-// console.log("User UID:", user.uid);
-//   await uploadBytes(storageRef, file);
-
-//   const url = await getDownloadURL(storageRef);
-
-//   await updateDoc(doc(db, "users", id), {
-//     resume: url,
-//   });
-
-//   setUser({
-//     ...user,
-//     resume: url,
-//   });
-
-//   alert("Resume Updated");
-// };
-
-// const updatePerformance = async () => {
-//   try {
-//     await updateDoc(doc(db, "users", id), {
-//       performance: performanceBand,
-//       performanceUpdatedAt: new Date(),
-//     });
-
-//     await loadUser();
-
-//     alert("Performance Updated Successfully");
-//   } catch (err) {
-//     console.log(err);
-//     alert("Failed");
-//   }
-// };
-
-// if(!user){
-
-// return <h2 style={{padding:40}}>Loading...</h2>
-
-// }
-// const generatePDF = async () => {
-//   const html2pdf = (await import("html2pdf.js")).default;
-
-//   const element = document.getElementById("loi-document");
-
-//   html2pdf()
-//     .set({
-//       margin: 0.5,
-//       filename: `LOI_${user.firstName}_${user.lastName}.pdf`,
-//       image: {
-//         type: "jpeg",
-//         quality: 1,
-//       },
-//       html2canvas: {
-//         scale: 2,
-//       },
-//       jsPDF: {
-//         unit: "in",
-//         format: "a4",
-//         orientation: "portrait",
-//       },
-//     })
-//     .from(element)
-//     .save();
-// };
-// const generateProfilePDF = async () => {
-
-// const html2pdf =
-// (await import("html2pdf.js")).default;
-
-
-// const element =
-// document.getElementById(
-// "employee-profile"
-// );
-
-
-// html2pdf()
-// .set({
-
-// margin:0.5,
-
-// filename:
-// `${user.firstName}_${user.lastName}_Profile.pdf`,
-
-// html2canvas:{
-// scale:2
-// },
-
-// jsPDF:{
-// unit:"in",
-// format:"a4",
-// orientation:"portrait"
-// }
-
-// })
-// .from(element)
-// .save();
-
-// };
-
-
-// return (
-
-// <div
-// id="employee-profile"
-// style={{
-// width:"90%",
-// maxWidth:"1200px",
-// margin:"30px auto",
-// padding:"35px",
-// background:"#ffffff",
-// borderRadius:"18px",
-// fontSize:"16px",
-// boxSizing:"border-box",
-// boxShadow:"0 5px 25px rgba(0,0,0,.08)"
-// }}
-// >
-
-//   <div
-// style={{
-// display:"flex",
-// gap:15
-// }}
-// >
-
-// <button
-// onClick={()=>window.location.href="/admin/users"}
-// style={{
-// padding:"15px 28px",
-// fontSize:"15px",
-// borderRadius:12,
-// border:"none",
-// background:"#111827",
-// color:"#fff",
-// fontWeight:700,
-// cursor:"pointer"
-// }}
-// >
-// ← Dashboard
-// </button>
-
-// </div>
-
-// <div
-//   style={{
-//     display: "flex",
-//     gap: "25px",
-//     alignItems: "center",
-//     marginBottom: "30px",
-//   }}
-// >
-//   <img 
-//  src={`${user.profilePhoto}?v=${Date.now()}` || "/profile.png"}
-//  alt="Profile"
-//  style={{
-//    width:140,
-//    height:140,
-//    borderRadius:"50%",
-//    objectFit:"cover",
-//    border:"5px solid #2563eb"
-//  }}
-// />
-
-//   <div style={{ flex: 1 }}>
-//     <h1 style={{ marginBottom: 5 }}>
-//       {user.firstName} {user.lastName}
-//     </h1>
-
-//     <h3
-//       style={{
-//         marginTop: 0,
-//         color: "#64748b",
-//       }}
-//     >
-//       {user.designation || "Employee"}
-//     </h3>
-
-//     <p>
-//       <b>Department:</b> {user.department || "-"}
-//     </p>
-
-//     <p>
-//       <b>Employee ID:</b> {user.employeeId || "-"}
-//     </p>
-
-//     <p>
-//   <b>Email:</b> {user.email || "-"}
-// </p>
-
-//     <span
-//       style={{
-//         display: "inline-block",
-//         marginTop: 10,
-//         padding: "8px 18px",
-//         borderRadius: 20,
-//         background:
-//           user.status === "active"
-//             ? "#dcfce7"
-//             : "#fee2e2",
-//         color:
-//           user.status === "active"
-//             ? "#15803d"
-//             : "#dc2626",
-//         fontWeight: 700,
-//       }}
-//     >
-//       {user.status || "Active"}
-//     </span>
-//   </div>
-// </div>
-
-// <div
-//   style={{
-//     marginTop: 20,
-//     marginBottom: 30,
-//     display: "flex",
-//     gap: 15,
-//   }}
-// >
-//   <button
-//     onClick={() => setEditMode(!editMode)}
-//     style={{
-//       padding: "10px 20px",
-//       background: "#2563eb",
-//       color: "#fff",
-//       border: "none",
-//       borderRadius: 8,
-//       cursor: "pointer",
-//     }}
-//   >
-//     {editMode ? "Cancel" : "Edit Employee"}
-//   </button>
-
-//   {editMode && (
-//     <button
-//       onClick={saveUser}
-//       style={{
-//         padding: "10px 20px",
-//         background: "#16a34a",
-//         color: "#fff",
-//         border: "none",
-//         borderRadius: 8,
-//         cursor: "pointer",
-//       }}
-//     >
-//       Save Changes
-//     </button>
-//   )}
-// </div>
-
-
-// <div
-//   style={{
-//     display: "grid",
-//     gridTemplateColumns:
-// "repeat(auto-fit,minmax(280px,1fr))",
-//     gap: "20px",
-//     marginBottom: "40px",
-//   }}
-// >
-
-// <div style={cardStyle}>
-// <h3>Attendance</h3>
-// <h1>{user.attendanceCount || 0}</h1>
-// <p>This Month</p>
-// </div>
-
-// <div style={cardStyle}>
-// <h3>Timesheets</h3>
-// <h1>{user.timesheetCount || 0}</h1>
-// <p>Submitted</p>
-// </div>
-
-// <div style={cardStyle}>
-// <h3>Total Hours</h3>
-// <h1>{user.totalHours || 0}</h1>
-// <p>Working Hours</p>
-// </div>
-
-// <div style={cardStyle}>
-
-//   <h3>⭐ Performance</h3>
-
-//   <select
-//     value={performanceBand}
-//     onChange={(e) => setPerformanceBand(e.target.value)}
-//     style={{
-//       width: "100%",
-//       padding: "12px",
-//       marginTop: "15px",
-//       borderRadius: "10px",
-//       fontSize: "18px",
-//       border: "1px solid #d1d5db",
-//     }}
-//   >
-
-//     <option value="Outstanding">Outstanding</option>
-// <option value="Excellent">Excellent</option>
-// <option value="Very Good">Very Good</option>
-// <option value="Good">Good</option>
-// <option value="Average">Average</option>
-// <option value="Needs Improvement">Needs Improvement</option>
-
-//   </select>
-
-//   <button
-//     onClick={updatePerformance}
-//     style={{
-//       marginTop: "20px",
-//       width: "100%",
-//       padding: "12px",
-//       background: "#3d6fa8",
-//       color: "#fff",
-//       border: "none",
-//       borderRadius: "10px",
-//       cursor: "pointer",
-//       fontWeight: "700",
-//       fontSize: "16px",
-//     }}
-//   >
-//     Update Rating
-//   </button>
-
-// </div>
-
-// </div>
-// <h2 style={{ marginBottom: "20px" }}>
-// ⚡ HR Quick Actions
-// </h2>
-
-// <div
-// style={{
-// display:"flex",
-// gap:"15px",
-// flexWrap:"wrap",
-// marginBottom:"40px",
-
-// }}
-// >
-
-// <button
-// style={blueBtn}
-// onClick={() =>
-// window.location.href = `/admin/attendance?employee=${id}`
-// }
-// >
-// Attendance
-// </button>
-
-// <button
-// style={greenBtn}
-// onClick={() =>
-// window.location.href = `/admin/leave?employee=${id}`
-// }
-// >
-// Leave History
-// </button>
-
-// <button
-// style={orangeBtn}
-// onClick={() =>
-// window.location.href = `/admin/payroll?employee=${id}`
-// }
-// >
-// Payroll
-// </button>
-
-// <button
-// style={purpleBtn}
-// onClick={() =>
-// window.location.href = `/admin/timesheets?employee=${id}`
-// }
-// >
-// Timesheets
-// </button>
-
-// <button
-//   style={greenBtn}
-//   onClick={() => {
-//     setDesignation(user.designation || "");
-//     setJoiningDate(user.joiningDate || "");
-//     setShowLOI(true);
-//   }}
-// >
-//   📄 Generate LOI
-// </button>
-
-// <button
-// style={redBtn}
-// onClick={async () => {
-
-// const confirmDeactivate = window.confirm(
-// "Deactivate this employee?"
-// );
-
-// if (!confirmDeactivate) return;
-
-// await updateDoc(
-// doc(db, "users", id),
-// {
-// status: "inactive",
-// }
-// );
-
-// alert("Employee Deactivated");
-
-// loadUser();
-
-// }}
-// >
-// Deactivate
-// </button>
-
-// <button
-// style={blueBtn}
-// onClick={generateProfilePDF}
-// >
-// 📄 Download Profile
-// </button>
-// </div>
-
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>
-// 👤 Basic Information
-// </h2>
-
-
-// <div style={{ marginBottom: 20 }}>
-//   <label>First Name</label>
-
-//   <input
-//     disabled={!editMode}
-//     value={user.firstName || ""}
-//     onChange={(e) =>
-//       setUser({
-//         ...user,
-//         firstName: e.target.value,
-//       })
-//     }
-//     style={inputStyle}
-//   />
-// </div>
-// <div style={{ marginBottom: 20 }}>
-//   <label>Last Name</label>
-
-//   <input
-//     disabled={!editMode}
-//     value={user.lastName || ""}
-//     onChange={(e) =>
-//       setUser({
-//         ...user,
-//         lastName: e.target.value,
-//       })
-//     }
-//     style={inputStyle}
-//   />
-// </div>
-// <div style={{ marginBottom: 20 }}>
-//   <label>Employee ID</label>
-
-//   <input
-//     disabled={!editMode}
-//     value={user.employeeId || ""}
-//     onChange={(e) =>
-//       setUser({
-//         ...user,
-//         employeeId: e.target.value,
-//       })
-//     }
-//     style={inputStyle}
-//   />
-// </div>
-
-// <p><b>Email:</b> {user.email}</p>
-
-// <div style={{ marginBottom: 20 }}>
-//   <label>Phone</label>
-
-//   <input
-//     disabled={!editMode}
-//     value={user.phone || ""}
-//     onChange={(e) =>
-//       setUser({
-//         ...user,
-//         phone: e.target.value,
-//       })
-//     }
-//     style={inputStyle}
-//   />
-// </div>
-
-// <p><b>DOB:</b> {user.dob}</p>
-
-// <p><b>Gender:</b> {user.gender}</p>
-
-// <p><b>Blood Group:</b> {user.bloodGroup}</p>
-
-
-// </div>
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>
-// 💼 Job Information</h2>
-
-// <div></div>
-// <div
-//   style={{
-//   display: "grid",
-//   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-//   columnGap: "40px",
-//   rowGap: "25px",
-//   marginTop: "20px",
-// }}
-// >
-
-// <div>
-// <label>Department</label>
-
-// <select
-// disabled={!editMode}
-// value={user.department || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// department:e.target.value
-// })
-// }
-// style={inputStyle}
-// >
-
-// <option>Production</option>
-// <option>Editing</option>
-// <option>VFX</option>
-// <option>Animation</option>
-// <option>Marketing</option>
-// <option>HR</option>
-// <option>Accounts</option>
-// <option>IT</option>
-
-// </select>
-
-// </div>
-
-// <div>
-
-// <label>Designation</label>
-
-// <input
-// disabled={!editMode}
-// value={user.designation || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// designation:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>Joining Date</label>
-
-// <input
-// type="date"
-// disabled={!editMode}
-// value={user.joiningDate || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// joiningDate:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>Role</label>
-
-// <select
-// disabled={!editMode}
-// value={user.role || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// role:e.target.value
-// })
-// }
-// style={inputStyle}
-// >
-
-// <option>employee</option>
-// <option>head</option>
-// <option>owner</option>
-// <option>admin</option>
-
-// </select>
-
-// </div>
-
-// <div>
-
-// <label>Status</label>
-
-// <select
-// disabled={!editMode}
-// value={user.status || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// status:e.target.value
-// })
-// }
-// style={inputStyle}
-// >
-
-// <option>active</option>
-
-// <option>inactive</option>
-
-// </select>
-
-// </div>
-
-// </div>
-
-// </div>
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>💻 Company Access</h2>
-
-// <div
-//   style={{
-//   display: "grid",
-//   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-//   columnGap: "40px",
-//   rowGap: "25px",
-//   marginTop: "20px",
-// }}
-// >
-
-// <div>
-// <label>Slack ID</label>
-
-// <input
-// disabled={!editMode}
-// value={user.slackId || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// slackId:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-// </div>
-
-// <div>
-// <label>Google Workspace Email</label>
-
-// <input
-// disabled={!editMode}
-// value={user.email || ""}
-// style={inputStyle}
-// />
-// </div>
-
-// <div>
-// <label>Frame.io Email</label>
-
-// <input
-// disabled={!editMode}
-// value={user.frameioEmail || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// frameioEmail:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-// </div>
-
-// <div>
-// <label>Manager</label>
-
-// <input
-// disabled={!editMode}
-// value={user.manager || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// manager:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-// </div>
-
-// <div>
-// <label>Employment Type</label>
-
-// <select
-// disabled={!editMode}
-// value={user.employmentType || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// employmentType:e.target.value
-// })
-// }
-// style={inputStyle}
-// >
-
-// <option value="">Select</option>
-// <option>Full Time</option>
-// <option>Intern</option>
-// <option>Contract</option>
-// <option>Freelancer</option>
-
-// </select>
-
-// </div>
-
-// <div>
-// <label>Work Location</label>
-
-// <select
-// disabled={!editMode}
-// value={user.workLocation || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// workLocation:e.target.value
-// })
-// }
-// style={inputStyle}
-// >
-
-// <option value="">Select</option>
-// <option>Office</option>
-// <option>Remote</option>
-// <option>Hybrid</option>
-
-// </select>
-
-// </div>
-
-// </div>
-
-
-// </div>
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>🚨 Emergency Contact</h2>
-
-// <div
-//   style={{
-//   display: "grid",
-//   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-//   columnGap: "40px",
-//   rowGap: "25px",
-//   marginTop: "20px",
-// }}
-// >
-
-//   <div>
-//     <label>Emergency Contact</label>
-
-//     <input
-//       disabled={!editMode}
-//       value={user.emergencyContact || ""}
-//       onChange={(e) =>
-//         setUser({
-//           ...user,
-//           emergencyContact: e.target.value,
-//         })
-//       }
-//       style={inputStyle}
-//     />
-//   </div>
-
-//   <div>
-//     <label>Emergency Phone</label>
-
-//     <input
-//       disabled={!editMode}
-//       value={user.emergencyPhone || ""}
-//       onChange={(e) =>
-//         setUser({
-//           ...user,
-//           emergencyPhone: e.target.value,
-//         })
-//       }
-//       style={inputStyle}
-//     />
-//   </div>
-
-// </div>
-
-// </div>
-
-
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>🏠 Address</h2>
-
-// <div
-//   style={{
-//   display: "grid",
-//   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-//   columnGap: "40px",
-//   rowGap: "25px",
-//   marginTop: "20px",
-// }}
-// >
-
-//   <div style={{ gridColumn: "1 / span 2" }}>
-//     <label>Street Address</label>
-
-//     <input
-//       disabled={!editMode}
-//       value={user.address || ""}
-//       onChange={(e) =>
-//         setUser({
-//           ...user,
-//           address: e.target.value,
-//         })
-//       }
-//       style={inputStyle}
-//     />
-//   </div>
-
-//     <div>
-//     <label>City</label>
-
-//     <input
-//       disabled={!editMode}
-//       value={user.city || ""}
-//       onChange={(e) =>
-//         setUser({
-//           ...user,
-//           city: e.target.value,
-//         })
-//       }
-//       style={inputStyle}
-//     />
-//   </div>
-
-//   <div>
-//     <label>State</label>
-
-//     <input
-//       disabled={!editMode}
-//       value={user.state || ""}
-//       onChange={(e) =>
-//         setUser({
-//           ...user,
-//           state: e.target.value,
-//         })
-//       }
-//       style={inputStyle}
-//     />
-//   </div>
-// <div>
-//   <label>Country</label>
-
-//   <input
-//     disabled={!editMode}
-//     value={user.country || ""}
-//     onChange={(e) =>
-//       setUser({
-//         ...user,
-//         country: e.target.value,
-//       })
-//     }
-//     style={inputStyle}
-//   />
-// </div>
-// </div>  {/* CLOSE ADDRESS GRID */}
-
-// </div>  {/* CLOSE ADDRESS sectionCard */}
-
-
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>📁 Documents & Assets</h2>
-
-// <div
-//   style={{
-//   display: "grid",
-//   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-//   columnGap: "40px",
-//   rowGap: "25px",
-//   marginTop: "20px",
-// }}
-// >
-
-// <div>
-//   <label>Resume</label>
-
-//   {user.resume ? (
-//     <div
-//       style={{
-//         display: "flex",
-//         alignItems: "center",
-//         gap: "12px",
-//         marginTop: "10px",
-//       }}
-//     >
-//       <a
-//         href={user.resume}
-//         target="_blank"
-//         rel="noopener noreferrer"
-//         style={{
-//           background: "#2563eb",
-//           color: "#fff",
-//           padding: "10px 18px",
-//           borderRadius: "10px",
-//           textDecoration: "none",
-//           fontWeight: 600,
-//         }}
-//       >
-//         📄 View Resume
-//       </a>
-
-//       <a
-//         href={user.resume}
-//         download
-//         style={{
-//           background: "#16a34a",
-//           color: "#fff",
-//           padding: "10px 18px",
-//           borderRadius: "10px",
-//           textDecoration: "none",
-//           fontWeight: 600,
-//         }}
-//       >
-//         ⬇ Download
-//       </a>
-//     </div>
-//   ) : (
-//     <p
-//       style={{
-//         color: "#64748b",
-//         marginTop: "12px",
-//       }}
-//     >
-//       No resume uploaded.
-//     </p>
-//   )}
-
-
-// {/* Only show when HR/Admin clicks Edit Employee */}
-
-//   {editMode && (
-//     <div style={{ marginTop: "15px" }}>
-//       <input
-//         type="file"
-//         accept=".pdf,.doc,.docx"
-//         onChange={handleResumeUpload}
-//       />
-//     </div>
-//   )}
-// </div>
-
-// <div>
-
-// <label>Offer Letter URL</label>
-
-// <input
-// disabled={!editMode}
-// value={user.offerLetter || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// offerLetter:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>ID Proof URL</label>
-
-// <input
-// disabled={!editMode}
-// value={user.idProof || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// idProof:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>Bank Account</label>
-
-// <input
-// disabled={!editMode}
-// value={user.bankAccount || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// bankAccount:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>Laptop Assigned</label>
-
-// <input
-// disabled={!editMode}
-// value={user.laptop || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// laptop:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// <div>
-
-// <label>Laptop Serial No.</label>
-
-// <input
-// disabled={!editMode}
-// value={user.laptopSerial || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// laptopSerial:e.target.value
-// })
-// }
-// style={inputStyle}
-// />
-
-// </div>
-
-// </div>
-
-// </div>
-
-
-// <div style={sectionCard}>
-
-// <h2 style={{
-// marginBottom:"25px",
-// fontSize:"22px",
-// color:"#111827"
-// }}>📝 HR Notes</h2>
-
-// <textarea
-// disabled={!editMode}
-// value={user.hrNotes || ""}
-// onChange={(e)=>
-// setUser({
-// ...user,
-// hrNotes:e.target.value
-// })
-// }
-// style={{
-// width:"90%",
-// height:"180px",
-// padding:"15px",
-// marginTop:"20px",
-// borderRadius:"10px",
-// border:"1px solid #d1d5db",
-// fontSize:"19px"
-// }}
-// placeholder="Private HR Notes..."
-// />
-// </div>
-// <h2 style={{ marginTop: "40px" }}>
-// 📅 Employee Timeline
-// </h2>
-
-// <div
-// style={{
-// background:"#f8fafc",
-// padding:"25px",
-// borderRadius:"15px",
-// marginTop:"20px"
-// }}
-// >
-
-// <p>✅ Joined Company : {user.joiningDate || "-"}</p>
-
-// <p>👤 Profile Completed</p>
-
-// <p>💼 Department Assigned</p>
-
-// <p>🖥 Laptop Assigned</p>
-
-// <p>📄 Offer Letter Uploaded</p>
-
-// <p>
-//   🎉 Last Updated :{" "}
-//   {user.updatedAt?.toDate?.().toLocaleDateString() || "-"}
-// </p>
-
-// </div>
-// {showLOI && (
-//   <div
-//     style={{
-//       position: "fixed",
-//       inset: 0,
-//       background: "rgba(0,0,0,.6)",
-//       display: "flex",
-//       justifyContent: "center",
-//       alignItems: "center",
-//       zIndex: 9999,
-//     }}
-//   >
-//     <div
-//       style={{
-//         width: "500px",
-//         background: "#fff",
-//         padding: "30px",
-//         borderRadius: "12px",
-//       }}
-//     >
-//       <h2>Generate Letter of Intent</h2>
-
-//       <p>
-//         <b>Employee</b>
-//       </p>
-
-//       <input
-//         value={`${user.firstName} ${user.lastName}`}
-//         disabled
-//         style={inputStyle}
-//       />
-
-//       <p>Email</p>
-
-//       <input
-//   value={user.email || ""}
-//   disabled
-//   style={inputStyle}
-// />
-
-//       <p>Designation</p>
-
-//       <input
-//         value={designation}
-//         onChange={(e) => setDesignation(e.target.value)}
-//         style={inputStyle}
-//       />
-
-//       <p>Joining Date</p>
-
-//       <input
-//         type="date"
-//         value={joiningDate}
-//         onChange={(e) => setJoiningDate(e.target.value)}
-//         style={inputStyle}
-//       />
-
-//       <div
-//         style={{
-//           display: "flex",
-//           gap: "15px",
-//           marginTop: "25px",
-//         }}
-//       >
-//         <button
-//   style={greenBtn}
-//   onClick={() => {
-//     setShowLOI(false);
-//     setShowPreview(true);
-//   }}
-// >
-//   Generate
-// </button>
-
-//         <button
-//           style={redBtn}
-//           onClick={() => setShowLOI(false)}
-//         >
-//           Cancel
-//         </button>
-//       </div>
-//     </div>
-//   </div>
-// )}
-// {showPreview && (
-//   <div
-//     style={{
-//       position: "fixed",
-//       inset: 0,
-//       background: "rgba(0,0,0,.7)",
-//       overflow: "auto",
-//       zIndex: 9999,
-//       padding: "40px",
-//     }}
-//   >
-//     <div
-//       style={{
-//         maxWidth: "900px",
-//         margin: "auto",
-//         background: "#fff",
-//         borderRadius: "10px",
-//         overflow: "hidden",
-//       }}
-//     >
-//       <div id="loi-document">
-//         <LetterOfIntent
-//           employeeName={`${user.firstName} ${user.lastName}`}
-//           designation={designation}
-//           joiningDate={joiningDate}
-//           currentDate={currentDate}
-//         />
-//       </div>
-
-//       <div
-//         style={{
-//           display: "flex",
-//           justifyContent: "center",
-//           gap: "20px",
-//           padding: "20px",
-//           borderTop: "1px solid #eee",
-//         }}
-//       >
-//         <button
-//           style={greenBtn}
-//           onClick={generatePDF}
-//         >
-//           📄 Download PDF
-//         </button>
-
-//         {/* <button
-//           style={greenBtn}
-//           onClick={sendLOI}
-//         >
-//           📧 Send LOI
-//         </button> */}
-
-//         <button
-//           style={redBtn}
-//           onClick={() => setShowPreview(false)}
-//         >
-//           Close
-//         </button>
-
-//       </div>
-//     </div>
-//   </div>
-// )}
-// </div>
-
-// );
-// }
-
-// const inputStyle = {
-//   width: "90%",
-//   padding: "14px 16px",
-//   marginTop: "8px",
-//   marginBottom: "15px",
-//   border: "1px solid #d1d5db",
-//   borderRadius: "10px",
-//   fontSize: "19px",
-//   boxSizing: "border-box",
-// };
-
-// const sectionDivider = {
-//   margin: "30px 0",
-//   border: "none",
-//   borderTop: "1px solid #e5e7eb",
-// };
-
-// const cardStyle = {
-//   background: "#f8fafc",
-//   padding: "25px",
-//   borderRadius: "15px",
-//   textAlign: "center",
-//   boxShadow: "0 4px 15px rgba(0,0,0,.06)",
-// };
-
-// const purpleBtn = {
-//   background: "#7c3aed",
-//   color: "#fff",
-//   border: "none",
-//   padding: "12px 20px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//    fontSize: "19px",
-// };
-
-// const blueBtn = {
-//   background: "#3d6fa8",
-//   color: "#fff",
-//   border: "none",
-//   padding: "10px 18px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//    fontSize: "19px",
-// };
-// const greenBtn = {
-//   background: "#16a34a",
-//   color: "#fff",
-//   border: "none",
-//   padding: "10px 18px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//   fontWeight: "600",
-//    fontSize: "19px",
-// };
-// const redBtn = {
-//   background: "#dc2626",
-//   color: "#fff",
-//   border: "none",
-//   padding: "10px 18px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//   fontWeight: "600",
-//    fontSize: "19px",
-// };
-
-// const orangeBtn = {
-//   background: "#f59e0b",
-//   color: "#fff",
-//   border: "none",
-//   padding: "10px 18px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//   fontWeight: "600",
-//    fontSize: "19px",
-// };
-
-// const grayBtn = {
-//   background: "#64748b",
-//   color: "#fff",
-//   border: "none",
-//   padding: "10px 18px",
-//   borderRadius: "8px",
-//   cursor: "pointer",
-//   fontWeight: "600",
-//    fontSize: "19px",
-// };
-// const sectionCard = {
-//   background:"#ffffff",
-//   padding:"30px",
-//   borderRadius:"16px",
-//   marginBottom:"25px",
-//   border:"1px solid #e5e7eb",
-//   boxShadow:"0 4px 12px rgba(0,0,0,0.04)",
-// };

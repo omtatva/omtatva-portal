@@ -2,12 +2,7 @@
 
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function AdminLoginPage() {
   const login = async () => {
@@ -18,31 +13,38 @@ export default function AdminLoginPage() {
 
       const user = result.user;
 
+      // TEMPORARY DEBUG — remove once the access-denied issue is
+      // resolved. Open browser DevTools (F12) → Console tab before
+      // clicking "Continue with Google", then check what gets printed.
+      console.log("DEBUG — signed in email:", JSON.stringify(user.email));
+
       // Allowed Admin Emails
       const allowedAdmins = [
         "admin@omtatvadigitals.com",
         "hr@omtatvadigitals.com",
+        "itsupport@omtatvadigitals.com",
       ];
+
+      console.log("DEBUG — allowedAdmins:", allowedAdmins);
+      console.log(
+        "DEBUG — email in allowedAdmins?",
+        allowedAdmins.includes(user.email || "")
+      );
 
       if (!allowedAdmins.includes(user.email || "")) {
         alert("Access Denied!\nOnly Admin / HR / Owner can login.");
-
         await signOut(auth);
-
         return;
       }
 
       const userRef = doc(db, "users", user.uid);
-
       const userSnap = await getDoc(userRef);
 
       // First Login
       if (!userSnap.exists()) {
         let role = "admin";
 
-
-        if (user.email === "hr@omtatvadigitals.com")
-          role = "hr";
+        if (user.email === "hr@omtatvadigitals.com") role = "hr";
 
         await setDoc(userRef, {
           uid: user.uid,
@@ -73,44 +75,43 @@ export default function AdminLoginPage() {
         });
 
         alert("Welcome Admin!");
-
-        window.location.href = "/profile";
-
+        window.location.href = "/admin";
         return;
       }
 
       const userData = userSnap.data();
 
+      // TEMPORARY DEBUG
+      console.log("DEBUG — Firestore role value:", JSON.stringify(userData.role));
+
       // Double Security Check
-      if (
-        userData.role !== "owner" &&
-        userData.role !== "admin" &&
-        userData.role !== "hr"
-      ) {
+      // Access is based on the email whitelist (allowedAdmins) rather
+      // than the Firestore "role" field — avoids issues if role ever
+      // drifts out of sync (wrong casing, stale value from an older
+      // login flow, etc.). The email was already checked once above
+      // right after sign-in; this re-checks it here as the final gate
+      // before granting access to an EXISTING user's account.
+      if (!allowedAdmins.includes(user.email || "")) {
         alert("Access Denied!");
-
         await signOut(auth);
-
         return;
       }
 
       if (userData.profileCompleted) {
         window.location.href = "/admin";
       } else {
-        window.location.href = "/profile";
+        window.location.href = "/admin";
       }
-    }       
- catch (error) {
-  console.error(error);
+    } catch (error) {
+      console.error(error);
 
-  if (error instanceof Error) {
-    alert(error.message);
-  } else {
-    alert("Something went wrong.");
-  }
-}
+      if (error instanceof Error) {
+        alert(error.message);
+      } else {
+        alert("Something went wrong.");
+      }
+    }
   };
-
 
   return (
     <div
@@ -125,6 +126,7 @@ export default function AdminLoginPage() {
       <div
         style={{
           width: 450,
+          maxWidth: "90vw",
           background: "#fff",
           padding: 40,
           borderRadius: 18,
@@ -137,34 +139,21 @@ export default function AdminLoginPage() {
           alt="logo"
           style={{
             width: 70,
-            marginBottom: 20,
+            display: "block",
+            margin: "0 auto 20px",
           }}
         />
 
-        <h1
-          style={{
-            color: "#2563eb",
-            marginBottom: 10,
-          }}
-        >
-          Admin Portal
-        </h1>
+        <h1 style={{ color: "#3d6fa8", marginBottom: 10 }}>Admin Portal</h1>
 
-        <p
-          style={{
-            color: "#666",
-            marginBottom: 30,
-          }}
-        >
-          OMTATVA DIGITALS HRMS
-        </p>
+        <p style={{ color: "#666", marginBottom: 30 }}>OMTATVA DIGITALS HRMS</p>
 
         <button
           onClick={login}
           style={{
             width: "100%",
             padding: "15px",
-            background: "#2563eb",
+            background: "#3d6fa8",
             color: "#fff",
             border: "none",
             borderRadius: 10,
@@ -176,13 +165,7 @@ export default function AdminLoginPage() {
           Continue with Google
         </button>
 
-        <p
-          style={{
-            marginTop: 25,
-            color: "#888",
-            fontSize: 14,
-          }}
-        >
+        <p style={{ marginTop: 25, color: "#888", fontSize: 14 }}>
           Only Owner, Admin and HR accounts are allowed.
         </p>
       </div>

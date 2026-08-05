@@ -14,7 +14,7 @@ import {
 import { db } from "../../../lib/firebase";
 
 const PRIORITY_OPTIONS = [
-  { key: "Info", color: "#2563eb", bg: "#eff6ff" },
+  { key: "Info", color: "#3d6fa8", bg: "#eff6ff" },
   { key: "Warning", color: "#d97706", bg: "#fffbeb" },
   { key: "Urgent", color: "#dc2626", bg: "#fef2f2" },
 ];
@@ -84,7 +84,8 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div style={{ padding: 25, maxWidth: 900 }}>
+    <div className="dashboard-content" style={{ maxWidth: 900 }}>
+
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
         📢 Announcements
       </h1>
@@ -93,20 +94,14 @@ export default function AnnouncementsPage() {
       </p>
 
       {/* COMPOSER */}
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 16,
-          padding: 28,
-          marginBottom: 30,
-          boxShadow: "0 5px 20px rgba(0,0,0,.05)",
-        }}
-      >
+      <div className="employee-card" style={{ marginBottom: 30 }}>
+
         <input
           placeholder="Announcement title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          style={{ ...inputStyle, marginBottom: 12, fontWeight: 600 }}
+          className="announcement-input"
+          style={{ marginBottom: 12, fontWeight: 600 }}
         />
 
         <textarea
@@ -114,11 +109,13 @@ export default function AnnouncementsPage() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={4}
-          style={{ ...inputStyle, marginBottom: 14, resize: "vertical", fontFamily: "inherit" }}
+          className="announcement-input"
+          style={{ marginBottom: 14, resize: "vertical", fontFamily: "inherit" }}
         />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", gap: 8 }}>
+        <div className="announcement-composer-footer">
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {PRIORITY_OPTIONS.map((p) => (
               <button
                 key={p.key}
@@ -151,10 +148,13 @@ export default function AnnouncementsPage() {
               fontWeight: 700,
               fontSize: 14,
               cursor: posting ? "default" : "pointer",
+              width: "100%",
+              maxWidth: 220,
             }}
           >
             {posting ? "Posting..." : "Post Announcement"}
           </button>
+
         </div>
       </div>
 
@@ -162,16 +162,7 @@ export default function AnnouncementsPage() {
       {loading ? (
         <p style={{ color: "#94a3b8" }}>Loading announcements...</p>
       ) : announcements.length === 0 ? (
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 16,
-            padding: 40,
-            textAlign: "center",
-            color: "#94a3b8",
-            boxShadow: "0 5px 20px rgba(0,0,0,.05)",
-          }}
-        >
+        <div className="employee-card" style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>
           No announcements posted yet.
         </div>
       ) : (
@@ -180,18 +171,12 @@ export default function AnnouncementsPage() {
           return (
             <div
               key={a.id}
-              style={{
-                background: "#fff",
-                borderRadius: 14,
-                padding: "20px 24px",
-                marginBottom: 14,
-                boxShadow: "0 4px 14px rgba(0,0,0,.05)",
-                borderLeft: `4px solid ${config.color}`,
-              }}
+              className="announcement-card"
+              style={{ borderLeft: `4px solid ${config.color}` }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <div className="announcement-card-inner">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
                       {a.title}
                     </h3>
@@ -218,15 +203,7 @@ export default function AnnouncementsPage() {
 
                 <button
                   onClick={() => removeAnnouncement(a.id)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#dc2626",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    flexShrink: 0,
-                  }}
+                  className="announcement-delete-btn"
                 >
                   Delete
                 </button>
@@ -238,13 +215,3 @@ export default function AnnouncementsPage() {
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "13px 16px",
-  borderRadius: 10,
-  border: "1px solid #e2e8f0",
-  fontSize: 14.5,
-  outline: "none",
-  boxSizing: "border-box",
-};

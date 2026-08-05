@@ -125,12 +125,16 @@ Loading Users...
 
 const totalEmployees = users.length;
 
+const pendingEmployees = users.filter(
+  (user) => !user.hrApprovalStatus || user.hrApprovalStatus === "Pending"
+).length;
+
 const activeEmployees = users.filter(
-  (user) => user.status === "active"
+  (user) => user.hrApprovalStatus === "Approved"
 ).length;
 
 const inactiveEmployees = users.filter(
-  (user) => user.status === "inactive"
+  (user) => user.hrApprovalStatus === "Rejected"
 ).length;
 
 const adminCount = users.filter(
@@ -144,7 +148,7 @@ const filteredUsers = users.filter((user) => {
   const employeeId = (user.employeeId || "").toLowerCase();
   const department = (user.department || "").toLowerCase();
   const role = (user.role || "").toLowerCase();
-  const status = (user.status || "").toLowerCase();
+const status = (user.hrApprovalStatus || "Pending").toLowerCase();
 
   const matchesSearch =
     fullName.includes(search.toLowerCase()) ||
@@ -243,17 +247,18 @@ cursor:"pointer"
 </button>
 
 <button
-style={{
-padding:"13px 22px",
-borderRadius:12,
-border:"none",
-background:"#3d6fa8",
-color:"#fff",
-fontWeight:700,
-cursor:"pointer"
-}}
+  onClick={() => window.location.href="/admin/users/add"}
+  style={{
+    padding:"13px 22px",
+    borderRadius:12,
+    border:"none",
+    background:"#3d6fa8",
+    color:"#fff",
+    fontWeight:700,
+    cursor:"pointer"
+  }}
 >
-＋ Add Employee
+  ＋ Add Employee
 </button>
 
 </div>
@@ -424,8 +429,9 @@ onChange={(e)=>setStatusFilter(e.target.value)}
 style={filterStyle}
 >
 <option value="">Status</option>
-<option>active</option>
-<option>inactive</option>
+<option>Pending</option>
+<option>Approved</option>
+<option>Rejected</option>
 </select>
 
 <button
@@ -551,30 +557,29 @@ minWidth:"1600px",
               {user.role || "employee"}
             </td>
 
-            <td style={td}>
-              <span
-                style={{
-                  padding:
-                    "6px 12px",
-                  borderRadius:
-                    "20px",
-                  background:
-                    user.status ===
-                    "inactive"
-                      ? "#fee2e2"
-                      : "#dcfce7",
-                  color:
-                    user.status ===
-                    "inactive"
-                      ? "#dc2626"
-                      : "#16a34a",
-                  fontWeight: "600",
-                }}
-              >
-                {user.status ||
-                  "active"}
-              </span>
-            </td>
+          <td style={td}>
+  <span
+    style={{
+      padding: "6px 12px",
+      borderRadius: "20px",
+      background:
+        (user.hrApprovalStatus || "Pending") === "Approved"
+          ? "#dcfce7"
+          : (user.hrApprovalStatus || "Pending") === "Rejected"
+          ? "#fee2e2"
+          : "#fef3c7",
+      color:
+        (user.hrApprovalStatus || "Pending") === "Approved"
+          ? "#16a34a"
+          : (user.hrApprovalStatus || "Pending") === "Rejected"
+          ? "#dc2626"
+          : "#d97706",
+      fontWeight: "600",
+    }}
+  >
+    {user.hrApprovalStatus || "Pending"}
+  </span>
+</td>
 
             <td style={td}>
             <div

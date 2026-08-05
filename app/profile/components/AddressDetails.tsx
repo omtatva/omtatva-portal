@@ -2,6 +2,10 @@
 
 import React, { useState } from "react";
 import { useProfile } from "../ProfileContext";
+import Select from "react-select";
+import CreatableSelect from "react-select/creatable";
+import { countries } from "../data/countries";
+import { indianStates, getCitiesForState } from "../data/indianstatescities";
 
 export default function AddressDetails({
   back,
@@ -14,7 +18,8 @@ export default function AddressDetails({
 
 const {
   profile,
-  setProfile
+  setProfile,
+  saveProfile,
 }=useProfile();
 
 
@@ -22,6 +27,33 @@ const {
 const [sameAddress,setSameAddress]=useState(
   profile.sameAddress || false
 );
+
+
+const [isSaving,setIsSaving]=useState(false);
+
+
+
+React.useEffect(() => {
+  if (!sameAddress) return;
+  setProfile((prev: any) => ({
+    ...prev,
+    permanentAddressLine1: prev.currentAddressLine1,
+    permanentAddressLine2: prev.currentAddressLine2,
+    permanentCity: prev.currentCity,
+    permanentState: prev.currentState,
+    permanentCountry: prev.currentCountry,
+    permanentPincode: prev.currentPincode,
+  }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  sameAddress,
+  profile.currentAddressLine1,
+  profile.currentAddressLine2,
+  profile.currentCity,
+  profile.currentState,
+  profile.currentCountry,
+  profile.currentPincode,
+]);
 
 
 
@@ -38,6 +70,49 @@ const input: React.CSSProperties = {
 
 
 
+const handleSaveAndContinue = async () => {
+  setIsSaving(true);
+  const ok = await saveProfile(profile);
+  setIsSaving(false);
+  if (ok) next();
+};
+
+
+
+// When a State changes, reset City if it doesn't belong to the new state.
+// If the state itself was typed in freehand (not in our list), there's no
+// known city list for it, so we just clear the city and let it be typed too.
+const handleStateChange = (
+  prefix: "current" | "permanent",
+  newState: string
+) => {
+  const cities = getCitiesForState(newState).map((c) => c.value);
+  setProfile((prev: any) => {
+    const cityField = `${prefix}City`;
+    const stillValid = cities.includes(prev[cityField]);
+    return {
+      ...prev,
+      [`${prefix}State`]: newState,
+      [cityField]: stillValid ? prev[cityField] : "",
+    };
+  });
+};
+
+
+
+// Wraps a plain string value as a react-select option so a freehand-typed
+// state/city (one that doesn't exist in our predefined lists) still shows
+// up correctly in the Creatable input instead of appearing empty.
+const toOption = (value: string | undefined) =>
+  value ? { value, label: value } : null;
+
+
+
+const currentCityOptions = getCitiesForState(profile.currentState);
+const permanentCityOptions = getCitiesForState(profile.permanentState);
+
+
+
 return (
 
 <div>
@@ -45,7 +120,7 @@ return (
 
 <h2
 style={{
-color:"#2563eb",
+color:"#3d6fa8",
 marginBottom:30
 }}
 >
@@ -155,31 +230,39 @@ currentAddressLine2:e.target.value
 <div>
 
 <label>
-City
+Country
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<Select
+
+instanceId="currentCountry"
+
+options={countries}
 
 value={
-profile.currentCity || ""
+countries.find(
+(c) => c.value === (profile.currentCountry || "India")
+)
 }
 
-onChange={(e)=>
+onChange={(selected) =>
 
 setProfile({
 
 ...profile,
 
-currentCity:e.target.value
+currentCountry: selected?.value || "India"
 
 })
 
 }
 
 />
+
+</div>
 
 </div>
 
@@ -194,27 +277,31 @@ State
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<CreatableSelect
+
+instanceId="currentState"
+
+options={indianStates}
 
 value={
-profile.currentState || ""
+indianStates.find(
+(s) => s.value === profile.currentState
+) || toOption(profile.currentState)
 }
 
-onChange={(e)=>
+placeholder="Select or type your State"
 
-setProfile({
+formatCreateLabel={(input) => `Use "${input}"`}
 
-...profile,
-
-currentState:e.target.value
-
-})
-
+onChange={(selected) =>
+handleStateChange("current", selected?.value || "")
 }
 
 />
+
+</div>
 
 </div>
 
@@ -225,31 +312,43 @@ currentState:e.target.value
 <div>
 
 <label>
-Country
+City
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<CreatableSelect
+
+instanceId="currentCity"
+
+options={currentCityOptions}
 
 value={
-profile.currentCountry || "India"
+currentCityOptions.find(
+(c) => c.value === profile.currentCity
+) || toOption(profile.currentCity)
 }
 
-onChange={(e)=>
+placeholder="Select or type your City"
+
+formatCreateLabel={(input) => `Use "${input}"`}
+
+onChange={(selected) =>
 
 setProfile({
 
 ...profile,
 
-currentCountry:e.target.value
+currentCity: selected?.value || ""
 
 })
 
 }
 
 />
+
+</div>
 
 </div>
 
@@ -322,49 +421,49 @@ const checked = e.target.checked;
 setSameAddress(checked);
 
 
-setProfile({
+setProfile((prev:any)=>({
 
-...profile,
+...prev,
 
 sameAddress:checked,
 
 
 permanentAddressLine1:
 checked
-? profile.currentAddressLine1
-: profile.permanentAddressLine1,
+? prev.currentAddressLine1
+: prev.permanentAddressLine1,
 
 
 permanentAddressLine2:
 checked
-? profile.currentAddressLine2
-: profile.permanentAddressLine2,
+? prev.currentAddressLine2
+: prev.permanentAddressLine2,
 
 
 permanentCity:
 checked
-? profile.currentCity
-: profile.permanentCity,
+? prev.currentCity
+: prev.permanentCity,
 
 
 permanentState:
 checked
-? profile.currentState
-: profile.permanentState,
+? prev.currentState
+: prev.permanentState,
 
 
 permanentCountry:
 checked
-? profile.currentCountry
-: profile.permanentCountry,
+? prev.currentCountry
+: prev.permanentCountry,
 
 
 permanentPincode:
 checked
-? profile.currentPincode
-: profile.permanentPincode,
+? prev.currentPincode
+: prev.permanentPincode,
 
-});
+}));
 
 
 }}
@@ -502,31 +601,39 @@ permanentAddressLine2:e.target.value
 <div>
 
 <label>
-City
+Country
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<Select
+
+instanceId="permanentCountry"
+
+options={countries}
 
 value={
-profile.permanentCity || ""
+countries.find(
+(c) => c.value === (profile.permanentCountry || "India")
+)
 }
 
-onChange={(e)=>
+onChange={(selected) =>
 
 setProfile({
 
 ...profile,
 
-permanentCity:e.target.value
+permanentCountry: selected?.value || "India"
 
 })
 
 }
 
 />
+
+</div>
 
 </div>
 
@@ -541,27 +648,31 @@ State
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<CreatableSelect
+
+instanceId="permanentState"
+
+options={indianStates}
 
 value={
-profile.permanentState || ""
+indianStates.find(
+(s) => s.value === profile.permanentState
+) || toOption(profile.permanentState)
 }
 
-onChange={(e)=>
+placeholder="Select or type your State"
 
-setProfile({
+formatCreateLabel={(input) => `Use "${input}"`}
 
-...profile,
-
-permanentState:e.target.value
-
-})
-
+onChange={(selected) =>
+handleStateChange("permanent", selected?.value || "")
 }
 
 />
+
+</div>
 
 </div>
 
@@ -572,31 +683,43 @@ permanentState:e.target.value
 <div>
 
 <label>
-Country
+City
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-style={input}
+<CreatableSelect
+
+instanceId="permanentCity"
+
+options={permanentCityOptions}
 
 value={
-profile.permanentCountry || "India"
+permanentCityOptions.find(
+(c) => c.value === profile.permanentCity
+) || toOption(profile.permanentCity)
 }
 
-onChange={(e)=>
+placeholder="Select or type your City"
+
+formatCreateLabel={(input) => `Use "${input}"`}
+
+onChange={(selected) =>
 
 setProfile({
 
 ...profile,
 
-permanentCountry:e.target.value
+permanentCity: selected?.value || ""
 
 })
 
 }
 
 />
+
+</div>
 
 </div>
 
@@ -700,11 +823,13 @@ fontWeight:700
 
 <button
 
-onClick={next}
+onClick={handleSaveAndContinue}
+
+disabled={isSaving}
 
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -716,13 +841,15 @@ borderRadius:12,
 
 cursor:"pointer",
 
-fontWeight:700
+fontWeight:700,
+
+opacity: isSaving ? 0.7 : 1,
 
 }}
 
 >
 
-Save & Continue →
+{isSaving ? "Saving..." : "Save & Continue →"}
 
 </button>
 

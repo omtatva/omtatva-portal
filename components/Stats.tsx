@@ -5,7 +5,7 @@ export default function Stats() {
   const stats = [
     {
       icon: "👨‍💼",
-      value: "20+",
+      value: "100+",
       title: "Employees",
       subtitle: "Creative & Technical Team",
       color: "#3d6fa8",
@@ -19,7 +19,7 @@ export default function Stats() {
     },
     {
       icon: "🤖",
-      value: "15+",
+      value: "20+",
       title: "AI Tools",
       subtitle: "Runway • Veo • Kling",
       color: "#7c3aed",

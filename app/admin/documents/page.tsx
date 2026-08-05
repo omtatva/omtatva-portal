@@ -263,7 +263,7 @@ export default function DocumentsPage() {
               <label
                 style={{
                   display: "inline-block",
-                  background: uploading ? "#93c5fd" : "#2563eb",
+                  background: uploading ? "#93c5fd" : "#3d6fa8",
                   color: "#fff",
                   padding: "12px 22px",
                   borderRadius: 10,
@@ -357,7 +357,7 @@ export default function DocumentsPage() {
                       href={file.url}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ color: "#2563eb", fontWeight: 600, fontSize: 14 }}
+                      style={{ color: "#3d6fa8", fontWeight: 600, fontSize: 14 }}
                     >
                       View
                     </a>
@@ -439,7 +439,7 @@ export default function DocumentsPage() {
                     <td style={td}>{emp.employeeId || "-"}</td>
                     <td style={td}>{emp.department || "-"}</td>
                     <td style={td}>
-                      {emp.resume ? (
+                      {emp. resume ? (
                         <span style={{ color: "#16a34a", fontWeight: 600 }}>✅ Uploaded</span>
                       ) : (
                         <span style={{ color: "#dc2626", fontWeight: 600 }}>❌ Missing</span>
@@ -804,7 +804,7 @@ const td: React.CSSProperties = {
 // style={{
 
 // display:"inline-block",
-// background:"#2563eb",
+// background:"#3d6fa8",
 // color:"#fff",
 // padding:"12px 22px",
 // borderRadius:10,
@@ -1106,7 +1106,7 @@ const td: React.CSSProperties = {
 
 // style={{
 
-// background:"#2563eb",
+// background:"#3d6fa8",
 // color:"#fff",
 // border:"none",
 // padding:"10px 20px",
@@ -1356,7 +1356,7 @@ const td: React.CSSProperties = {
 // //                       (window.location.href = `/admin/documents/${emp.id}`)
 // //                     }
 // //                     style={{
-// //                       background: "#2563eb",
+// //                       background: "#3d6fa8",
 // //                       color: "#fff",
 // //                       border: "none",
 // //                       padding: "10px 20px",

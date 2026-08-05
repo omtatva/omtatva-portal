@@ -69,7 +69,7 @@ export default function AdminPage() {
           "itsupport@omtatvadigitals.com",
         ];
 
-        const allowedRoles = ["admin", "hr", "Developer"];
+        const allowedRoles = ["admin", "hr", "Super admin"];
 
         const emailAllowed = allowedEmails.includes(user.email);
         const roleAllowed = allowedRoles.includes((data.role || "").toLowerCase());
@@ -103,7 +103,6 @@ export default function AdminPage() {
         users.filter((user) => (user.status || "").toLowerCase() === "inactive").length
       );
 
-      // Department breakdown
       const deptCounts = {};
       users.forEach((u) => {
         const dept = u.department || "Unassigned";
@@ -121,10 +120,8 @@ export default function AdminPage() {
       const timesheetDocs = timesheetSnap.docs.map((d) => d.data());
       setTimesheetCount(timesheetSnap.size);
 
-      // Company-wide trend, last 14 days
       setTrendData(buildTrendData(attendanceDocs, timesheetDocs));
 
-      // Pending leave requests (assumes a "leaves" collection with a "status" field)
       try {
         const leavesSnap = await getDocs(collection(db, "leaves"));
         const pending = leavesSnap.docs.filter(
@@ -161,6 +158,7 @@ export default function AdminPage() {
           fontSize: "22px",
           fontWeight: 700,
           color: "#3d6fa8",
+          background: "var(--bg-color)",
         }}
       >
         Loading Admin Dashboard...
@@ -169,23 +167,23 @@ export default function AdminPage() {
   }
 
   return (
-    <div style={{ width: "90%", padding: "25px", background: "#f5f8fc", minHeight: "100vh" }}>
+    <div style={{ width: "90%", padding: "25px", background: "var(--bg-color)", minHeight: "100vh" }}>
       {/* HEADER */}
       <div
         style={{
-          background: "#ffffff",
+          background: "var(--card-bg)",
           padding: "35px",
           borderRadius: "25px",
           marginBottom: "30px",
           boxShadow: "0 10px 30px rgba(61,111,168,0.12)",
-          border: "1px solid #eaf3ff",
+          border: "1px solid var(--border-color)",
         }}
       >
-        <h1 style={{ fontSize: "42px", fontWeight: 800, margin: 0, color: "#111111" }}>
+        <h1 style={{ fontSize: "42px", fontWeight: 800, margin: 0, color: "var(--text-color)" }}>
           🏢 Admin Dashboard
         </h1>
 
-        <p style={{ fontSize: "19px", color: "#444444", marginTop: "12px" }}>
+        <p style={{ fontSize: "19px", color: "var(--text-muted)", marginTop: "12px" }}>
           Manage HR, Payroll, Creative Production & AI Operations from one place.
         </p>
 
@@ -232,18 +230,18 @@ export default function AdminPage() {
       >
         <div
           style={{
-            background: "#ffffff",
+            background: "var(--card-bg)",
             padding: "30px",
             borderRadius: "22px",
             boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
           }}
         >
-          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "#111111", marginBottom: 20 }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-color)", marginBottom: 20 }}>
             📈 Activity Trend (Last 14 Days)
           </h2>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eaf3ff" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
               <Tooltip />
@@ -256,13 +254,13 @@ export default function AdminPage() {
 
         <div
           style={{
-            background: "#ffffff",
+            background: "var(--card-bg)",
             padding: "30px",
             borderRadius: "22px",
             boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
           }}
         >
-          <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#111111", marginBottom: 20 }}>
+          <h2 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-color)", marginBottom: 20 }}>
             🏢 Department Breakdown
           </h2>
           <ResponsiveContainer width="100%" height={220}>
@@ -277,7 +275,7 @@ export default function AdminPage() {
           </ResponsiveContainer>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
             {departmentData.map((d, i) => (
-              <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+              <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-color)" }}>
                 <span
                   style={{
                     width: 10,
@@ -297,14 +295,14 @@ export default function AdminPage() {
       {/* QUICK ACTIONS */}
       <div
         style={{
-          background: "#ffffff",
+          background: "var(--card-bg)",
           padding: "30px",
           borderRadius: "22px",
           boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
           marginBottom: "30px",
         }}
       >
-        <h2 style={{ fontSize: "28px", fontWeight: 800, color: "#111111", marginBottom: "25px" }}>
+        <h2 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-color)", marginBottom: "25px" }}>
           ⚡ Quick Actions
         </h2>
 
@@ -332,11 +330,11 @@ export default function AdminPage() {
               style={{
                 padding: "25px",
                 borderRadius: "18px",
-                background: "#eaf3ff",
-                border: "1px solid #66a8e0",
+                background: "var(--accent-bg)",
+                border: "1px solid var(--accent-border)",
                 fontSize: "17px",
                 fontWeight: 700,
-                color: "#111111",
+                color: "var(--text-color)",
                 cursor: "pointer",
                 transition: "0.3s",
               }}
@@ -345,8 +343,8 @@ export default function AdminPage() {
                 e.currentTarget.style.color = "#ffffff";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#eaf3ff";
-                e.currentTarget.style.color = "#111111";
+                e.currentTarget.style.background = "var(--accent-bg)";
+                e.currentTarget.style.color = "var(--text-color)";
               }}
             >
               {title}
@@ -360,13 +358,13 @@ export default function AdminPage() {
         {/* RECENT ACTIVITY */}
         <div
           style={{
-            background: "#ffffff",
+            background: "var(--card-bg)",
             padding: "30px",
             borderRadius: "22px",
             boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
           }}
         >
-          <h2 style={{ fontSize: "26px", fontWeight: 800, color: "#111111" }}>
+          <h2 style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-color)" }}>
             📢 Recent Activity
           </h2>
 
@@ -382,7 +380,7 @@ export default function AdminPage() {
             <tbody>
               {activities.length === 0 ? (
                 <tr>
-                  <td colSpan="3" style={{ textAlign: "center", padding: "25px", color: "#444" }}>
+                  <td colSpan="3" style={{ textAlign: "center", padding: "25px", color: "var(--text-muted)" }}>
                     No Activity Found
                   </td>
                 </tr>
@@ -395,7 +393,7 @@ export default function AdminPage() {
                     <td style={tdStyle}>
                       <span
                         style={{
-                          background: "#eaf3ff",
+                          background: "var(--accent-bg)",
                           color: "#3d6fa8",
                           padding: "8px 14px",
                           borderRadius: "20px",
@@ -418,13 +416,13 @@ export default function AdminPage() {
         {/* OVERVIEW */}
         <div
           style={{
-            background: "#ffffff",
+            background: "var(--card-bg)",
             padding: "30px",
             borderRadius: "22px",
             boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
           }}
         >
-          <h2 style={{ fontSize: "26px", fontWeight: 800, color: "#111111" }}>📌 Overview</h2>
+          <h2 style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-color)" }}>📌 Overview</h2>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginTop: "25px" }}>
             <OverviewItem title="Today's Attendance" value={`${attendanceCount} Records`} />
@@ -444,10 +442,10 @@ function StatCard({ title, value, icon, highlight, onClick }) {
     <div
       onClick={onClick}
       style={{
-        background: "#ffffff",
+        background: "var(--card-bg)",
         padding: "28px",
         borderRadius: "22px",
-        border: highlight ? "1px solid #dc2626" : "1px solid #eaf3ff",
+        border: highlight ? "1px solid #dc2626" : "1px solid var(--border-color)",
         boxShadow: "0 8px 25px rgba(61,111,168,0.12)",
         position: "relative",
         overflow: "hidden",
@@ -462,13 +460,13 @@ function StatCard({ title, value, icon, highlight, onClick }) {
           width: "100px",
           height: "100px",
           borderRadius: "50%",
-          background: highlight ? "#fee2e2" : "#eaf3ff",
+          background: highlight ? "#fee2e2" : "var(--accent-bg)",
         }}
       ></div>
 
       <div style={{ fontSize: "42px", marginBottom: "15px" }}>{icon}</div>
 
-      <p style={{ margin: 0, fontSize: "17px", fontWeight: 600, color: "#444444" }}>{title}</p>
+      <p style={{ margin: 0, fontSize: "17px", fontWeight: 600, color: "var(--text-muted)" }}>{title}</p>
 
       <h1
         style={{
@@ -499,13 +497,13 @@ function OverviewItem({ title, value }) {
   return (
     <div
       style={{
-        background: "#eaf3ff",
+        background: "var(--accent-bg)",
         padding: "18px",
         borderRadius: "15px",
-        border: "1px solid #66a8e0",
+        border: "1px solid var(--accent-border)",
       }}
     >
-      <p style={{ margin: 0, fontSize: "15px", fontWeight: 600, color: "#444444" }}>{title}</p>
+      <p style={{ margin: 0, fontSize: "15px", fontWeight: 600, color: "var(--text-muted)" }}>{title}</p>
       <h2 style={{ margin: "8px 0 0", fontSize: "28px", fontWeight: 800, color: "#3d6fa8" }}>
         {value}
       </h2>
@@ -513,11 +511,6 @@ function OverviewItem({ title, value }) {
   );
 }
 
-/**
- * Builds a 14-day company-wide trend of attendance and timesheet record counts.
- * Expects a "date" field on each doc (Firestore Timestamp or date string) —
- * adjust if your schema differs.
- */
 function buildTrendData(attendanceDocs, timesheetDocs) {
   const days = [];
   const today = new Date();
@@ -560,16 +553,16 @@ function normalizeDate(value) {
 const thStyle = {
   padding: "15px",
   textAlign: "left",
-  background: "#eaf3ff",
-  color: "#111111",
+  background: "var(--accent-bg)",
+  color: "var(--text-color)",
   fontWeight: 700,
-  borderBottom: "1px solid #66a8e0",
+  borderBottom: "1px solid var(--accent-border)",
 };
 
 const tdStyle = {
   padding: "15px",
-  color: "#444444",
-  borderBottom: "1px solid #edf2f7",
+  color: "var(--text-muted)",
+  borderBottom: "1px solid var(--border-color)",
 };
 
 // "use client";
@@ -2086,7 +2079,7 @@ const tdStyle = {
 // {
 // title:"Employees",
 // value:totalEmployees,
-// color:"#2563eb",
+// color:"#3d6fa8",
 // icon:"👥"
 // },
 // {
@@ -2372,7 +2365,7 @@ const tdStyle = {
 // }
 
 // const buttonStyle = {
-// background: "#2563eb",
+// background: "#3d6fa8",
 // color: "#fff",
 // border: "none",
 // padding: "12px 20px",

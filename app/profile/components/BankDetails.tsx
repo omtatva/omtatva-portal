@@ -14,10 +14,12 @@ export default function BankDetails({
 }) {
 
 
-const { profile, setProfile } = useProfile();
+const { profile, setProfile, saveProfile } = useProfile();
 
 
 const [isAdminOrIT, setIsAdminOrIT] = useState(false);
+
+const [isSaving, setIsSaving] = useState(false);
 
 
 
@@ -98,7 +100,7 @@ setProfile({
 
 
 
-const handleNext = ()=>{
+const handleNext = async ()=>{
 
 
 if(!isAdminOrIT){
@@ -106,7 +108,7 @@ if(!isAdminOrIT){
 
 if(
 
-!profile.accountHolder ||
+!profile.bankAccountHolder ||
 
 !profile.bankName ||
 
@@ -128,8 +130,13 @@ return;
 }
 
 
+setIsSaving(true);
 
-next();
+const ok = await saveProfile(profile);
+
+setIsSaving(false);
+
+if (ok) next();
 
 
 };
@@ -145,7 +152,7 @@ return (
 
 <h2
 style={{
-color:"#2563eb",
+color:"#3d6fa8",
 marginBottom:30
 }}
 >
@@ -185,13 +192,13 @@ Account Holder Name
 style={input}
 
 value={
-profile.accountHolder || ""
+profile.bankAccountHolder || ""
 }
 
 onChange={(e)=>
 
 updateField(
-"accountHolder",
+"bankAccountHolder",
 e.target.value
 )
 
@@ -615,9 +622,11 @@ fontWeight:700
 
 onClick={handleNext}
 
+disabled={isSaving}
+
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -629,13 +638,15 @@ borderRadius:12,
 
 cursor:"pointer",
 
-fontWeight:700
+fontWeight:700,
+
+opacity: isSaving ? 0.7 : 1,
 
 }}
 
 >
 
-Save & Continue →
+{isSaving ? "Saving..." : "Save & Continue →"}
 
 </button>
 

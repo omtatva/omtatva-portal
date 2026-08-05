@@ -297,7 +297,7 @@ return (
 
 <h2
 style={{
-color:"#2563eb",
+color:"#3d6fa8",
 marginBottom:25
 }}
 >

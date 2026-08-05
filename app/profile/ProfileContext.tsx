@@ -14,6 +14,7 @@ import {
 import {
   doc,
   getDoc,
+  setDoc,
 } from "firebase/firestore";
 
 import {
@@ -26,7 +27,9 @@ type ProfileType = {
 
   profilePhoto:string;
 
+  salutation:string;
   firstName:string;
+  middleName:string;
   lastName:string;
   personalEmail:string;
   mobile:string;
@@ -79,32 +82,33 @@ type ProfileType = {
 
 
   employeeCode: string;
-officeLocation: string;
-joiningDate: string;
-confirmationDate: string;
-noticePeriod: string;
-employeeStatus: string;
+  officeLocation: string;
+  joiningDate: string;
+  confirmationDate: string;
+  noticePeriod: string;
+  employeeStatus: string;
 
   // BANK
 
   bankAccountHolder:string;
-bankName:string;
-accountNumber:string;
-confirmAccountNumber:string;
-ifsc:string;
-branch:string;
-upi:string;
-accountType:string;
-pfNumber:string;
-esicNumber:string;
-uanNumber:string;
-panLinked:string;
+  bankName:string;
+  accountNumber:string;
+  confirmAccountNumber:string;
+  ifsc:string;
+  branch:string;
+  upi:string;
+  accountType:string;
+  pfNumber:string;
+  esicNumber:string;
+  uanNumber:string;
+  panLinked:string;
 
 
   // DOCUMENTS
 
   pan:string;
   aadhaar:string;
+  documents: Record<string, string>;
 
 };
 
@@ -115,7 +119,9 @@ const initialProfile:ProfileType = {
 
 profilePhoto:"",
 
+salutation:"",
 firstName:"",
+middleName:"",
 lastName:"",
 personalEmail:"",
 mobile:"",
@@ -189,6 +195,7 @@ panLinked:"Yes",
 
 pan:"",
 aadhaar:"",
+documents:{},
 
 };
 
@@ -224,6 +231,10 @@ const [loading,setLoading] =
 useState(true);
 
 
+const [uid,setUid] =
+useState<string | null>(null);
+
+
 
 
 
@@ -244,6 +255,8 @@ return;
 
 }
 
+
+setUid(user.uid);
 
 
 try{
@@ -316,6 +329,45 @@ return ()=>unsubscribe();
 
 
 
+// NEW: actually persist profile to Firestore.
+// Every step's "Save & Continue" should call this instead of
+// relying only on local setProfile.
+const saveProfile = async (
+  data: Partial<ProfileType>
+): Promise<boolean> => {
+
+  const currentUid = uid || auth.currentUser?.uid;
+
+  if (!currentUid) {
+    console.log("Profile Save Error: no logged in user");
+    return false;
+  }
+
+  const merged = { ...profile, ...data };
+
+  setProfile(merged);
+
+  const cleaned = Object.fromEntries(
+    Object.entries(merged).filter(
+      ([, value]) => value !== undefined
+    )
+  );
+
+  try {
+    await setDoc(
+      doc(db, "employeeProfiles", currentUid),
+      cleaned,
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.log("Profile Save Error:", error);
+    return false;
+  }
+};
+
+
+
 
 
 
@@ -328,6 +380,8 @@ value={{
 profile,
 
 setProfile,
+
+saveProfile,
 
 loading
 

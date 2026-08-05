@@ -30,6 +30,8 @@ officeEndTime:"18:30",
 
 graceMinutes:15,
 
+extraBufferMinutes:60,
+
 minimumHours:8,
 
 halfDayHours:4,
@@ -75,7 +77,10 @@ doc(db,"settings","attendanceRules")
 
 if(snap.exists()){
 
-setSettings(snap.data());
+setSettings(prev=>({
+...prev,
+...snap.data()
+}));
 
 }
 
@@ -343,6 +348,31 @@ handleInput("graceMinutes",Number(e.target.value))
 }
 className="w-full border border-[#dbeafe] rounded-xl p-3"
 />
+
+<p className="text-xs text-[#888] mt-1">
+Punch-in allowed this many minutes after Office In Time before being marked Late.
+</p>
+
+</div>
+
+<div>
+
+<label className="block text-sm text-[#444] mb-2">
+Extra Hours Buffer (Minutes)
+</label>
+
+<input
+type="number"
+value={settings.extraBufferMinutes}
+onChange={(e)=>
+handleInput("extraBufferMinutes",Number(e.target.value))
+}
+className="w-full border border-[#dbeafe] rounded-xl p-3"
+/>
+
+<p className="text-xs text-[#888] mt-1">
+Punch-out allowed this many minutes after Office Out Time before Extra Hours start counting.
+</p>
 
 </div>
 

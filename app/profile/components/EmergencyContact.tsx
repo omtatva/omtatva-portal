@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useProfile } from "../ProfileContext";
 
 
@@ -15,8 +15,12 @@ export default function EmergencyContact({
 
 const {
   profile,
-  setProfile
+  setProfile,
+  saveProfile,
 }=useProfile();
+
+
+const [isSaving,setIsSaving]=useState(false);
 
 
 
@@ -54,7 +58,7 @@ setProfile({
 
 
 
-const saveAndContinue = ()=>{
+const saveAndContinue = async ()=>{
 
 
 if(!profile.emergencyName){
@@ -79,7 +83,13 @@ return;
 }
 
 
-next();
+setIsSaving(true);
+
+const ok = await saveProfile(profile);
+
+setIsSaving(false);
+
+if (ok) next();
 
 
 };
@@ -95,7 +105,7 @@ return (
 
 <h2
 style={{
-color:"#2563eb",
+color:"#3d6fa8",
 marginBottom:30
 }}
 >
@@ -556,9 +566,11 @@ fontWeight:700
 
 onClick={saveAndContinue}
 
+disabled={isSaving}
+
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -570,13 +582,15 @@ borderRadius:12,
 
 cursor:"pointer",
 
-fontWeight:700
+fontWeight:700,
+
+opacity: isSaving ? 0.7 : 1,
 
 }}
 
 >
 
-Save & Continue →
+{isSaving ? "Saving..." : "Save & Continue →"}
 
 </button>
 

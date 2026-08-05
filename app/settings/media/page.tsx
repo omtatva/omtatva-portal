@@ -235,7 +235,7 @@ onClick={save}
 
 style={{
 marginTop:30,
-background:"#2563EB",
+background:"#3d6fa8",
 color:"#fff",
 padding:"14px 35px",
 borderRadius:12,

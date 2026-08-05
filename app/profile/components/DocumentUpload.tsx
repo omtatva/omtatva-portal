@@ -14,6 +14,8 @@ storage
 
 import toast from "react-hot-toast";
 
+import { useProfile } from "../ProfileContext";
+
 
 import {
 ref,
@@ -30,10 +32,32 @@ where,
 getDocs,
 setDoc,
 doc,
-serverTimestamp
+serverTimestamp,
+arrayUnion
 }
 from "firebase/firestore";
 
+
+// Document types that accept more than one file. Everything else
+// (photo, resume, cheque, offer) stays a single-file upload where
+// `documents[key]` is a plain URL string. For these keys,
+// `documents[key]` is instead an array of { fileName, url }.
+const MULTI_UPLOAD_TYPES = ["aadhaar", "pan", "education", "experience", "other"];
+
+// Maps this component's field keys to the field names/shapes that
+// `admin/documents/[id]` (a separate, HR-facing page reading from the
+// `users` collection) expects. Keys with no mapping (photo, education,
+// other) have no equivalent field there, so they're skipped — they'll
+// still save normally to employeeDocuments/employeeProfiles above,
+// just won't appear on that particular admin screen.
+const ADMIN_DOCUMENTS_FIELD_MAP: Record<string, string> = {
+  aadhaar: "aadhaar",
+  pan: "pan",
+  resume: "resume",
+  experience: "experienceLetter",
+  cheque: "bank",
+  offer: "offerLetter",
+};
 
 
 export default function DocumentUpload({
@@ -48,6 +72,8 @@ next:()=>void;
 
 }){
 
+
+const { profile, setProfile } = useProfile();
 
 const [documents,setDocuments]=useState<any>({});
 
@@ -96,11 +122,21 @@ const snap=await getDocs(q);
 let data:any={};
 
 
-snap.forEach((doc)=>{
+snap.forEach((docSnap)=>{
 
-const d=doc.data();
+const d=docSnap.data();
+
+if(MULTI_UPLOAD_TYPES.includes(d.documentType)){
+
+// Multi-type docs store their files array directly on the doc
+data[d.documentType] = d.files || [];
+
+}
+else{
 
 data[d.documentType]=d.downloadURL;
+
+}
 
 
 });
@@ -108,6 +144,22 @@ data[d.documentType]=d.downloadURL;
 
 
 setDocuments(data);
+
+
+// keep context in sync too, so sectionCompleted() sees it
+setProfile((prev:any)=>({
+
+...prev,
+
+documents:{
+
+...prev.documents,
+
+...data
+
+}
+
+}));
 
 
 };
@@ -134,8 +186,25 @@ if(!user)
 return;
 
 
+const isMulti = MULTI_UPLOAD_TYPES.includes(type);
+
+// For multi-upload types, track progress per-file (keyed by file
+// name) instead of overwriting a single progress value per type.
+const progressKey = isMulti ? `${type}:${file.name}` : type;
+
+
 
 try{
+
+
+setUploadProgress((prev:any)=>({
+
+...prev,
+
+[progressKey]:0
+
+}));
+
 
 
 const storageRef=ref(
@@ -178,7 +247,7 @@ setUploadProgress((prev:any)=>({
 
 ...prev,
 
-[type]:progress
+[progressKey]:progress
 
 }));
 
@@ -208,7 +277,162 @@ uploadTask.snapshot.ref
 
 
 
+if(isMulti){
 
+
+// 1) Save to employeeDocuments collection — append this file
+//    to the doc's `files` array instead of overwriting.
+
+await setDoc(
+
+doc(
+db,
+"employeeDocuments",
+`${user.uid}_${type}`
+),
+
+
+{
+
+employeeId:user.uid,
+
+employeeEmail:user.email,
+
+documentType:type,
+
+files: arrayUnion({
+fileName:file.name,
+url:url
+}),
+
+updatedAt:
+serverTimestamp()
+
+},
+
+
+{
+merge:true
+}
+
+);
+
+
+
+
+// 2) Mirror into employeeProfiles/{uid}.documents so
+//    admin/users/[id] page (which reads the profile doc)
+//    shows the uploaded documents too.
+
+const existingFiles =
+(documents[type] as any[]) || [];
+
+const updatedFiles = [
+...existingFiles,
+{ fileName:file.name, url:url }
+];
+
+await setDoc(
+
+doc(
+db,
+"employeeProfiles",
+user.uid
+),
+
+{
+
+documents:{
+
+...profile.documents,
+
+[type]: updatedFiles
+
+}
+
+},
+
+{
+merge:true
+}
+
+);
+
+
+
+setDocuments((prev:any)=>({
+
+...prev,
+
+[type]: [
+...( (prev[type] as any[]) || [] ),
+{ fileName:file.name, url:url }
+]
+
+}));
+
+
+
+setProfile((prev:any)=>({
+
+...prev,
+
+documents:{
+
+...prev.documents,
+
+[type]: updatedFiles
+
+}
+
+}));
+
+
+
+// 3) Mirror into users/{uid}.documents so the separate HR-facing
+//    admin/documents/[id] page can see it too — using the field
+//    name and { name, url } shape that page expects.
+
+const adminField = ADMIN_DOCUMENTS_FIELD_MAP[type];
+
+if(adminField){
+
+await setDoc(
+
+doc(
+db,
+"users",
+user.uid
+),
+
+{
+
+documents:{
+
+[adminField]: arrayUnion({
+name:file.name,
+url:url
+})
+
+}
+
+},
+
+{
+merge:true
+}
+
+);
+
+}
+
+
+}
+
+else{
+
+
+// 1) Save to employeeDocuments collection (existing behaviour)
 
 await setDoc(
 
@@ -245,6 +469,40 @@ merge:true
 
 
 
+
+// 2) Mirror into employeeProfiles/{uid}.documents so
+//    admin/users/[id] page (which reads the profile doc)
+//    shows the uploaded documents too.
+
+await setDoc(
+
+doc(
+db,
+"employeeProfiles",
+user.uid
+),
+
+{
+
+documents:{
+
+...profile.documents,
+
+[type]:url
+
+}
+
+},
+
+{
+merge:true
+}
+
+);
+
+
+
+
 setDocuments((prev:any)=>({
 
 ...prev,
@@ -255,8 +513,110 @@ setDocuments((prev:any)=>({
 
 
 
+setProfile((prev:any)=>({
+
+...prev,
+
+documents:{
+
+...prev.documents,
+
+[type]:url
+
+}
+
+}));
+
+
+// 3) Mirror into users/{uid}.documents so the separate HR-facing
+//    admin/documents/[id] page can see it too — using the field
+//    name that page expects (e.g. "experience" -> "experienceLetter").
+
+const adminField = ADMIN_DOCUMENTS_FIELD_MAP[type];
+
+if(adminField){
+
+await setDoc(
+
+doc(
+db,
+"users",
+user.uid
+),
+
+{
+
+documents:{
+
+[adminField]: url
+
+}
+
+},
+
+{
+merge:true
+}
+
+);
+
+}
+
+
+// 4) Profile photo is a special case — the admin header cards read
+//    a top-level `profilePhoto` (EmployeePage.js) / `photoURL`
+//    (AdminEmployeeDocumentsPage.js) field, not documents.photo, so
+//    set both directly whenever this upload is the "photo" type.
+
+if(type === "photo"){
+
+await setDoc(
+
+doc(
+db,
+"employeeProfiles",
+user.uid
+),
+
+{
+profilePhoto: url
+},
+
+{
+merge:true
+}
+
+);
+
+await setDoc(
+
+doc(
+db,
+"users",
+user.uid
+),
+
+{
+photoURL: url,
+profilePhoto: url
+},
+
+{
+merge:true
+}
+
+);
+
+}
+
+
+
+}
+
+
+
 toast.success(
-`${type} uploaded`
+`${file.name} uploaded`
 );
 
 
@@ -288,6 +648,25 @@ toast.error(
 
 
 
+const uploadMultipleFiles = (
+
+fileList:FileList,
+
+type:string
+
+)=>{
+
+Array.from(fileList).forEach((file)=>{
+
+uploadFile(file, type);
+
+});
+
+};
+
+
+
+
 
 
 
@@ -299,7 +678,15 @@ title:string,
 
 key:string
 
-)=>(
+)=>{
+
+const isMulti = MULTI_UPLOAD_TYPES.includes(key);
+
+const multiFiles: any[] = isMulti ? (documents[key] || []) : [];
+
+const hasAny = isMulti ? multiFiles.length > 0 : Boolean(documents[key]);
+
+return (
 
 
 <div
@@ -325,7 +712,7 @@ background:"#f8fafc"
 
 style={{
 
-color:"#2563eb"
+color:"#3d6fa8"
 
 }}
 
@@ -344,6 +731,8 @@ id={key}
 
 type="file"
 
+multiple={isMulti}
+
 style={{
 display:"none"
 }}
@@ -351,16 +740,28 @@ display:"none"
 onChange={(e)=>{
 
 
-const file=
-e.target.files?.[0];
+const files=
+e.target.files;
 
 
-if(file)
+if(!files || files.length===0)
+return;
 
-uploadFile(
-file,
-key
-);
+
+if(isMulti){
+
+uploadMultipleFiles(files, key);
+
+}
+else{
+
+uploadFile(files[0], key);
+
+}
+
+
+// reset so the same file(s) can be re-selected later
+e.target.value = "";
 
 
 }}
@@ -381,11 +782,11 @@ display:"inline-block",
 marginTop:15,
 
 background:
-documents[key]
+hasAny
 ?
 "#16a34a"
 :
-"#2563eb",
+"#3d6fa8",
 
 color:"#fff",
 
@@ -403,11 +804,11 @@ fontWeight:600
 
 
 {
-documents[key]
+isMulti
 ?
-"✅ Uploaded / Replace"
+(hasAny ? `✅ ${multiFiles.length} Uploaded / Add More` : "📤 Upload (multiple allowed)")
 :
-"📤 Upload"
+(hasAny ? "✅ Uploaded / Replace" : "📤 Upload")
 }
 
 
@@ -417,9 +818,36 @@ documents[key]
 
 
 
+{/* Per-file progress for multi-upload types */}
+
 {
 
-uploadProgress[key] &&
+isMulti &&
+
+Object.keys(uploadProgress)
+
+.filter((k)=>k.startsWith(`${key}:`) && uploadProgress[k] < 100)
+
+.map((k)=>(
+
+<p key={k} style={{ fontSize:13, margin:"6px 0 0" }}>
+
+Uploading {k.split(":")[1]}... {uploadProgress[k]}%
+
+</p>
+
+))
+
+}
+
+
+{/* Single-file progress */}
+
+{
+
+!isMulti &&
+
+uploadProgress[key]!==undefined &&
 
 uploadProgress[key]<100 &&
 
@@ -437,9 +865,84 @@ Uploading...
 
 
 
+{/* Multi-upload file list */}
+
 {
 
-documents[key] &&
+isMulti && multiFiles.length > 0 &&
+
+<div style={{ marginTop:15, textAlign:"left" }}>
+
+{multiFiles.map((f, i)=>(
+
+<a
+
+key={i}
+
+href={f.url}
+
+target="_blank"
+
+style={{
+
+display:"flex",
+
+justifyContent:"space-between",
+
+gap:10,
+
+padding:"8px 10px",
+
+marginBottom:6,
+
+background:"#fff",
+
+border:"1px solid #e2e8f0",
+
+borderRadius:8,
+
+color:"#3d6fa8",
+
+textDecoration:"none",
+
+fontSize:13.5,
+
+}}
+
+>
+
+<span style={{
+
+overflow:"hidden",
+
+textOverflow:"ellipsis",
+
+whiteSpace:"nowrap",
+
+}}>
+
+📄 {f.fileName}
+
+</span>
+
+<span>View →</span>
+
+</a>
+
+))}
+
+</div>
+
+}
+
+
+
+
+{/* Single-upload view link */}
+
+{
+
+!isMulti && documents[key] &&
 
 
 <a
@@ -454,7 +957,7 @@ display:"block",
 
 marginTop:15,
 
-color:"#2563eb"
+color:"#3d6fa8"
 
 }}
 
@@ -474,6 +977,8 @@ View Document
 
 );
 
+};
+
 
 
 
@@ -491,7 +996,7 @@ return (
 
 style={{
 
-color:"#2563eb",
+color:"#3d6fa8",
 
 marginBottom:35
 
@@ -637,7 +1142,7 @@ onClick={next}
 
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -673,8 +1178,6 @@ Save & Continue →
 
 
 }
-
-
 
 
 // "use client";
@@ -797,7 +1300,7 @@ Save & Continue →
 //       <h3
 //         style={{
 //           marginBottom: 15,
-//           color: "#2563eb",
+//           color: "#3d6fa8",
 //         }}
 //       >
 //         {title}
@@ -829,7 +1332,7 @@ Save & Continue →
 //     background:
 //       uploadProgress[key] === 100
 //         ? "#16a34a"
-//         : "#2563eb",
+//         : "#3d6fa8",
 //     color: "#fff",
 //     padding: "10px 22px",
 //     borderRadius: 10,
@@ -863,7 +1366,7 @@ Save & Continue →
 //         background:
 //           uploadProgress[key] === 100
 //             ? "#16a34a"
-//             : "#2563eb",
+//             : "#3d6fa8",
 //         transition: "width .3s ease",
 //       }}
 //     />
@@ -877,7 +1380,7 @@ Save & Continue →
 //     color:
 //       uploadProgress[key] === 100
 //         ? "#16a34a"
-//         : "#2563eb",
+//         : "#3d6fa8",
 //   }}
 // >
 //   {uploadProgress[key] === 100 ? (
@@ -919,7 +1422,7 @@ Save & Continue →
 //     <div>
 //       <h2
 //         style={{
-//           color: "#2563eb",
+//           color: "#3d6fa8",
 //           marginBottom: 35,
 //         }}
 //       >
@@ -970,7 +1473,7 @@ Save & Continue →
 //         <button
 //           onClick={next}
 //           style={{
-//             background: "#2563eb",
+//             background: "#3d6fa8",
 //             color: "#fff",
 //             border: "none",
 //             padding: "14px 30px",

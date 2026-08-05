@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useProfile } from "../ProfileContext";
 
 
@@ -15,8 +15,12 @@ export default function EmploymentDetails({
 
 const {
  profile,
- setProfile
+ setProfile,
+ saveProfile,
 }=useProfile();
+
+
+const [isSaving,setIsSaving]=useState(false);
 
 
 
@@ -49,6 +53,15 @@ setProfile({
 
 
 
+const handleSaveAndContinue = async () => {
+  setIsSaving(true);
+  const ok = await saveProfile(profile);
+  setIsSaving(false);
+  if (ok) next();
+};
+
+
+
 return (
 
 <div>
@@ -56,7 +69,7 @@ return (
 
 <h2
 style={{
-color:"#2563eb",
+color:"#3d6fa8",
 marginBottom:30
 }}
 >
@@ -79,35 +92,6 @@ gap:25
 }}
 
 >
-
-
-
-<div>
-
-<label>
-Employee Code
-</label>
-
-<input
-
-style={input}
-
-value={
-profile.employeeCode || ""
-}
-
-onChange={(e)=>
-updateField(
-"employeeCode",
-e.target.value
-)
-}
-
-/>
-
-</div>
-
-
 
 
 
@@ -147,6 +131,9 @@ Production
 </option>
 
 <option>
+IT
+</option>
+<option>
 HR
 </option>
 
@@ -155,7 +142,7 @@ Marketing
 </option>
 
 <option>
-Finance
+Management
 </option>
 
 <option>
@@ -422,47 +409,6 @@ e.target.value
 
 
 
-
-
-
-
-<div>
-
-<label>
-Confirmation Date
-</label>
-
-
-<input
-
-type="date"
-
-style={input}
-
-value={
-profile.confirmationDate || ""
-}
-
-onChange={(e)=>
-
-updateField(
-"confirmationDate",
-e.target.value
-)
-
-}
-
-/>
-
-
-</div>
-
-
-
-
-
-
-
 <div>
 
 <label>
@@ -489,7 +435,9 @@ e.target.value
 
 >
 
-
+<option>
+NA
+</option>
 <option>
 15 Days
 </option>
@@ -515,97 +463,7 @@ e.target.value
 
 
 
-
-
-
-<div>
-
-<label>
-Employee Status
-</label>
-
-
-<select
-
-style={input}
-
-value={
-profile.employeeStatus || ""
-}
-
-onChange={(e)=>
-
-updateField(
-"employeeStatus",
-e.target.value
-)
-
-}
-
->
-
-
-<option>
-Active
-</option>
-
-<option>
-Probation
-</option>
-
-<option>
-On Leave
-</option>
-
-<option>
-Resigned
-</option>
-
-
-</select>
-
-
 </div>
-
-
-
-
-
-
-
-
-<div>
-
-<label>
-Official Email
-</label>
-
-
-<input
-
-style={{
-...input,
-background:"#f3f4f6"
-}}
-
-value={
-profile.officialEmail || ""
-}
-
-disabled
-
-/>
-
-
-</div>
-
-
-
-</div>
-
-
-
-
 
 
 
@@ -659,11 +517,13 @@ fontWeight:700
 
 <button
 
-onClick={next}
+onClick={handleSaveAndContinue}
+
+disabled={isSaving}
 
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -675,13 +535,15 @@ borderRadius:12,
 
 cursor:"pointer",
 
-fontWeight:700
+fontWeight:700,
+
+opacity: isSaving ? 0.7 : 1,
 
 }}
 
 >
 
-Save & Continue →
+{isSaving ? "Saving..." : "Save & Continue →"}
 
 </button>
 

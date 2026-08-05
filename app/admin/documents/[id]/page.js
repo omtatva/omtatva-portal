@@ -7,19 +7,87 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 import { db, storage } from "../../../../lib/firebase";
 
+// Types marked `multiple: true` accept more than one file — HR can
+// keep adding files and every one shows up with its own View/Download.
+// Everything else stays single-file (uploading again replaces it).
 const DOCUMENT_TYPES = [
   { title: "📄 Resume", type: "resume" },
   { title: "✉️ Offer Letter", type: "offerLetter" },
   { title: "🖼 Passport", type: "passport" },
-  { title: "💳 PAN Card", type: "pan" },
-  { title: "🪪 Aadhaar Card", type: "aadhaar" },
+  { title: "💳 PAN Card", type: "pan", multiple: true },
+  { title: "🪪 Aadhaar Card", type: "aadhaar", multiple: true },
+  { title: "Education Certificates", type: "education", multiple: true },
   { title: "🏦 Cancelled Cheque", type: "bank" },
-  { title: "💼 Experience Letter", type: "experienceLetter" },
+  { title: "💼 Experience Letter", type: "experienceLetter", multiple: true },
   { title: "📄 Relieving Letter", type: "relievingLetter" },
-  { title: "💰 Payslip", type: "salarySlip" },
+  { title: "💰 Payslip", type: "salarySlip", multiple: true },
   { title: "🏢 Office Compliance Document", type: "officeCompliance" },
-  { title: "🎬 Script Documents", type: "scriptDocuments", multiple: true },
+
 ];
+
+// Infer a proper Content-Type from the file extension / URL so
+// Storage doesn't fall back to a generic application/octet-stream —
+// that generic type, combined with an attachment disposition, is
+// what makes browsers download instead of preview.
+function extensionFromNameOrUrl(nameOrUrl) {
+  if (!nameOrUrl) return undefined;
+  const withoutQuery = nameOrUrl.split("?")[0];
+  const decoded = decodeURIComponent(withoutQuery);
+  return decoded.split(".").pop()?.toLowerCase();
+}
+
+function getContentType(nameOrUrl) {
+  const ext = extensionFromNameOrUrl(nameOrUrl);
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    default:
+      return undefined;
+  }
+}
+
+// Opens a file in a new tab via a fetched blob with the correct MIME
+// type — works for both newly uploaded (inline-metadata) files and
+// older ones that still carry an attachment disposition from Storage.
+async function viewInNewTab(url, fileName) {
+  if (!url) return;
+
+  const newTab = window.open("", "_blank");
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Fetch failed");
+
+    const rawBlob = await response.blob();
+    const contentType = getContentType(fileName || url) || rawBlob.type;
+    const blob = contentType ? new Blob([rawBlob], { type: contentType }) : rawBlob;
+    const blobUrl = URL.createObjectURL(blob);
+
+    if (newTab) {
+      newTab.location.href = blobUrl;
+    } else {
+      window.open(blobUrl, "_blank");
+    }
+
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+  } catch (error) {
+    console.log("View fetch failed, falling back to direct link:", error);
+    if (newTab) {
+      newTab.location.href = url;
+    } else {
+      window.open(url, "_blank");
+    }
+  }
+}
 
 export default function EmployeeDocumentsPage() {
   const { id } = useParams();
@@ -29,7 +97,11 @@ export default function EmployeeDocumentsPage() {
   const [downloadingKey, setDownloadingKey] = useState(null);
 
   useEffect(() => {
-    loadEmployee();
+    if (id) {
+      loadEmployee();
+    } else {
+      setLoading(false);
+    }
   }, [id]);
 
   const loadEmployee = async () => {
@@ -48,7 +120,16 @@ export default function EmployeeDocumentsPage() {
       setUploadingType(type);
 
       const storageRef = ref(storage, `documents/${id}/${type}_${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
+
+      // contentDisposition: "inline" tells Storage to serve the file
+      // for the browser to render instead of forcing a download.
+      const contentType = getContentType(file.name);
+      const metadata = {
+        contentDisposition: "inline",
+        ...(contentType ? { contentType } : {}),
+      };
+
+      await uploadBytes(storageRef, file, metadata);
       const url = await getDownloadURL(storageRef);
 
       if (multiple) {
@@ -144,18 +225,21 @@ export default function EmployeeDocumentsPage() {
             flexWrap: "wrap",
           }}
         >
-          <img
-            src={user.photoURL || "/profile.png"}
-            alt="Profile"
-            style={{
-              width: 110,
-              height: 110,
-              borderRadius: "50%",
-              objectFit: "cover",
-              border: "4px solid #2563eb",
-              flexShrink: 0,
-            }}
-          />
+<img
+  src={
+    user.profilePhoto ||
+    user.photoURL ||
+    "/profile.png"
+  }
+  alt="Profile"
+  style={{
+    width:110,
+    height:110,
+    borderRadius:"50%",
+    objectFit:"cover",
+    border:"4px solid #3d6fa8"
+  }}
+/>
 
           <div style={{ flex: 1, minWidth: 200 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0f172a", margin: 0 }}>
@@ -175,7 +259,7 @@ export default function EmployeeDocumentsPage() {
               flexShrink: 0,
             }}
           >
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#2563eb" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#3d6fa8" }}>
               {uploadedCount}/{DOCUMENT_TYPES.length}
             </div>
             <div style={{ fontSize: 12.5, color: "#64748b", fontWeight: 600 }}>
@@ -258,9 +342,12 @@ function DocumentRow({
             const key = `${type}-${index}`;
             return (
               <div key={key} style={{ display: "flex", gap: 8 }}>
-                <a href={file.url} target="_blank" rel="noreferrer" style={btnStyle("#3d6fa8")}>
+                <button
+                  onClick={() => viewInNewTab(file.url, file.name)}
+                  style={{ ...btnStyle("#3d6fa8"), border: "none", cursor: "pointer" }}
+                >
                   View {index + 1}
-                </a>
+                </button>
                 <button
                   onClick={() => onDownload(file.url, file.name, key)}
                   disabled={downloadingKey === key}
@@ -274,9 +361,12 @@ function DocumentRow({
 
         {!multiple && data && (
           <>
-            <a href={data} target="_blank" rel="noreferrer" style={btnStyle("#3d6fa8")}>
+            <button
+              onClick={() => viewInNewTab(data, type)}
+              style={{ ...btnStyle("#3d6fa8"), border: "none", cursor: "pointer" }}
+            >
               View
-            </a>
+            </button>
             <button
               onClick={() => onDownload(data, `${type}`, type)}
               disabled={downloadingKey === type}
@@ -293,7 +383,7 @@ function DocumentRow({
             cursor: isUploading ? "default" : "pointer",
           }}
         >
-          {isUploading ? "Uploading..." : "Upload"}
+          {isUploading ? "Uploading..." : multiple ? "Upload (Add More)" : "Upload"}
           <input
             hidden
             type="file"
@@ -337,419 +427,3 @@ function btnStyle(bg) {
     fontSize: 13.5,
   };
 }
-
-
-
-// "use client";
-
-// import { useEffect, useState } from "react";
-// import { useParams } from "next/navigation";
-// import { doc, getDoc, updateDoc } from "firebase/firestore";
-// import {
-//   ref,
-//   uploadBytes,
-//   getDownloadURL,
-// } from "firebase/storage";
-
-// import { db, storage } from "../../../../lib/firebase";
-
-// export default function EmployeeDocumentsPage() {
-//   const { id } = useParams();
-// const [documents,setDocuments]=useState([]);
-//   const [user, setUser] = useState(null);
-
-//   useEffect(() => {
-//     loadEmployee();
-//   }, []);
-
-//   const loadEmployee = async () => {
-//     const snap = await getDoc(doc(db, "users", id));
-
-//     if (snap.exists()) {
-//       setUser(snap.data());
-//     }
-//   };
-
-//   if (!user) {
-//     return <h2 style={{ padding: 40 }}>Loading...</h2>;
-//   }
-
-//   const uploadDocument = async (type, file) => {
-//   if (!file) return;
-
-//   try {
-//     const storageRef = ref(
-//       storage,
-//       `documents/${id}/${type}_${file.name}`
-//     );
-
-//     await uploadBytes(storageRef, file);
-
-//     const url = await getDownloadURL(storageRef);
-
-//     if(type === "scriptDocuments"){
-
-// const oldScripts =
-// user.documents?.scriptDocuments || [];
-
-
-// await updateDoc(
-// doc(db,"users",id),
-// {
-// "documents.scriptDocuments":[
-// ...oldScripts,
-// {
-// name:file.name,
-// url:url
-// }
-// ]
-// }
-// );
-
-
-// }
-// else{
-
-
-// await updateDoc(
-// doc(db,"users",id),
-// {
-// [`documents.${type}`]:url
-// }
-// );
-
-
-// }
-
-//     loadEmployee();
-
-//     alert(`${type} uploaded successfully`);
-//   } catch (err) {
-//     console.log(err);
-//     alert("Upload Failed");
-//   }
-// };
-
-// const DocumentRow = ({ title, type }) => {
-
-// const isMultiple = type === "scriptDocuments";
-
-// const documentData = user.documents?.[type];
-
-
-// return (
-
-// <div
-// style={{
-// display:"flex",
-// justifyContent:"space-between",
-// alignItems:"center",
-// padding:"20px",
-// borderBottom:"1px solid #eee",
-// }}
-// >
-
-// <div>
-
-// <h3>{title}</h3>
-
-
-// {
-// isMultiple ? (
-
-// documentData?.length > 0 ?
-
-// <span
-// style={{
-// color:"#16a34a",
-// fontWeight:600
-// }}
-// >
-// {documentData.length} Files Uploaded
-// </span>
-
-// :
-
-// <span style={{color:"#dc2626"}}>
-// Not Uploaded
-// </span>
-
-
-// )
-
-// :
-
-// documentData ?
-
-// <span
-// style={{
-// color:"#16a34a",
-// fontWeight:600
-// }}
-// >
-// Uploaded
-// </span>
-
-// :
-
-// <span style={{color:"#dc2626"}}>
-// Not Uploaded
-// </span>
-
-// }
-
-
-// </div>
-
-
-
-// <div
-// style={{
-// display:"flex",
-// gap:"12px",
-// alignItems:"center"
-// }}
-// >
-
-
-// {
-// isMultiple && documentData?.map((file,index)=>(
-
-// <div key={index}>
-
-// <a
-// href={file.url}
-// target="_blank"
-// style={blueBtn}
-// >
-// View {index+1}
-// </a>
-
-
-// <a
-// href={file.url}
-// download
-// style={greenBtn}
-// >
-// Download
-// </a>
-
-// </div>
-
-// ))
-
-// }
-
-
-
-// {
-// !isMultiple && documentData && (
-
-// <>
-
-// <a
-// href={documentData}
-// target="_blank"
-// style={blueBtn}
-// >
-// View
-// </a>
-
-
-// <a
-// href={documentData}
-// download
-// style={greenBtn}
-// >
-// Download
-// </a>
-
-// </>
-
-// )
-
-// }
-
-
-
-// <label style={orangeBtn}>
-
-// Upload
-
-// <input
-// hidden
-// type="file"
-// onChange={(e)=>
-// uploadDocument(type,e.target.files[0])
-// }
-// />
-
-// </label>
-
-
-// </div>
-
-
-// </div>
-
-// )
-
-// }
-
-// return (
-// <div
-//   style={{
-//     width: "96%",
-//     maxWidth: "1700px",
-//     margin: "40px auto",
-//   }}
-// >
-//     <div
-//   style={{
-//     width:"100%",
-//     display:"flex",
-//     justifyContent:"space-between",
-//     alignItems:"center",
-//     marginBottom:"35px",
-//     flexWrap:"wrap",
-//     gap:"20px",
-//   }}
-// >
-//     {/* <div
-//       style={{
-//         display: "flex",
-//         gap: "25px",
-//         alignItems: "center",
-//         marginBottom: "30px",
-//       }}
-//     > */}
-//       <img
-//         src={user.photoURL || "/profile.png"}
-//         style={{
-//           width: 140,
-//           height: 140,
-//           borderRadius: "50%",
-//           objectFit: "cover",
-//           border: "5px solid #2563eb",
-//         }}
-//       />
-
-// <button
-// onClick={()=>window.location.href="/admin/documents"}
-// style={{
-// padding:"15px 28px",
-// fontSize:"16px",
-// borderRadius:12,
-// border:"none",
-// background:"#111827",
-// color:"#fff",
-// fontWeight:700,
-// cursor:"pointer",
-// whiteSpace:"nowrap",
-// marginLeft:"auto",
-// }}
-// >
-// ← Dashboard
-// </button>
-
-
-//       <div>
-//         <h1>
-//           {user.firstName} {user.lastName}
-//         </h1>
-
-//         <h3>{user.employeeId}</h3>
-
-//         <p>{user.department}</p>
-//       </div>
-//     </div>
-
-//     <div
-//       style={{
-//         background: "#fff",
-//         borderRadius: 15,
-//         overflow: "hidden",
-//         boxShadow:
-//           "0 5px 20px rgba(0,0,0,.08)",
-//       }}
-//     >
-//       <DocumentRow
-//         title="📄 Resume"
-//         type="resume"
-//       />
-
-      
-// <DocumentRow
-//  title="✉️ Offer Letter"
-//  type="offerLetter"
-// />
-
-//       <DocumentRow
-//         title="🖼 Passport"
-//         type="passport"
-//       />
-
-//       <DocumentRow
-//         title="💳 PAN Card"
-//         type="pan"
-//       />
-
-//       <DocumentRow
-//         title="🪪 Aadhaar Card"
-//         type="aadhaar"
-//       />
-
-//       <DocumentRow
-//         title="🏦 Cancelled Cheque"
-//         type="bank"
-//       />
-
-
-//       <DocumentRow
-//         title="💼 Experience Letter"
-//         type="experienceLetter"
-//       />
-
-//       <DocumentRow
-//         title="📄 Relieving Letter"
-//         type="relievingLetter"
-//       />
-//       <DocumentRow
-//  title="💰 Payslip"
-//  type="salarySlip"
-// />
-
-
-
-// <DocumentRow
-//  title="🏢 Office Compliance Document"
-//  type="officeCompliance"
-// />
-//     </div>
-//   </div>
-// );
-// }
-
-// const blueBtn = {
-//   background: "#3d6fa8",
-//   color: "#fff",
-//   padding: "10px 18px",
-//   borderRadius: 8,
-//   textDecoration: "none",
-// };
-
-// const greenBtn = {
-//   background: "#16a34a",
-//   color: "#fff",
-//   padding: "10px 18px",
-//   borderRadius: 8,
-//   textDecoration: "none",
-// };
-
-// const orangeBtn = {
-//   background: "#f59e0b",
-//   color: "#fff",
-//   padding: "10px 18px",
-//   borderRadius: 8,
-//   cursor: "pointer",
-// };

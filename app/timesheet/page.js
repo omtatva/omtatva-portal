@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { addDoc, collection } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function TimesheetPage() {
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [client, setClient] = useState("");
   const [episode, setEpisode] = useState("");
   const [task, setTask] = useState("");
@@ -14,6 +16,21 @@ export default function TimesheetPage() {
   const [status, setStatus] = useState("Completed");
   const [notes, setNotes] = useState("");
   const [myTimesheets, setMyTimesheets] = useState([]);
+
+  // Same guard as AttendancePage.js — this page shouldn't be viewable
+  // (even the form/history) until we know the user is logged in.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+      setCheckingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const saveTimesheet = async () => {
     const user = auth.currentUser;
 
@@ -63,30 +80,83 @@ export default function TimesheetPage() {
     }
   };
 
+  if (checkingAuth) {
+    return null;
+  }
+
   return (
   <div
     style={{
     width: "100%",
     padding: "8px",
-    background: "#F5F7FB",
+    background: "var(--bg-color)",
     minHeight: "100%",
   }}
   >
 
+    <style jsx global>{`
+      .timesheet-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+      }
+      .ts-history-desktop {
+        display: block;
+      }
+      .ts-history-mobile {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+      }
+      @media (max-width: 700px) {
+        .ts-header {
+          padding: 20px !important;
+        }
+        .ts-header h1 {
+          font-size: 24px !important;
+        }
+        .ts-header p {
+          font-size: 14px !important;
+        }
+        .ts-form-card,
+        .ts-history-card {
+          padding: 20px !important;
+        }
+        .ts-form-card h2,
+        .ts-history-card h2 {
+          font-size: 22px !important;
+        }
+        .timesheet-grid {
+          grid-template-columns: 1fr !important;
+          gap: 14px !important;
+        }
+        .ts-save-btn {
+          width: 100% !important;
+        }
+        .ts-history-desktop {
+          display: none !important;
+        }
+        .ts-history-mobile {
+          display: flex !important;
+        }
+      }
+    `}</style>
+
     {/* Header */}
     <div
+      className="ts-header"
       style={{
-        background:"#ffffff",
+        background: "var(--card-bg)",
         padding:"35px",
         borderRadius:"25px",
         boxShadow:"0 10px 30px rgba(0,0,0,.08)",
-        marginBottom:"35px",
+        marginBottom:"25px",
       }}
     >
 
       <h1
         style={{
-          fontSize:"42px",
+          fontSize:"clamp(24px, 5vw, 42px)",
           margin:0,
           color:"#1e3a8a",
           fontWeight:800,
@@ -97,8 +167,8 @@ export default function TimesheetPage() {
 
       <p
         style={{
-          fontSize:"20px",
-          color:"#64748b",
+          fontSize:"16px",
+          color: "var(--text-muted)",
           marginTop:"12px",
         }}
       >
@@ -112,9 +182,10 @@ export default function TimesheetPage() {
     {/* Form Card */}
 
     <div
+      className="ts-form-card"
       style={{
-        background:"#fff",
-        padding:"50px",
+        background: "var(--card-bg)",
+        padding:"30px",
         borderRadius:"25px",
         boxShadow:"0 10px 30px rgba(0,0,0,.08)",
       }}
@@ -122,9 +193,9 @@ export default function TimesheetPage() {
 
       <h2
         style={{
-          fontSize:"30px",
-          marginBottom:"30px",
-          color:"#111827",
+          fontSize:"26px",
+          marginBottom:"25px",
+          color: "var(--text-color)",
         }}
       >
         Add Work Update
@@ -341,14 +412,15 @@ onChange={(e)=>setMinutes(e.target.value)}
 
       <button
         onClick={saveTimesheet}
+        className="ts-save-btn"
         style={{
-          marginTop:"30px",
-          background:"#2563eb",
+          marginTop:"25px",
+          background:"#3d6fa8",
           color:"#fff",
           border:"none",
           padding:"16px 40px",
           borderRadius:"12px",
-          fontSize:"20px",
+          fontSize:"18px",
           fontWeight:700,
           cursor:"pointer",
         }}
@@ -365,10 +437,11 @@ onChange={(e)=>setMinutes(e.target.value)}
     {/* History */}
 
     <div
+      className="ts-history-card"
       style={{
-        marginTop:"40px",
-        background:"#fff",
-        padding:"35px",
+        marginTop:"30px",
+        background: "var(--card-bg)",
+        padding:"30px",
         borderRadius:"25px",
         boxShadow:"0 10px 30px rgba(0,0,0,.08)",
       }}
@@ -376,19 +449,57 @@ onChange={(e)=>setMinutes(e.target.value)}
 
     <h2
       style={{
-        fontSize:"30px",
+        fontSize:"26px",
+        marginBottom:"20px",
+        color: "var(--text-color)",
       }}
     >
       📋 Creative Work History
     </h2>
 
+    {/* MOBILE cards */}
+    <div className="ts-history-mobile">
+      {myTimesheets.length === 0 ? (
+        <p style={{ color: "var(--text-muted)" }}>No work updates yet</p>
+      ) : (
+        myTimesheets.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              border: "1px solid var(--border-color)",
+              borderRadius: 14,
+              padding: 14,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-color)" }}>{item.client}</span>
+              <span style={{ fontSize: 12.5, color: "#3d6fa8", fontWeight: 600 }}>{item.status}</span>
+            </div>
+            {item.episodeName && (
+              <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text-muted)" }}>Episode: {item.episodeName}</p>
+            )}
+            <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text-muted)" }}>Task: {item.task}</p>
+            {item.aiTool && (
+              <p style={{ margin: "2px 0", fontSize: 13, color: "var(--text-muted)" }}>Tool: {item.aiTool}</p>
+            )}
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+              {item.hours || 0} hrs {item.minutesWorked || 0} min
+            </p>
+          </div>
+        ))
+      )}
+    </div>
 
+    {/* DESKTOP table */}
+    <div className="ts-history-desktop" style={{ overflowX: "auto" }}>
     <table
       style={{
         width:"100%",
-        marginTop:"25px",
+        minWidth:"800px",
+        marginTop:"5px",
         borderCollapse:"collapse",
-        fontSize:"18px",
+        fontSize:"16px",
+        color: "var(--text-color)",
       }}
     >
 
@@ -465,6 +576,7 @@ Minutes
     </tbody>
 
     </table>
+    </div>
 
     </div>
 
@@ -474,35 +586,37 @@ Minutes
 }
 
 const labelStyle = {
-  fontSize:"18px",
+  fontSize:"15px",
   fontWeight:700,
-  color:"#334155",
+  color: "var(--text-color)",
   display:"block",
-  marginBottom:"12px",
+  marginBottom:"10px",
 };
 
 
 const inputStyle = {
   width:"100%",
   boxSizing:"border-box",
-  padding:"16px",
+  padding:"14px",
   marginTop:"8px",
-  border:"1px solid #cbd5e1",
+  border: "1px solid var(--border-color)",
   borderRadius:"12px",
-  fontSize:"17px",
-  background:"#f8fafc",
+  fontSize:"15px",
+  background: "var(--accent-bg)",
+  color: "var(--text-color)",
 };
 
 
 const thStyle = {
-  padding:"16px",
+  padding:"14px",
   textAlign:"left",
-  background:"#f1f5f9",
-  borderBottom:"2px solid #ddd",
+  background: "var(--accent-bg)",
+  borderBottom: "1px solid var(--border-color)",
+  color: "var(--text-color)",
 };
 
 
 const tdStyle = {
-  padding:"16px",
-  borderBottom:"1px solid #eee",
+  padding:"14px",
+  borderBottom: "1px solid var(--border-color)",
 };

@@ -422,7 +422,7 @@ marginBottom:20
 }}
 >
 
-<h2 style={{color:"#2563eb"}}>
+<h2 style={{color:"#3d6fa8"}}>
 👤 Personal Information
 </h2>
 
@@ -490,7 +490,7 @@ marginTop:8
 style={{
 width:`${completion}%`,
 height:"100%",
-background:"#2563eb",
+background:"#3d6fa8",
 borderRadius:50
 }}
 />
@@ -540,7 +540,7 @@ width:140,
 height:140,
 borderRadius:"50%",
 objectFit:"cover",
-border:"4px solid #2563eb"
+border:"4px solid #3d6fa8"
 
 }}
 
@@ -598,7 +598,7 @@ style={{
 
 display:"block",
 marginTop:15,
-background:"#2563eb",
+background:"#3d6fa8",
 color:"#fff",
 padding:"12px",
 borderRadius:10,
@@ -718,7 +718,9 @@ Ms.
 Dr.
 </option>
 
-
+<option>
+Er.
+</option>
 </select>
 
 
@@ -1285,7 +1287,7 @@ onClick={saveProfile}
 
 style={{
 
-background:"#2563eb",
+background:"#3d6fa8",
 
 color:"#fff",
 
@@ -1515,7 +1517,7 @@ Save & Continue →
 // >
 //        <h2
 //     style={{
-//       color: "#2563eb",
+//       color: "#3d6fa8",
 //     }}
 //   >
 //     👤 Personal Information
@@ -1569,7 +1571,7 @@ Save & Continue →
 //         background:
 //           completion === 100
 //             ? "#16a34a"
-//             : "#2563eb",
+//             : "#3d6fa8",
 //         transition: ".4s",
 //       }}
 //     />
@@ -1601,7 +1603,7 @@ Save & Continue →
 //     height:140,
 //     borderRadius:"50%",
 //     objectFit:"cover",
-//     border:"4px solid #2563eb"
+//     border:"4px solid #3d6fa8"
 //   }}
 // />
 
@@ -1633,7 +1635,7 @@ Save & Continue →
 //       style={{
 //         display: "block",
 //         marginTop: 15,
-//         background: "#2563eb",
+//         background: "#3d6fa8",
 //         color: "#fff",
 //         padding: "12px 18px",
 //         borderRadius: 10,
@@ -1884,7 +1886,7 @@ Save & Continue →
 //         <button
 //           onClick={next}
 //           style={{
-//             background: "#2563eb",
+//             background: "#3d6fa8",
 //             color: "#fff",
 //             border: "none",
 //             padding: "15px 35px",

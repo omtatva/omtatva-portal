@@ -8,71 +8,78 @@ export let appSettings = {
   },
 
   branding: {
-  companyName: "OMTATVA DIGITALS",
-  logo: "",
-  backgroundImage: "",
-  loginImage: "",
-},
+    companyName: "OMTATVA DIGITALS",
+    logo: "",
+    backgroundImage: "",
+    loginImage: "",
+  },
 
-media: {
-  welcomeVideo: "",
-  announcementVideo: "",
-  bannerImage: "",
-},
+  media: {
+    welcomeVideo: "",
+    announcementVideo: "",
+    bannerImage: "",
+  },
   dashboard: {
     showAttendance: true,
     showLeave: true,
     showHoliday: true,
     showEmployee: true,
   },
-      access: {
-  users: [
-    {
-      name: "Main Admin",
-      email: "admin@omtatvadigitals.com",
-      role: "Super Admin",
-      permissions: [
-        "Dashboard",
-        "Attendance",
-        "Timesheet",
-        "Leave",
-        "Holiday",
-        "Employees",
-        "Reports",
-        "Settings",
-      ],
-    },
-  ],
-},
+  // Company-wide annual leave quotas. LeavePage.js reads these instead
+  // of hardcoding the numbers, so HR can adjust policy in one place.
+  leavePolicy: {
+    casualLeave: 12,
+    sickLeave: 10,
+    paidLeave: 18,
+  },
+  access: {
+    users: [
+      {
+        name: "Main Admin",
+        email: "admin@omtavta.com",
+        role: "Super Admin",
+        permissions: [
+          "Dashboard",
+          "Attendance",
+          "Timesheet",
+          "Leave",
+          "Holiday",
+          "Employees",
+          "Reports",
+          "Settings",
+        ],
+      },
+    ],
+  },
 };
 
-
-export function updateAppSettings(data:any){
-
+export function updateAppSettings(data: any) {
   appSettings = {
     ...appSettings,
     ...data,
-    colors:{
+    colors: {
       ...appSettings.colors,
       ...data.colors,
     },
-    branding:{
+    branding: {
       ...appSettings.branding,
       ...data.branding,
     },
-    media:{
+    media: {
       ...appSettings.media,
       ...data.media,
     },
-    dashboard:{
+    dashboard: {
       ...appSettings.dashboard,
       ...data.dashboard,
     },
-    access:{
-...appSettings.access,
-...data.access,
-},
-
+    leavePolicy: {
+      ...appSettings.leavePolicy,
+      ...data.leavePolicy,
+    },
+    access: {
+      ...appSettings.access,
+      ...data.access,
+    },
   };
-
 }

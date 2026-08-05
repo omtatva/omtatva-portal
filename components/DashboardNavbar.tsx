@@ -3,25 +3,76 @@
 import { Menu, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import { appSettings } from "@/config/appSettings";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 interface Props {
   sidebarOpen: boolean;
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+const DEFAULT_BRANDING = {
+  companyName: "OMTATVA DIGITALS",
+  logo: "",
+};
+
+const DEFAULT_COLORS = {
+  primary: "#3d6fa8",
+  sidebar: "#FFFFFF",
+};
+
 export default function DashboardNavbar({
   sidebarOpen,
   setSidebarOpen,
 }: Props) {
   const [user, setUser] = useState<User | null>(null);
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const [colors, setColors] = useState(DEFAULT_COLORS);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Live from Firestore instead of the old in-memory appSettings object —
+  // so a logo/name change from Settings → Branding, or a color change
+  // from Settings → Appearance, shows up here immediately for every
+  // logged-in user, not just the tab that made the change.
+  useEffect(() => {
+    const unsubscribeBranding = onSnapshot(
+      doc(db, "settings", "branding"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setBranding({
+            companyName: data.companyName || DEFAULT_BRANDING.companyName,
+            logo: data.logo || "",
+          });
+        }
+      },
+      (error) => console.error("BRANDING SNAPSHOT ERROR:", error)
+    );
+
+    const unsubscribeAppearance = onSnapshot(
+      doc(db, "settings", "appearance"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setColors({
+            primary: data.colors?.primary || DEFAULT_COLORS.primary,
+            sidebar: data.colors?.sidebar || DEFAULT_COLORS.sidebar,
+          });
+        }
+      },
+      (error) => console.error("APPEARANCE SNAPSHOT ERROR:", error)
+    );
+
+    return () => {
+      unsubscribeBranding();
+      unsubscribeAppearance();
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -37,7 +88,7 @@ export default function DashboardNavbar({
     <header
       style={{
         height: 70,
-        background: appSettings.colors.sidebar,
+        background: colors.sidebar,
         borderBottom: "1px solid #EAF3FF",
         display: "flex",
         alignItems: "center",
@@ -60,7 +111,7 @@ export default function DashboardNavbar({
             border: "none",
             background: "transparent",
             cursor: "pointer",
-            color: appSettings.colors.primary,
+            color: colors.primary,
             display: "flex",
             alignItems: "center",
             padding: 6,
@@ -78,10 +129,10 @@ export default function DashboardNavbar({
             marginLeft: 20,
           }}
         >
-          {appSettings.branding.logo ? (
+          {branding.logo ? (
             <img
-              src={appSettings.branding.logo}
-              alt={`${appSettings.branding.companyName} logo`}
+              src={branding.logo}
+              alt={`${branding.companyName} logo`}
               style={{
                 height: 40,
                 width: 40,
@@ -95,12 +146,12 @@ export default function DashboardNavbar({
             className="dashnav-company-name"
             style={{
               margin: 0,
-              color: appSettings.colors.primary,
+              color: colors.primary,
               fontSize: "20px",
               fontWeight: 700,
             }}
           >
-            {appSettings.branding.companyName}
+            {branding.companyName}
           </h3>
         </div>
       </div>
@@ -156,7 +207,7 @@ export default function DashboardNavbar({
         }
         .dashnav-menu-btn:focus-visible,
         .dashnav-logout-btn:focus-visible {
-          outline: 2px solid ${appSettings.colors.primary};
+          outline: 2px solid ${colors.primary};
           outline-offset: 2px;
         }
         @media (max-width: 640px) {
@@ -174,7 +225,6 @@ export default function DashboardNavbar({
     </header>
   );
 }
-
 
 // "use client";
 

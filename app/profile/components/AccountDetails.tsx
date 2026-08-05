@@ -24,7 +24,7 @@ export default function AccountDetails({
     <div>
       <h2
         style={{
-          color: "#2563eb",
+          color: "#3d6fa8",
           marginBottom: 30,
         }}
       >
@@ -150,7 +150,7 @@ export default function AccountDetails({
         <button
           onClick={next}
           style={{
-            background: "#2563eb",
+            background: "#3d6fa8",
             color: "#fff",
             border: "none",
             padding: "15px 30px",

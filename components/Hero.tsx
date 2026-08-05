@@ -50,6 +50,9 @@ export default function Hero() {
             <a href="/login">
               <button className="hero-btn-primary">Employee Login</button>
             </a>
+            <a href="/admin/login">
+              <button className="hero-btn-primary">Admin Login</button>
+            </a>
             <a href="/demo">
               <button className="hero-btn-secondary">▶ Watch Demo</button>
             </a>
@@ -89,7 +92,7 @@ export default function Hero() {
             }}
           >
             <source
-              src="https://storage.googleapis.com/omtatva_portal_bucket/videos/Draft%2001%20with%20sound%20(2).mp4"
+              src="https://storage.googleapis.com/omtatva_portal_bucket/videos/homevideo.mp4"
               type="video/mp4"
             />
           </video>
