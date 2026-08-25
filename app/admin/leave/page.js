@@ -5,16 +5,18 @@ import {
   onSnapshot,
   doc,
   updateDoc,
-  addDoc,
   Timestamp
 } from "firebase/firestore";
 
 import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
+import { logActivity } from "../../../lib/activityLog";
+import { usePermission } from "../../../lib/usePermission";
 
 
 export default function LeaveAdminPage() {
 
+const { canEdit } = usePermission("leave");
 const [requests,setRequests]=useState([]);
 const [remarks,setRemarks]=useState({});
 
@@ -124,100 +126,18 @@ const updateLeaveStatus = async (id, status) => {
     );
 
 
-    // 2. Send email through Cloud Run
+    // 2. Activity Log
 
-    await fetch(
-      "YOUR_CLOUD_RUN_EMAIL_API_URL",
-      {
-        method: "POST",
+    await logActivity({
+      employeeName: leave.employeeName,
+      employeeEmail: leave.email,
+      uid: leave.uid,
+      activity: `Leave ${status}`,
+      module: "Leave",
+      description: `${leave.leaveType} (${leave.fromDate} - ${leave.toDate})`,
+    });
 
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-
-          to: leave.email,
-
-          employeeName:
-          leave.employeeName,
-
-          leaveType:
-          leave.leaveType,
-
-          status: status,
-
-          fromDate:
-          leave.fromDate,
-
-          toDate:
-          leave.toDate,
-
-          approvedBy:
-          auth.currentUser?.displayName || "Admin",
-
-          remarks:
-          remarks[id] || ""
-
-        })
-
-      }
-    );
-
-
-    // 3. Activity Log
-
-   // 3. Activity Log
-
-const currentUser = auth.currentUser;
-
-
-await addDoc(
-  collection(db,"activityLogs"),
-  {
-
-    employeeName:
-    leave.employeeName,
-
-    uid:
-    leave.uid,
-
-
-    // Dashboard me dikhega
-    activity:
-    `Leave ${status}`,
-
-
-    // Module name
-    module:
-    "Leave",
-
-
-    // Ye kis type ka action hai
-    type:
-    "Leave",
-
-
-    description:
-    `${leave.leaveType} (${leave.fromDate} - ${leave.toDate})`,
-
-
-    // Kisne kiya
-    updatedBy:
-    currentUser?.email || "Unknown",
-
-
-    updatedByUid:
-    currentUser?.uid || "",
-
-
-    createdAt:
-    Timestamp.now()
-
-  }
-);
-
-    alert("Status Updated & Email Sent");
+    alert("Status Updated");
 
 
   }
@@ -259,79 +179,14 @@ const updateWfhStatus = async (id, status) => {
 
     // 2. Activity Log
 
-    await addDoc(
-      collection(db,"activityLogs"),
-      {
-
-        employeeName:
-        wfh.employeeName,
-
-        uid:
-        wfh.uid,
-
-        activity:
-        `WFH ${status}`,
-
-        type:
-        "WFH",
-
-        description:
-        `Work From Home (${wfh.date})`,
-
-        createdAt:
-        Timestamp.now()
-
-      }
-    );
-// 3. Activity Log
-
-const currentUser = auth.currentUser;
-
-
-await addDoc(
-  collection(db,"activityLogs"),
-  {
-
-    employeeName:
-    wfh.employeeName,
-
-    uid:
-    wfh.uid,
-
-
-    // Dashboard me dikhega
-    activity:
-    `WFH ${status}`,
-
-
-    // Module name
-    module:
-    "wfh",
-
-
-    // Ye kis type ka action hai
-    type:
-    "WFH",
-
-
-    description:
-    `${wfh.leaveType} (${wfh.fromDate} - ${wfh.toDate})`,
-
-
-    // Kisne kiya
-    updatedBy:
-    currentUser?.email || "Unknown",
-
-
-    updatedByUid:
-    currentUser?.uid || "",
-
-
-    createdAt:
-    Timestamp.now()
-
-  }
-);
+    await logActivity({
+      employeeName: wfh.employeeName,
+      employeeEmail: wfh.email,
+      uid: wfh.uid,
+      activity: `WFH ${status}`,
+      module: "WFH",
+      description: `Work From Home (${wfh.date})`,
+    });
 
     alert("WFH Status Updated");
 
@@ -640,6 +495,8 @@ fontSize:"14px",
 
 <td style={td}>
 
+{canEdit ? (
+<>
 <button
 
 style={greenBtn}
@@ -671,6 +528,10 @@ updateLeaveStatus(item.id,"Rejected")
 Reject
 
 </button>
+</>
+) : (
+<span style={{ color: "#94a3b8", fontSize: 13 }}>View only</span>
+)}
 
 </td>
 
@@ -847,6 +708,8 @@ fontSize:"14px",
 
 <td style={td}>
 
+{canEdit ? (
+<>
 <button
 
 style={greenBtn}
@@ -878,6 +741,10 @@ updateWfhStatus(item.id,"Rejected")
 Reject
 
 </button>
+</>
+) : (
+<span style={{ color: "#94a3b8", fontSize: 13 }}>View only</span>
+)}
 
 </td>
 

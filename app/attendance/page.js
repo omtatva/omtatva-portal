@@ -32,12 +32,17 @@ import {
 } from "firebase/firestore";
 
 import AttendanceCalendar from "./AttendanceCalendar";
+import { computeDisplayStatus, getShiftTimes } from "@/lib/attendanceRules";
 
 export default function AttendancePage() {
   const [user, setUser] = useState(null);
   const [todayData, setTodayData] = useState(null);
   const [history, setHistory] = useState([]);
   const [attendanceRules, setAttendanceRules] = useState(null);
+  // Which shift (Settings -> Attendance Settings -> Shifts) this
+  // employee is assigned to, if any — determines their late cutoff and
+  // extra-hours cutoff instead of the office-wide default.
+  const [shiftId, setShiftId] = useState(null);
   const [locationStatus, setLocationStatus] = useState("");
   const [distance, setDistance] = useState(0);
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -72,6 +77,14 @@ export default function AttendancePage() {
       const holidays = await loadHolidayDates();
       setHolidayDates(holidays);
 
+      // Which shift this employee is assigned to (Admin -> Users), if
+      // any — fetched once here (not just via state) so the very first
+      // loadHistory call below already has it, instead of using a stale
+      // "no shift" default before state catches up.
+      const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+      const employeeShiftId = userSnap.exists() ? userSnap.data().shiftId || null : null;
+      setShiftId(employeeShiftId);
+
       await loadToday(currentUser.uid);
 
       // Backfill any missing past working days as "Absent" before
@@ -79,7 +92,7 @@ export default function AttendancePage() {
       // attendance collection, e.g. payroll) sees them. Company
       // holidays are excluded so they don't get marked Absent.
       await syncMissingAbsences(currentUser.uid, holidays);
-      await loadHistory(currentUser.uid, rules);
+      await loadHistory(currentUser.uid, rules, employeeShiftId);
 
       if (rules) {
         await checkOfficeRange(rules);
@@ -161,42 +174,6 @@ export default function AttendancePage() {
     }
 
     return dates;
-  }
-
-  // Determines Present / Late / Absent / Incomplete for display +
-  // calendar coloring. Based on Firestore settings/attendanceRules:
-  // officeStartTime (e.g. "10:00") + graceMinutes (e.g. 15) define the
-  // late cutoff.
-  function getDisplayStatus(item, rules) {
-    if (item.status === "Absent") {
-      return "Absent";
-    }
-
-    const punch = convertDate(item.PunchIn);
-    if (!punch) {
-      return item.status || "Present";
-    }
-
-    // Punched in but the day is already over and there's still no
-    // punch-out — actual hours worked are unknown, so don't count
-    // this as a real "Present" day. Today itself is excluded since
-    // the employee may still punch out later today.
-    const punchOut = convertDate(item.PunchOut);
-    if (!punchOut && item.date !== today) {
-      return "Incomplete";
-    }
-
-    const officeStartTime = rules?.officeStartTime || "10:00";
-    const graceMinutes = Number(rules?.graceMinutes ?? 15);
-
-    const [officeHour, officeMinute] = officeStartTime.split(":").map(Number);
-
-    const cutoff = new Date(punch);
-    cutoff.setHours(officeHour, officeMinute + graceMinutes, 0, 0);
-
-    const isLate = punch > cutoff;
-
-    return isLate ? "Late" : "Present";
   }
 
   // =======================
@@ -365,7 +342,7 @@ export default function AttendancePage() {
     }
   }
 
-  async function loadHistory(uid, rules) {
+  async function loadHistory(uid, rules, employeeShiftId) {
     const q = query(collection(db, "attendance"), where("userId", "==", uid));
 
     const snap = await getDocs(q);
@@ -374,7 +351,12 @@ export default function AttendancePage() {
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .map((item) => ({
         ...item,
-        displayStatus: getDisplayStatus(item, rules || attendanceRules),
+        displayStatus: computeDisplayStatus(
+          item,
+          rules || attendanceRules,
+          employeeShiftId !== undefined ? employeeShiftId : shiftId,
+          today
+        ),
       }))
       .sort((a, b) => (a.date < b.date ? 1 : -1));
 
@@ -523,14 +505,14 @@ export default function AttendancePage() {
       const rules = rulesSnap.exists() ? rulesSnap.data() : attendanceRules;
 
       // Extra (overtime) hours — time worked PAST a buffer window after
-      // office end time (officeEndTime from Attendance Settings, e.g.
-      // "19:00"). Punching out anytime up to 60 minutes after office end
-      // time (e.g. 19:00–20:00) is treated as normal — no extra hours.
-      // Only time worked beyond that buffer counts as extra. Punching
-      // out before office end time simply results in fewer totalHours,
-      // which is already reflected automatically — no separate logic
-      // needed for that case.
-      const officeEndTime = rules?.officeEndTime || "19:00";
+      // this employee's shift end time (their assigned shift from
+      // Admin -> Users, or the office-wide officeEndTime if none).
+      // Punching out anytime up to the buffer window after that (e.g.
+      // 19:00–20:00) is treated as normal — no extra hours. Only time
+      // worked beyond that buffer counts as extra. Punching out before
+      // end time simply results in fewer totalHours, which is already
+      // reflected automatically — no separate logic needed for that case.
+      const { endTime: officeEndTime } = getShiftTimes(rules, shiftId);
       const extraBufferMinutes = Number(rules?.extraBufferMinutes ?? 60);
 
       const [endHour, endMinute] = officeEndTime.split(":").map(Number);
@@ -671,6 +653,16 @@ export default function AttendancePage() {
     (item) => item.displayStatus === "Incomplete"
   );
 
+  // Read-only — this employee's assigned shift (set by HR/Admin from
+  // Admin -> Users), just shown here so they know what timing applies
+  // to them. Not editable here on purpose: letting employees pick their
+  // own shift each day would let anyone dodge being marked "Late".
+  const myShift = attendanceRules?.shifts?.find((s) => s.id === shiftId);
+  const { startTime: myShiftStart, endTime: myShiftEnd } = getShiftTimes(attendanceRules, shiftId);
+  const myShiftLabel = myShift
+    ? `${myShift.name} (${myShiftStart}–${myShiftEnd})`
+    : `Default Office Timing (${myShiftStart}–${myShiftEnd})`;
+
   return (
     <div className="w-full flex flex-col gap-4">
       <main className="w-full max-w-full px-3 sm:px-6 lg:px-8 py-4">
@@ -695,6 +687,9 @@ export default function AttendancePage() {
                 </span>
                 <span className="bg-[var(--accent-bg)] text-[#3d6fa8] px-3 sm:px-5 py-1.5 sm:py-2 rounded-full font-semibold text-xs sm:text-base">
                   🏢 Office Attendance
+                </span>
+                <span className="bg-[var(--accent-bg)] text-[#3d6fa8] px-3 sm:px-5 py-1.5 sm:py-2 rounded-full font-semibold text-xs sm:text-base">
+                  🕒 Your Shift: {myShiftLabel}
                 </span>
               </div>
             </div>

@@ -18,7 +18,8 @@ import { db } from "@/lib/firebase";
 export default function PayrollProcess({
 
 salaryList,
-loadSalary
+loadSalary,
+canEdit = true
 
 }){
 
@@ -296,6 +297,12 @@ netSalary
 
 
 const generatePayroll=async()=>{
+
+
+if(!canEdit){
+alert("View only — you don't have edit access for Salary Structure");
+return;
+}
 
 
 if(!month){

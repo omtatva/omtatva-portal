@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import { appSettings } from "@/config/appSettings";
 
 export default function DashboardLayout({
   children,
@@ -61,10 +60,8 @@ export default function DashboardLayout({
           style={{
             flex: 1,
             transition: "margin-left 0.3s ease",
-            backgroundColor: appSettings.colors.background,
-            backgroundImage: appSettings.branding.backgroundImage
-              ? `url(${appSettings.branding.backgroundImage})`
-              : "none",
+            backgroundColor: "var(--brand-bg, var(--bg-color))",
+            backgroundImage: "var(--brand-bg-image, none)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             overflowY: "auto",

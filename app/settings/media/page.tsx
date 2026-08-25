@@ -1,61 +1,88 @@
 "use client";
 
-import { useState } from "react";
-import { appSettings, updateAppSettings } from "@/config/appSettings";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   Video,
   Image,
   Play,
 } from "lucide-react";
 
+const SETTINGS_REF = () => doc(db, "settings", "media");
+
+const DEFAULTS = {
+  welcomeVideo: "",
+  announcementVideo: "",
+  bannerImage: "",
+};
 
 export default function MediaPage(){
 
+const [welcomeVideo, setWelcomeVideo] = useState(DEFAULTS.welcomeVideo);
+const [announcementVideo, setAnnouncementVideo] = useState(DEFAULTS.announcementVideo);
+const [banner, setBanner] = useState(DEFAULTS.bannerImage);
+const [loading, setLoading] = useState(true);
+const [saving, setSaving] = useState(false);
 
-const [welcomeVideo,setWelcomeVideo] =
-useState(
-appSettings.media.welcomeVideo
-);
+// Live-load from Firestore and stay in sync, same pattern as
+// Branding/Appearance, instead of the old non-persistent in-memory
+// config/appSettings.ts object.
+useEffect(() => {
+  const unsubscribe = onSnapshot(
+    SETTINGS_REF(),
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setWelcomeVideo(data.welcomeVideo || DEFAULTS.welcomeVideo);
+        setAnnouncementVideo(data.announcementVideo || DEFAULTS.announcementVideo);
+        setBanner(data.bannerImage || DEFAULTS.bannerImage);
+      }
+      setLoading(false);
+    },
+    (error) => {
+      console.error("LOAD MEDIA ERROR:", error);
+      setLoading(false);
+    }
+  );
+  return () => unsubscribe();
+}, []);
 
-
-const [announcementVideo,setAnnouncementVideo] =
-useState(
-appSettings.media.announcementVideo
-);
-
-
-const [banner,setBanner] =
-useState(
-appSettings.media.bannerImage || ""
-);
-
-
-
-function save(){
-
-updateAppSettings({
-
-media:{
-welcomeVideo,
-announcementVideo,
-bannerImage:banner
+async function save() {
+  setSaving(true);
+  try {
+    await setDoc(
+      SETTINGS_REF(),
+      {
+        welcomeVideo,
+        announcementVideo,
+        bannerImage: banner,
+      },
+      { merge: true }
+    );
+    alert("Media Settings Updated");
+  } catch (error) {
+    console.error("SAVE MEDIA ERROR:", error);
+    alert("Failed to save. Please try again.");
+  } finally {
+    setSaving(false);
+  }
 }
 
-});
-
-
-alert("Media Settings Updated");
-
+if (loading) {
+  return (
+    <div style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
+      <h2>Loading media settings...</h2>
+    </div>
+  );
 }
-
-
 
 return(
 
 <div
 style={{
 padding:"30px",
-background:"#f8fbff",
+background:"var(--bg-color)",
 minHeight:"100vh"
 }}
 >
@@ -64,16 +91,22 @@ minHeight:"100vh"
 <h1
 style={{
 fontSize:"30px",
-fontWeight:700
+fontWeight:700,
+color: "var(--text-color)",
 }}
 >
 🖼 Media Manager
+{saving && (
+  <span style={{ fontSize: 14, color: "#3d6fa8", marginLeft: 12, fontWeight: 500 }}>
+    Saving...
+  </span>
+)}
 </h1>
 
 
 <p
 style={{
-color:"#64748B",
+color:"var(--text-muted)",
 marginBottom:30
 }}
 >
@@ -121,7 +154,8 @@ style={{
 marginTop:15,
 display:"flex",
 alignItems:"center",
-gap:10
+gap:10,
+color: "var(--text-color)",
 }}
 >
 
@@ -163,7 +197,7 @@ style={input}
 {
 announcementVideo &&
 
-<div>
+<div style={{ color: "var(--text-color)" }}>
 <Play size={20}/>
  Video Added
 </div>
@@ -233,6 +267,8 @@ marginTop:10
 
 onClick={save}
 
+disabled={saving}
+
 style={{
 marginTop:30,
 background:"#3d6fa8",
@@ -241,12 +277,13 @@ padding:"14px 35px",
 borderRadius:12,
 border:"none",
 fontWeight:600,
-cursor:"pointer"
+cursor: saving ? "default" : "pointer",
+opacity: saving ? 0.7 : 1,
 }}
 
 >
 
-Save Media
+{saving ? "Saving..." : "Save Media"}
 
 </button>
 
@@ -271,7 +308,7 @@ return(
 
 <div
 style={{
-background:"#fff",
+background:"var(--card-bg)",
 padding:25,
 borderRadius:18,
 boxShadow:"0 8px 25px rgba(0,0,0,.05)"
@@ -286,7 +323,8 @@ alignItems:"center",
 gap:10,
 fontSize:18,
 fontWeight:700,
-marginBottom:20
+marginBottom:20,
+color: "var(--text-color)",
 }}
 >
 
@@ -314,8 +352,14 @@ width:"100%",
 
 padding:"12px",
 
-border:"1px solid #ddd",
+border:"1px solid var(--border-color)",
 
-borderRadius:10
+borderRadius:10,
+
+background: "var(--card-bg)",
+
+color: "var(--text-color)",
+
+boxSizing: "border-box" as const,
 
 };

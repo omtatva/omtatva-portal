@@ -12,7 +12,9 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../../lib/firebase";
+import { usePermission } from "../../../lib/usePermission";
 export default function PayrollPage() {
+    const { canEdit } = usePermission("payroll");
     const [employees, setEmployees] = useState([]);
 const [userUid, setUserUid] = useState("");
 const [payroll, setPayroll] = useState([]);
@@ -394,14 +396,16 @@ value={`₹ ${netSalary.toLocaleString()}`}
 </div>
 <button
 onClick={generatePayroll}
+disabled={!canEdit}
+title={canEdit ? undefined : "View only — you don't have edit access for Payroll"}
 style={{
 marginTop:"30px",
 padding:"15px 30px",
-background:"#3d6fa8",
+background: canEdit ? "#3d6fa8" : "#94a3b8",
 color:"#fff",
 border:"none",
 borderRadius:"10px",
-cursor:"pointer",
+cursor: canEdit ? "pointer" : "not-allowed",
 fontWeight:"bold"
 }}
 >

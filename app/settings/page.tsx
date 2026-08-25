@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Palette,
@@ -11,38 +10,12 @@ import {
   Bell,
   Shield,
   Database,
-  Lock,
+  CalendarRange,
 } from "lucide-react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
 
-// Only these accounts can view/change platform settings. Matches the
-// same email-whitelist pattern used for Bank Details access
-// (BankDetails.tsx's isAdminOrIT check) — update this list to add or
-// remove IT Support accounts.
-const ALLOWED_SETTINGS_EMAILS = [
-  "itsupport@omtatvadigitals.com",
-];
-
+// Access to this whole section (and every /settings/* sub-route) is
+// enforced once, centrally, in app/settings/layout.tsx via useAccess().
 export default function SettingsPage() {
-  const [checkingAccess, setCheckingAccess] = useState(true);
-  const [hasAccess, setHasAccess] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      const email = user.email?.toLowerCase() || "";
-      setHasAccess(ALLOWED_SETTINGS_EMAILS.includes(email));
-      setCheckingAccess(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
   const settings = [
     {
       title: "Appearance",
@@ -75,6 +48,12 @@ export default function SettingsPage() {
       link: "/settings/access",
     },
     {
+      title: "Leave Policy",
+      icon: <CalendarRange size={24} />,
+      desc: "Casual, sick and paid leave quotas",
+      link: "/settings/leave-policy",
+    },
+    {
       title: "Notifications",
       icon: <Bell size={24} />,
       desc: "Alerts and announcements",
@@ -93,58 +72,6 @@ export default function SettingsPage() {
       link: "/settings/backup",
     },
   ];
-
-  if (checkingAccess) {
-    return null;
-  }
-
-  if (!hasAccess) {
-    return (
-      <div
-        style={{
-          padding: "25px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "70vh",
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 20,
-            padding: "40px 30px",
-            textAlign: "center",
-            maxWidth: 420,
-            boxShadow: "0 10px 30px rgba(0,0,0,.06)",
-          }}
-        >
-          <div
-            style={{
-              width: 60,
-              height: 60,
-              margin: "0 auto 18px",
-              borderRadius: "50%",
-              background: "#fee2e2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#dc2626",
-            }}
-          >
-            <Lock size={28} />
-          </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 10px" }}>
-            Access Restricted
-          </h2>
-          <p style={{ color: "#64748b", fontSize: 14.5, margin: 0 }}>
-            Only IT Support can view or change platform settings. Contact IT
-            Support if you need something changed here.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: "20px" }}>
@@ -170,6 +97,7 @@ export default function SettingsPage() {
           fontSize: "28px",
           fontWeight: 700,
           marginBottom: 22,
+          color: "var(--text-color)",
         }}
       >
         ⚙ Settings
@@ -195,7 +123,7 @@ export default function SettingsPage() {
             <div
               className="settings-card"
               style={{
-                background: "#fff",
+                background: "var(--card-bg)",
                 padding: "25px",
                 borderRadius: "16px",
                 boxShadow: "0 5px 20px rgba(0,0,0,.05)",
@@ -221,7 +149,7 @@ export default function SettingsPage() {
 
               <p
                 style={{
-                  color: "#64748B",
+                  color: "var(--text-muted)",
                   marginTop: 15,
                   fontSize: 14,
                 }}

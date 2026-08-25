@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import AccessRestricted from "@/components/AccessRestricted";
+import { useAccess } from "@/lib/useAccess";
 
 export default function DashboardLayout({
   children,
@@ -10,6 +12,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { authReady, authUser, roleReady, isSuperAdmin } = useAccess();
+
+  // Gate every /settings/* route here (not just the hub page) — previously
+  // only app/settings/page.tsx checked access, so any settings sub-page
+  // was reachable directly by URL with no check at all.
+  useEffect(() => {
+    if (authReady && !authUser) {
+      window.location.href = "/admin/login";
+    }
+  }, [authReady, authUser]);
+
+  const checking = !authReady || (!!authUser && !roleReady);
+
+  if (checking) {
+    return null;
+  }
+
+  if (!authUser) {
+    return null;
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <AccessRestricted message="Only IT Support / Super Admin can view or change platform settings. Contact them if you need something changed here." />
+    );
+  }
 
   return (
     <div
@@ -87,7 +115,7 @@ export default function DashboardLayout({
             marginLeft: sidebarOpen ? "260px" : "80px",
             transition: "margin-left 0.3s ease",
             padding: "20px",
-            background: "#F5F7FB",
+            background: "var(--bg-color)",
             overflowY: "auto",
             width: "100%",
             boxSizing: "border-box",

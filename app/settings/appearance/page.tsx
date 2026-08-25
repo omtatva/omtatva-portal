@@ -75,7 +75,7 @@ export default function AppearancePage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 60, textAlign: "center", color: "#64748b" }}>
+      <div style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
         <h2>Loading appearance settings...</h2>
       </div>
     );
@@ -85,7 +85,7 @@ export default function AppearancePage() {
     <div
       style={{
         padding: "20px",
-        background: "#f8fbff",
+        background: "var(--bg-color)",
         minHeight: "100vh",
       }}
     >
@@ -106,7 +106,7 @@ export default function AppearancePage() {
 
       <h1
         className="appearance-title"
-        style={{ fontSize: "30px", fontWeight: 700, marginBottom: "8px" }}
+        style={{ fontSize: "30px", fontWeight: 700, marginBottom: "8px", color: "var(--text-color)" }}
       >
         🎨 Appearance
         {saving && (
@@ -116,7 +116,7 @@ export default function AppearancePage() {
         )}
       </h1>
 
-      <p style={{ color: "#64748B", marginBottom: "26px" }}>
+      <p style={{ color: "var(--text-muted)", marginBottom: "26px" }}>
         Customize your dashboard look and feel. Changes apply platform-wide
         once saved.
       </p>
@@ -217,7 +217,7 @@ function Card({ icon, title, children }: any) {
     <div
       className="appearance-card"
       style={{
-        background: "#fff",
+        background: "var(--card-bg)",
         borderRadius: 18,
         padding: 25,
         boxShadow: "0 8px 25px rgba(0,0,0,.05)",
@@ -231,6 +231,7 @@ function Card({ icon, title, children }: any) {
           fontSize: 18,
           fontWeight: 700,
           marginBottom: 20,
+          color: "var(--text-color)",
         }}
       >
         {icon}
@@ -254,7 +255,7 @@ function ColorPicker({ title, value, setValue }: any) {
         flexWrap: "wrap",
       }}
     >
-      <span style={{ fontWeight: 500 }}>{title}</span>
+      <span style={{ fontWeight: 500, color: "var(--text-color)" }}>{title}</span>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input
@@ -272,10 +273,12 @@ function ColorPicker({ title, value, setValue }: any) {
           style={{
             width: 100,
             padding: "8px",
-            border: "1px solid #ddd",
+            border: "1px solid var(--border-color)",
             borderRadius: 8,
             fontSize: 14,
             textTransform: "uppercase",
+            background: "var(--card-bg)",
+            color: "var(--text-color)",
           }}
         />
       </div>
@@ -292,8 +295,9 @@ function themeBtn(active: boolean) {
     gap: 8,
     padding: "12px",
     borderRadius: 12,
-    border: active ? "2px solid #3d6fa8" : "1px solid #ddd",
-    background: "#fff",
+    border: active ? "2px solid #3d6fa8" : "1px solid var(--border-color)",
+    background: "var(--card-bg)",
+    color: "var(--text-color)",
     cursor: "pointer",
     fontWeight: 600,
   };

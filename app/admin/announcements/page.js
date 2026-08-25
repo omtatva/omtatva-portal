@@ -10,8 +10,10 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
+import { usePermission } from "../../../lib/usePermission";
 
 export default function AdminAnnouncements() {
+  const { canEdit } = usePermission("announcements");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [announcements, setAnnouncements] = useState([]);
@@ -94,7 +96,9 @@ export default function AdminAnnouncements() {
 
         <button
           onClick={publishAnnouncement}
-          style={button}
+          disabled={!canEdit}
+          title={canEdit ? undefined : "View only — you don't have edit access for Announcements"}
+          style={canEdit ? button : { ...button, background: "#94a3b8", cursor: "not-allowed" }}
         >
           Publish
         </button>

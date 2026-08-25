@@ -1,6 +1,6 @@
 "use client";
 
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { auth, db } from "../../lib/firebase";
 import {
   doc,
@@ -8,6 +8,8 @@ import {
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { lookupRoleForEmail } from "@/lib/adminAccess";
+import { checkLoginAllowed } from "@/lib/security";
 
 export default function LoginPage() {
   const login = async () => {
@@ -22,8 +24,20 @@ export default function LoginPage() {
 
       const existingUser = await getDoc(userRef);
 
-      // First login
+      // First login — if this email has been granted admin/HR/etc access
+      // via Settings -> Access Management, honor that role here too (not
+      // just when signing in through /admin/login), so nothing depends on
+      // which login page someone happens to use first.
       if (!existingUser.exists()) {
+        const role = await lookupRoleForEmail(user.email || "");
+
+        const blockedReason = await checkLoginAllowed(user.email || "", role);
+        if (blockedReason) {
+          alert(blockedReason);
+          await signOut(auth);
+          return;
+        }
+
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
@@ -43,7 +57,7 @@ export default function LoginPage() {
           joiningDate: "",
           profileImage: user.photoURL || "",
 
-          role: "employee",
+          role,
           status: "Active",
 
           profileCompleted: false,
@@ -60,6 +74,13 @@ export default function LoginPage() {
 
       // Existing Employee
       const userData = existingUser.data();
+
+      const blockedReason = await checkLoginAllowed(user.email || "", userData.role || "employee");
+      if (blockedReason) {
+        alert(blockedReason);
+        await signOut(auth);
+        return;
+      }
 
       if (userData.profileCompleted) {
         window.location.href = "/dashboard";

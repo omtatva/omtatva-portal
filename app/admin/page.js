@@ -7,14 +7,14 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   getDocs,
-  doc,
-  getDoc,
   limit,
   query,
   orderBy,
 } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebase";
+import { isAdminTierRole } from "../../lib/roles";
+import { lookupRoleForEmail } from "../../lib/adminAccess";
 
 import {
   ResponsiveContainer,
@@ -52,29 +52,14 @@ export default function AdminPage() {
       }
 
       try {
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
+        // Who counts as admin-tier is decided ONLY by Settings -> Access
+        // Management (adminAccess collection, keyed by email) — not by
+        // the "role" label on users/{uid}, which HR can set freely from
+        // Admin -> Users as a title/designation without it granting real
+        // access.
+        const role = await lookupRoleForEmail(user.email || "");
 
-        if (!userSnap.exists()) {
-          alert("User not found");
-          window.location.href = "/";
-          return;
-        }
-
-        const data = userSnap.data();
-
-        const allowedEmails = [
-          "admin@omtatvadigitals.com",
-          "hr@omtatvadigitals.com",
-          "itsupport@omtatvadigitals.com",
-        ];
-
-        const allowedRoles = ["admin", "hr", "Super admin"];
-
-        const emailAllowed = allowedEmails.includes(user.email);
-        const roleAllowed = allowedRoles.includes((data.role || "").toLowerCase());
-
-        if (!emailAllowed && !roleAllowed) {
+        if (!isAdminTierRole(role)) {
           alert("Access Denied");
           window.location.href = "/";
           return;
@@ -123,7 +108,11 @@ export default function AdminPage() {
       setTrendData(buildTrendData(attendanceDocs, timesheetDocs));
 
       try {
-        const leavesSnap = await getDocs(collection(db, "leaves"));
+        // "leaveRequests" is what app/leave/page.js (apply) and
+        // app/admin/leave/page.js (approve/reject) actually read/write —
+        // this used to read a "leaves" collection that nothing else in
+        // the app writes to, so this count was always 0.
+        const leavesSnap = await getDocs(collection(db, "leaveRequests"));
         const pending = leavesSnap.docs.filter(
           (d) => (d.data().status || "").toLowerCase() === "pending"
         ).length;
@@ -373,6 +362,7 @@ export default function AdminPage() {
               <tr>
                 <th style={thStyle}>Employee</th>
                 <th style={thStyle}>Activity</th>
+                <th style={thStyle}>Updated By</th>
                 <th style={thStyle}>Time</th>
               </tr>
             </thead>
@@ -380,7 +370,7 @@ export default function AdminPage() {
             <tbody>
               {activities.length === 0 ? (
                 <tr>
-                  <td colSpan="3" style={{ textAlign: "center", padding: "25px", color: "var(--text-muted)" }}>
+                  <td colSpan="4" style={{ textAlign: "center", padding: "25px", color: "var(--text-muted)" }}>
                     No Activity Found
                   </td>
                 </tr>
@@ -389,6 +379,11 @@ export default function AdminPage() {
                   <tr key={item.id}>
                     <td style={tdStyle}>
                       <b>{item.employeeName || "-"}</b>
+                      {item.employeeEmail && (
+                        <div style={{ fontSize: 12.5, color: "var(--text-muted)", fontWeight: 400 }}>
+                          {item.employeeEmail}
+                        </div>
+                      )}
                     </td>
                     <td style={tdStyle}>
                       <span
@@ -402,6 +397,9 @@ export default function AdminPage() {
                       >
                         {item.activity}
                       </span>
+                    </td>
+                    <td style={tdStyle}>
+                      {item.updatedBy || "Self"}
                     </td>
                     <td style={tdStyle}>
                       {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : "-"}
@@ -646,7 +644,6 @@ const tdStyle = {
 // return;
 
 // }
-
 
 
 // const data = userSnap.data();

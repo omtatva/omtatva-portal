@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import AvatarIllustration, { HeroAvatar } from "../../components/AvatarIllustration";
 import {
   ResponsiveContainer,
   LineChart,
@@ -76,6 +77,34 @@ export default function DashboardPage() {
   // Used to scope birthday wishes to "today" in Firestore, and to key
   // the real-time wishes listener below.
   const todayDateKey = new Date().toISOString().slice(0, 10);
+
+  // Widget visibility from Settings -> Dashboard Layout, live so a
+  // toggle there shows/hides the matching section here immediately.
+  const [widgets, setWidgets] = useState({
+    showAttendance: true,
+    showLeave: true,
+    showHoliday: true,
+    showEmployee: true,
+  });
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "settings", "dashboardLayout"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setWidgets({
+            showAttendance: data.showAttendance ?? true,
+            showLeave: data.showLeave ?? true,
+            showHoliday: data.showHoliday ?? true,
+            showEmployee: data.showEmployee ?? true,
+          });
+        }
+      },
+      (error) => console.error("DASHBOARD LAYOUT SNAPSHOT ERROR:", error)
+    );
+    return () => unsubscribe();
+  }, []);
 
   // ================= REAL-TIME USER / EMPLOYEE PROFILE =================
   // Uses onSnapshot instead of a one-time getDoc so that any change HR makes
@@ -385,10 +414,14 @@ export default function DashboardPage() {
   const chartData = buildTrendData(myAttendance, myTimesheets);
 
   // ---------- TODAY'S CHECK-IN STATUS ----------
+  // Attendance records are written with "PunchIn"/"PunchOut" fields (see
+  // app/attendance/page.js's punchIn()/punchOut()) — this used to read
+  // "checkIn"/"checkOut", which never existed on the record, so this
+  // card always showed "not checked in" even right after punching in.
   const todayKey = new Date().toISOString().split("T")[0];
   const todayRecord = myAttendance.find((a) => normalizeDate(a.date) === todayKey);
-  const checkInTime = formatTime(todayRecord?.checkIn);
-  const checkOutTime = formatTime(todayRecord?.checkOut);
+  const checkInTime = formatTime(todayRecord?.PunchIn);
+  const checkOutTime = formatTime(todayRecord?.PunchOut);
 
   // ---------- PAYSLIP (already available under My Documents) ----------
   const latestPayslipUrl = userData?.documents?.salarySlip || null;
@@ -435,11 +468,89 @@ export default function DashboardPage() {
       {/* Responsive rules: inline style objects can't hold media queries,
           so layout breakpoints for grids / spacing / font sizes live here. */}
       <style jsx>{`
-        .dash-header {
-          padding: clamp(20px, 5vw, 35px);
+        .dash-hero {
+          padding: clamp(24px, 4vw, 36px) clamp(22px, 5vw, 40px);
         }
-        .dash-header h1 {
-          font-size: clamp(22px, 5vw, 34px);
+        .dash-hero-title {
+          font-size: clamp(20px, 4vw, 28px);
+        }
+
+        /* Avatar nudged down so its bottom half naturally peeks past
+           the card's rounded edge (the hero container has
+           overflow:visible to allow this) — like a floating character
+           resting against the banner. */
+        .dash-hero-avatar-wrap {
+          top: 26px;
+        }
+
+        /* Small floating music notes near the avatar's headphones,
+           each drifting up/down on its own gentle cycle. */
+        .dash-hero-note {
+          position: absolute;
+          font-size: 20px;
+          opacity: 0.85;
+          animation: dash-note-float 3s ease-in-out infinite;
+          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+        }
+        .dash-hero-note-1 {
+          top: 10px;
+          left: -6px;
+          animation-delay: 0s;
+        }
+        .dash-hero-note-2 {
+          top: 44px;
+          left: -22px;
+          font-size: 15px;
+          animation-delay: 1.1s;
+        }
+        @keyframes dash-note-float {
+          0%,
+          100% {
+            transform: translateY(0) rotate(-4deg);
+          }
+          50% {
+            transform: translateY(-10px) rotate(4deg);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .dash-hero-note {
+            animation: none;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .dash-hero-avatar-wrap :global(svg) {
+            width: 130px !important;
+            height: 154px !important;
+          }
+          .dash-hero-avatar-wrap {
+            top: 18px;
+          }
+        }
+        @media (max-width: 640px) {
+          .dash-hero-row {
+            flex-direction: column;
+            align-items: center !important;
+            text-align: center;
+          }
+          .dash-hero-avatar-wrap {
+            top: 0;
+            margin-bottom: 4px;
+          }
+          .dash-hero-text {
+            padding-bottom: 0 !important;
+          }
+          .dash-hero-text > div {
+            justify-content: center;
+          }
+          .dash-hero-plant {
+            display: none;
+          }
+          .dash-hero-date {
+            position: static !important;
+            display: inline-flex !important;
+            margin-bottom: 14px;
+          }
         }
         .dash-charts-grid {
           display: grid;
@@ -472,10 +583,6 @@ export default function DashboardPage() {
         @media (max-width: 600px) {
           .dash-wrapper {
             padding: 4px;
-          }
-          .dash-header {
-            flex-direction: column;
-            align-items: flex-start !important;
           }
           .dash-today-status {
             padding: 18px 20px !important;
@@ -591,45 +698,175 @@ export default function DashboardPage() {
         }
       `}</style>
 
-      {/* Header */}
+      {/* ================= WELCOME HERO ================= */}
       <div
-        className="dash-header"
+        className="dash-hero"
         style={{
-          background: COLORS.primary,
+          background: `linear-gradient(135deg, ${COLORS.primary}, #2c517f)`,
           color: "#fff",
-          borderRadius: 22,
-          padding: "35px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          borderRadius: 26,
+          padding: "36px 40px",
           marginBottom: 35,
-          boxShadow: "0 12px 30px rgba(61,111,168,.25)",
-          flexWrap: "wrap",
-          gap: 20,
+          boxShadow: "0 16px 40px rgba(61,111,168,.28)",
+          position: "relative",
+          overflow: "visible",
         }}
       >
-        <div>
-          <h1 style={{ margin: 0, fontSize: "clamp(22px, 5vw, 34px)", fontWeight: 700 }}>
-            👋 Welcome Back{userName ? `, ${userName}` : ""}
-          </h1>
-          <p style={{ marginTop: 10, opacity: 0.9, fontSize: 15 }}>
-            Track attendance, productivity and timesheets.
-          </p>
-        </div>
-
+        {/* Date pill — top right */}
         <div
+          className="dash-hero-date"
           style={{
-            background: COLORS.accent,
-            padding: "12px 20px",
-            borderRadius: 15,
+            position: "absolute",
+            top: 28,
+            right: 34,
+            background: "rgba(255,255,255,.18)",
+            padding: "8px 16px",
+            borderRadius: 999,
             fontWeight: 600,
             color: "#fff",
-            fontSize: 14,
+            fontSize: 13.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
             whiteSpace: "nowrap",
           }}
         >
-          {new Date().toDateString()}
+          📅 {new Date().toDateString()}
         </div>
+
+        {/* Plant decoration — bottom right, small + subtle */}
+        <div className="dash-hero-plant" style={{ position: "absolute", right: 30, bottom: 16 }}>
+          <PlantDecoration size={52} />
+        </div>
+
+        <div className="dash-hero-row" style={{ display: "flex", alignItems: "flex-end", gap: 26, flexWrap: "wrap" }}>
+          {/* Avatar — always the illustrated mascot (never the real
+              uploaded photo, which shows in the top bar / profile card
+              instead). Positioned to peek slightly below the card edge,
+              like a floating character. */}
+          <div className="dash-hero-avatar-wrap" style={{ position: "relative", flexShrink: 0 }}>
+            <HeroAvatar gender={userData?.gender} size={170} />
+            <span className="dash-hero-note dash-hero-note-1" aria-hidden>🎵</span>
+            <span className="dash-hero-note dash-hero-note-2" aria-hidden>🎵</span>
+          </div>
+
+          {/* Greeting + chips */}
+          <div className="dash-hero-text" style={{ paddingBottom: 8, minWidth: 0 }}>
+            <h1 className="dash-hero-title" style={{ margin: 0, fontWeight: 700 }}>
+              👋 Welcome Back, {(userData?.firstName || userName || "").split(" ")[0] || "there"}!
+            </h1>
+            <p style={{ marginTop: 8, opacity: 0.9, fontSize: 14.5 }}>
+              Track attendance, productivity and timesheets.
+            </p>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  background: "rgba(255,255,255,.18)",
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                🪪 ID: {userData?.employeeId || "Not Assigned"}
+              </span>
+              <span
+                style={{
+                  background: "rgba(255,255,255,.18)",
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ✉️ Official email: {userData?.officialEmail || "Not Set"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ================= PROFILE SUMMARY CARD ================= */}
+      <div
+        style={{
+          background: "var(--card-bg)",
+          borderRadius: 20,
+          padding: "22px 28px",
+          marginBottom: 35,
+          border: `1px solid ${COLORS.soft}`,
+          boxShadow: "0 8px 24px rgba(0,0,0,.05)",
+          display: "flex",
+          alignItems: "center",
+          gap: 20,
+          flexWrap: "wrap",
+        }}
+      >
+        {userData?.profilePhoto ? (
+          <img
+            src={userData.profilePhoto}
+            alt={userName || "Profile"}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              objectFit: "cover",
+              flexShrink: 0,
+              border: `2px solid ${COLORS.primary}`,
+            }}
+          />
+        ) : userData?.gender ? (
+          <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, overflow: "hidden" }}>
+            <AvatarIllustration gender={userData.gender} size={64} />
+          </div>
+        ) : (
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              flexShrink: 0,
+              background: `linear-gradient(135deg,${COLORS.primary},${COLORS.accent})`,
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 26,
+              fontWeight: 700,
+            }}
+          >
+            {(userData?.firstName?.[0] || auth.currentUser?.email?.[0] || "U").toUpperCase()}
+          </div>
+        )}
+
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: COLORS.text }}>
+            {userName || "Complete your profile"}
+          </h2>
+          <p style={{ margin: "4px 0 0", color: COLORS.secondary, fontSize: 14 }}>
+            {[userData?.designation, userData?.department].filter(Boolean).join(" • ") ||
+              "Designation and department not set yet"}
+          </p>
+        </div>
+
+        <button
+          onClick={() => (window.location.href = "/profile")}
+          style={{
+            background: "var(--bg-color)",
+            color: COLORS.primary,
+            border: `2px solid ${COLORS.primary}`,
+            padding: "10px 20px",
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 13.5,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          View / Edit Profile
+        </button>
       </div>
 
       {/* ================= OWN BIRTHDAY POPUP (confetti burst) ================= */}
@@ -680,6 +917,7 @@ export default function DashboardPage() {
       )}
 
       {/* ================= TODAY'S STATUS ================= */}
+      {widgets.showAttendance && (
       <div
         className="dash-today-status"
         style={{
@@ -739,6 +977,7 @@ export default function DashboardPage() {
           {checkInTime ? "View Attendance" : "Check In"}
         </button>
       </div>
+      )}
 
       {/* ================= QUICK ACTIONS ================= */}
       <h2 style={{ marginBottom: "20px", color: "#0f172a", fontWeight: 700 }}>
@@ -965,6 +1204,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Leave Balance */}
+        {widgets.showLeave && (
         <div
           style={{
             background: "var(--card-bg)",
@@ -1012,6 +1252,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        )}
 
         <div
           style={{
@@ -1025,6 +1266,7 @@ export default function DashboardPage() {
               up here, INCLUDING the current user (who also gets the
               confetti popup separately). The current user just sees an
               "It's your day!" tag instead of a wish button. */}
+          {widgets.showEmployee && (
           <div
             style={{
               background: "#FFF8E8",
@@ -1132,8 +1374,10 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* 🎉 Upcoming Holidays */}
+          {widgets.showHoliday && (
           <div className="holiday-section">
             <div className="holiday-header">
               <h2>🎉 Upcoming Holidays</h2>
@@ -1173,6 +1417,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -1310,6 +1555,30 @@ function normalizeDate(value) {
   const d = new Date(value);
   if (isNaN(d.getTime())) return null;
   return d.toISOString().split("T")[0];
+}
+
+// Small decorative plant pot for the welcome hero's bottom-right corner
+// — purely visual, matches the reference design's "cozy desk" touch.
+function PlantDecoration({ size = 52 }) {
+  return (
+    <svg viewBox="0 0 60 64" width={size} height={size} role="img" aria-hidden="true">
+      <ellipse cx="30" cy="60" rx="14" ry="3" fill="#000" opacity="0.12" />
+      <path d="M14 40h32l-4 20a4 4 0 0 1-4 3.4H22a4 4 0 0 1-4-3.4z" fill="#8fb8e0" />
+      <path d="M14 40h32l-1.5 7h-29z" fill="#a9cdf0" />
+      <path
+        d="M30 40c-2-10-12-12-16-9 2 6 8 9 16 9z"
+        fill="#4d9b6a"
+      />
+      <path
+        d="M30 40c2-14 14-17 19-13-2 8-10 13-19 13z"
+        fill="#5fb87e"
+      />
+      <path
+        d="M30 40c-1-8-8-19-2-25 5 5 6 17 2 25z"
+        fill="#79cf95"
+      />
+    </svg>
+  );
 }
 
 const actionCard = {

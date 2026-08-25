@@ -111,7 +111,7 @@ export default function BrandingPage() {
     <div
       style={{
         padding: "20px",
-        background: "#f8fbff",
+        background: "var(--bg-color)",
         minHeight: "100vh",
       }}
     >
@@ -132,7 +132,7 @@ export default function BrandingPage() {
 
       <h1
         className="branding-title"
-        style={{ fontSize: "30px", fontWeight: 700 }}
+        style={{ fontSize: "30px", fontWeight: 700, color: "var(--text-color)" }}
       >
         🏢 Branding
         {saving && (
@@ -142,7 +142,7 @@ export default function BrandingPage() {
         )}
       </h1>
 
-      <p style={{ color: "#64748B", marginBottom: 26 }}>
+      <p style={{ color: "var(--text-muted)", marginBottom: 26 }}>
         Manage your company identity and visuals. Changes here apply
         instantly across the platform (navbar, login page, dashboard).
       </p>
@@ -297,7 +297,7 @@ function Card({ title, icon, children }: any) {
     <div
       className="branding-card"
       style={{
-        background: "#fff",
+        background: "var(--card-bg)",
         padding: 25,
         borderRadius: 18,
         boxShadow: "0 8px 25px rgba(0,0,0,.05)",
@@ -311,6 +311,7 @@ function Card({ title, icon, children }: any) {
           fontSize: 18,
           fontWeight: 700,
           marginBottom: 20,
+          color: "var(--text-color)",
         }}
       >
         {icon}
@@ -324,7 +325,7 @@ function Card({ title, icon, children }: any) {
 
 function CenteredMessage({ text }: { text: string }) {
   return (
-    <div style={{ padding: 60, textAlign: "center", color: "#64748b" }}>
+    <div style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>
       <h2>{text}</h2>
     </div>
   );
@@ -334,7 +335,7 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 13.5,
   fontWeight: 600,
-  color: "#334155",
+  color: "var(--text-color)",
   marginBottom: 8,
 };
 
@@ -342,15 +343,17 @@ const input: React.CSSProperties = {
   width: "100%",
   padding: "12px",
   margin: "0 0 12px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-color)",
   borderRadius: 10,
   boxSizing: "border-box",
   fontSize: 14.5,
+  background: "var(--card-bg)",
+  color: "var(--text-color)",
 };
 
 const saveBtn: React.CSSProperties = {
-  background: "#f1f5f9",
-  color: "#334155",
+  background: "var(--icon-bg)",
+  color: "var(--text-color)",
   border: "none",
   padding: "9px 16px",
   borderRadius: 8,

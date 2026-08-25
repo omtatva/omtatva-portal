@@ -22,7 +22,8 @@ import { db } from "@/lib/firebase";
 
 export default function BulkUpload({
 
-loadSalary
+loadSalary,
+canEdit = true
 
 }){
 
@@ -38,6 +39,11 @@ const [result,setResult]=useState(null);
 
 
 const uploadExcel=async()=>{
+
+if(!canEdit){
+alert("View only — you don't have edit access for Salary Structure");
+return;
+}
 
 
 if(!file){

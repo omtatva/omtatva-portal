@@ -38,26 +38,7 @@ arrayUnion
 from "firebase/firestore";
 
 
-// Document types that accept more than one file. Everything else
-// (photo, resume, cheque, offer) stays a single-file upload where
-// `documents[key]` is a plain URL string. For these keys,
-// `documents[key]` is instead an array of { fileName, url }.
-const MULTI_UPLOAD_TYPES = ["aadhaar", "pan", "education", "experience", "other"];
-
-// Maps this component's field keys to the field names/shapes that
-// `admin/documents/[id]` (a separate, HR-facing page reading from the
-// `users` collection) expects. Keys with no mapping (photo, education,
-// other) have no equivalent field there, so they're skipped — they'll
-// still save normally to employeeDocuments/employeeProfiles above,
-// just won't appear on that particular admin screen.
-const ADMIN_DOCUMENTS_FIELD_MAP: Record<string, string> = {
-  aadhaar: "aadhaar",
-  pan: "pan",
-  resume: "resume",
-  experience: "experienceLetter",
-  cheque: "bank",
-  offer: "offerLetter",
-};
+import { MULTI_UPLOAD_TYPES, ADMIN_DOCUMENTS_FIELD_MAP } from "../../../lib/documentFields";
 
 
 export default function DocumentUpload({
@@ -1066,7 +1047,7 @@ gap:25
 
 {uploadCard(
 "🏦 Cancelled Cheque",
-"cheque"
+"bank"
 )}
 
 

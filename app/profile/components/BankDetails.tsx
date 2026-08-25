@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
-import { auth } from "../../../lib/firebase";
 import { useProfile } from "../ProfileContext";
+import { useAccess } from "../../../lib/useAccess";
 
 export default function BankDetails({
   back,
@@ -17,45 +17,9 @@ export default function BankDetails({
 const { profile, setProfile, saveProfile } = useProfile();
 
 
-const [isAdminOrIT, setIsAdminOrIT] = useState(false);
+const { isSuperAdmin: isAdminOrIT } = useAccess();
 
 const [isSaving, setIsSaving] = useState(false);
-
-
-
-useEffect(()=>{
-
-const user = auth.currentUser;
-
-if(!user) return;
-
-
-const email = user.email?.toLowerCase();
-
-
-
-const allowedEmails = [
-
-"admin@omtatvadigitals.com",
-
-"itsupport@omtatvadigitals.com"
-
-];
-
-
-
-if(
-email &&
-allowedEmails.includes(email)
-){
-
-setIsAdminOrIT(true);
-
-}
-
-
-},[]);
-
 
 
 

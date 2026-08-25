@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { appSettings } from "@/config/appSettings";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useAccess } from "@/lib/useAccess";
 
 import {
   Home,
@@ -35,75 +34,18 @@ const menus = [
   { title: "Settings", href: "/settings", icon: Settings },
 ];
 
-// Titles that are hidden from regular employees — everyone else
-// (Admin / HR) sees every item in `menus`.
-const ADMIN_ONLY_MENU = ["Admin", "Settings"];
-
-// Must match the exact role values AdminLoginPage.js writes to
-// users/{uid}.role — currently just "admin" and "hr" (no "owner").
-const ADMIN_ROLES = ["admin", "hr"];
-
 export default function Sidebar({ open }: { open: boolean }) {
   const pathname = usePathname();
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [userRole, setUserRole] = useState<string>("");
+  const { authUser, authReady, isAdminTier, isSuperAdmin } = useAccess();
 
   // Mobile drawer state — fully separate from the desktop `open`
   // (260px / 80px) collapse prop passed in from the parent layout.
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
-      setAuthUser(u);
-      setAuthReady(true);
-    });
-    return () => unsubscribeAuth();
-  }, []);
-
-  // Read the role straight from Firestore (users/{uid}) — the same
-  // document AdminLoginPage.js writes — instead of relying on a
-  // separate hardcoded appSettings.access.users list that can drift out
-  // of sync. onSnapshot also means a role change is picked up live,
-  // without a manual logout/login.
-  useEffect(() => {
-    if (!authUser) {
-      setUserRole("");
-      return;
-    }
-
-    const userRef = doc(db, "users", authUser.uid);
-
-    const unsubscribeRole = onSnapshot(
-      userRef,
-      (snap) => {
-        const role = snap.exists() ? snap.data()?.role : "";
-        setUserRole(role || "");
-      },
-      (error) => {
-        console.log("Sidebar role fetch error:", error);
-      }
-    );
-
-    return () => unsubscribeRole();
-  }, [authUser]);
-
   // Close the mobile drawer automatically whenever the route changes
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
-
-  // Optional legacy fallback: still honor appSettings.access.users if an
-  // email is explicitly listed there, in case that config is used for
-  // people without a matching Firestore role field.
-  const legacyUser = appSettings.access?.users?.find(
-    (u: any) => u.email === authUser?.email
-  );
-  const legacyIsAdmin =
-    !!legacyUser && ADMIN_ROLES.includes(String(legacyUser.role || "").toLowerCase());
-
-  const isAdminTier =
-    ADMIN_ROLES.includes(userRole.toLowerCase()) || legacyIsAdmin;
 
   const visibleMenus = menus.filter((menu) => {
     if (menu.title === "Home") {
@@ -115,13 +57,17 @@ export default function Sidebar({ open }: { open: boolean }) {
       return false;
     }
 
-    // Admin / HR -> every menu item
-    if (isAdminTier) {
-      return true;
+    // Settings is restricted to Super Admin (matches Settings' own gate).
+    if (menu.title === "Settings") {
+      return isSuperAdmin;
     }
 
-    // Everyone else (regular employees) -> everything except Admin/Settings
-    return !ADMIN_ONLY_MENU.includes(menu.title);
+    // Admin is visible to any admin-tier role (admin/hr/head/super admin).
+    if (menu.title === "Admin") {
+      return isAdminTier;
+    }
+
+    return true;
   });
 
   const handleLogout = async () => {

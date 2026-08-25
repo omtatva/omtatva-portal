@@ -12,7 +12,8 @@ import { db } from "@/lib/firebase";
 export default function PayrollTable({
 
 payrollList=[],
-loadPayroll
+loadPayroll,
+canEdit = true
 
 }){
 
@@ -20,6 +21,10 @@ loadPayroll
 
 const updateStatus=async(id,status)=>{
 
+if(!canEdit){
+alert("View only — you don't have edit access for Salary Structure");
+return;
+}
 
 try{
 

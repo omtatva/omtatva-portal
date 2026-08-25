@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useProfile } from "../ProfileContext";
 
@@ -20,7 +20,6 @@ import {
 import {
   doc,
   setDoc,
-  getDoc,
 } from "firebase/firestore";
 
 import toast from "react-hot-toast";
@@ -42,8 +41,12 @@ export default function PersonalInfo({
 const { profile, setProfile } = useProfile();
 
 
+// Empty until the user picks a new file (local blob preview) or
+// finishes an upload (real Storage URL) — see the <img> below, which
+// falls back to profile.profilePhoto (already loaded by ProfileContext)
+// whenever this is empty, and to the placeholder only if neither exists.
 const [photoPreview,setPhotoPreview] =
-useState("/profile.png");
+useState("");
 
 
 const [isSaving,setIsSaving] =
@@ -70,68 +73,16 @@ boxSizing:"border-box",
 
 
 
-// LOAD PROFILE
-
-useEffect(()=>{
-
-
-const loadProfile = async()=>{
-
-
-const user = auth.currentUser;
-
-
-if(!user) return;
-
-
-
-const snap = await getDoc(
-doc(
-db,
-"employeeProfiles",
-user.uid
-)
-);
-
-
-
-if(snap.exists()){
-
-
-const data = snap.data();
-
-
-
-setProfile((prev:any)=>({
-
-...prev,
-...data
-
-}));
-
-
-
-if(data.profilePhoto){
-
-setPhotoPreview(
-data.profilePhoto
-);
-
-}
-
-
-}
-
-
-
-};
-
-
-loadProfile();
-
-
-
-},[]);
+// Profile data (including profilePhoto) is already loaded reliably by
+// ProfileContext, which waits for onAuthStateChanged before reading
+// Firestore. This component used to do its OWN separate load here using
+// auth.currentUser directly — on a page refresh, Firebase Auth hasn't
+// finished rehydrating the session yet at that exact moment, so
+// auth.currentUser was still null and this silently no-op'd, leaving
+// photoPreview stuck on the placeholder even though profile.profilePhoto
+// (from the correctly-loaded context) had the real value — status text
+// said "Uploaded" but the image never showed. Falling back to
+// profile.profilePhoto below (instead of a second, racy fetch) fixes it.
 
 
 
@@ -529,7 +480,7 @@ textAlign:"center"
 <img
 
 src={
-photoPreview || "/profile.png"
+photoPreview || profile.profilePhoto || "/profile.png"
 }
 
 alt="profile"

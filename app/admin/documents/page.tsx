@@ -6,17 +6,23 @@ import {
   collection,
   getDocs,
   addDoc,
+  deleteDoc,
   query,
   where,
+  doc,
+  setDoc,
 } from "firebase/firestore";
 
 import {
   ref,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 
 import { db, storage } from "../../../lib/firebase";
+import { ADMIN_DOCUMENTS_FIELD_MAP, MULTI_UPLOAD_TYPES } from "../../../lib/documentFields";
+import { usePermission } from "../../../lib/usePermission";
 
 type Employee = {
   id: string;
@@ -24,8 +30,10 @@ type Employee = {
   lastName?: string;
   employeeId?: string;
   department?: string;
-  resume?: string;
+  documents?: {
+    resume?: string;}
   status?: string;
+  hrApprovalStatus?: string;
 };
 
 type CommonDoc = {
@@ -44,12 +52,16 @@ const CATEGORY_OPTIONS = [
 ];
 
 export default function DocumentsPage() {
+  const { canEdit } = usePermission("documents");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [commonDocs, setCommonDocs] = useState<CommonDoc[]>([]);
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState(CATEGORY_OPTIONS[2].key);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingCommonId, setDeletingCommonId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     loadEmployees();
@@ -80,6 +92,67 @@ export default function DocumentsPage() {
     })) as CommonDoc[];
 
     setCommonDocs(list);
+  };
+
+  // One-time backfill for documents employees uploaded from their
+  // Profile page BEFORE DocumentUpload.tsx's field-mapping bugs were
+  // fixed (e.g. "Cancelled Cheque" and "Education Certificates" never
+  // made it into users/{uid}.documents, so they showed as "Not
+  // Uploaded" here even though the file existed). Reads the
+  // "employeeDocuments" collection (the one place every upload always
+  // landed, bugs or not) and re-mirrors each one into users/{uid} using
+  // the same mapping DocumentUpload.tsx uses going forward. Safe to run
+  // more than once — it just overwrites with the same values.
+  const syncExistingDocuments = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+
+    try {
+      const snap = await getDocs(collection(db, "employeeDocuments"));
+
+      // Group by employee so each employee gets one write instead of
+      // one per document.
+      const byEmployee: Record<string, Record<string, any>> = {};
+      let matchedCount = 0;
+
+      snap.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const employeeId = data.employeeId;
+        const documentType = data.documentType;
+        const adminField = ADMIN_DOCUMENTS_FIELD_MAP[documentType];
+
+        if (!employeeId || !adminField) return;
+
+        const isMulti = MULTI_UPLOAD_TYPES.includes(documentType);
+        const value = isMulti
+          ? (data.files || []).map((f: any) => ({ name: f.fileName, url: f.url }))
+          : data.downloadURL;
+
+        if (!value || (isMulti && value.length === 0)) return;
+
+        byEmployee[employeeId] = {
+          ...(byEmployee[employeeId] || {}),
+          [adminField]: value,
+        };
+        matchedCount++;
+      });
+
+      await Promise.all(
+        Object.entries(byEmployee).map(([employeeId, documents]) =>
+          setDoc(doc(db, "users", employeeId), { documents }, { merge: true })
+        )
+      );
+
+      setSyncResult(
+        `Synced ${matchedCount} document(s) across ${Object.keys(byEmployee).length} employee(s).`
+      );
+      await loadEmployees();
+    } catch (error) {
+      console.error("SYNC DOCUMENTS ERROR:", error);
+      setSyncResult("Sync failed — check console for details.");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const uploadCommonDocument = async (file?: File) => {
@@ -141,6 +214,24 @@ export default function DocumentsPage() {
     }
   };
 
+  const deleteCommonDocument = async (commonDoc: CommonDoc) => {
+    if (!window.confirm(`Delete "${commonDoc.fileName}"? This cannot be undone.`)) return;
+
+    try {
+      setDeletingCommonId(commonDoc.id);
+      await deleteDoc(doc(db, "documents", commonDoc.id));
+      if (commonDoc.url) {
+        await deleteObject(ref(storage, commonDoc.url)).catch(() => {});
+      }
+      await loadCommonDocs();
+    } catch (error) {
+      console.error("DELETE COMMON DOCUMENT ERROR:", error);
+      alert("Could not delete document.");
+    } finally {
+      setDeletingCommonId(null);
+    }
+  };
+
   const filtered = employees.filter((emp) => {
     const keyword = search.toLowerCase();
 
@@ -190,22 +281,59 @@ export default function DocumentsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => (window.location.href = "/admin")}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={syncExistingDocuments}
+              disabled={syncing}
+              title="Fixes documents that were uploaded before a field-mapping bug was corrected, so they show as Uploaded here without employees re-uploading."
+              style={{
+                padding: "13px 24px",
+                background: syncing ? "#94a3b8" : "#16a34a",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14.5,
+                cursor: syncing ? "default" : "pointer",
+              }}
+            >
+              {syncing ? "Syncing..." : "🔄 Sync Existing Documents"}
+            </button>
+
+            <button
+              onClick={() => (window.location.href = "/admin")}
+              style={{
+                padding: "13px 24px",
+                background: "#3d6fa8",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14.5,
+                cursor: "pointer",
+              }}
+            >
+              ← Dashboard
+            </button>
+          </div>
+        </div>
+
+        {syncResult && (
+          <div
             style={{
-              padding: "13px 24px",
-              background: "#3d6fa8",
-              color: "#fff",
-              border: "none",
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              color: "#1d4ed8",
+              padding: "12px 18px",
               borderRadius: 10,
-              fontWeight: 700,
-              fontSize: 14.5,
-              cursor: "pointer",
+              marginBottom: 24,
+              fontSize: 14,
+              fontWeight: 600,
             }}
           >
-            ← Dashboard
-          </button>
-        </div>
+            {syncResult}
+          </div>
+        )}
 
         {/* COMMON DOCUMENTS */}
         <div
@@ -260,30 +388,32 @@ export default function DocumentsPage() {
                 ))}
               </select>
 
-              <label
-                style={{
-                  display: "inline-block",
-                  background: uploading ? "#93c5fd" : "#3d6fa8",
-                  color: "#fff",
-                  padding: "12px 22px",
-                  borderRadius: 10,
-                  cursor: uploading ? "default" : "pointer",
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
-                {uploading ? "Uploading..." : "+ Upload Document"}
-                <input
-                  type="file"
-                  disabled={uploading}
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadCommonDocument(file);
-                    e.target.value = "";
+              {canEdit && (
+                <label
+                  style={{
+                    display: "inline-block",
+                    background: uploading ? "#93c5fd" : "#3d6fa8",
+                    color: "#fff",
+                    padding: "12px 22px",
+                    borderRadius: 10,
+                    cursor: uploading ? "default" : "pointer",
+                    fontWeight: 600,
+                    fontSize: 14,
                   }}
-                />
-              </label>
+                >
+                  {uploading ? "Uploading..." : "+ Upload Document"}
+                  <input
+                    type="file"
+                    disabled={uploading}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadCommonDocument(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </div>
 
@@ -377,6 +507,24 @@ export default function DocumentsPage() {
                     >
                       {downloadingId === file.id ? "Downloading..." : "Download"}
                     </button>
+
+                    {canEdit && (
+                      <button
+                        onClick={() => deleteCommonDocument(file)}
+                        disabled={deletingCommonId === file.id}
+                        style={{
+                          color: "#dc2626",
+                          fontWeight: 600,
+                          fontSize: 14,
+                          background: "none",
+                          border: "none",
+                          cursor: deletingCommonId === file.id ? "default" : "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        {deletingCommonId === file.id ? "Deleting..." : "Delete"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -439,32 +587,40 @@ export default function DocumentsPage() {
                     <td style={td}>{emp.employeeId || "-"}</td>
                     <td style={td}>{emp.department || "-"}</td>
                     <td style={td}>
-                      {emp. resume ? (
-                        <span style={{ color: "#16a34a", fontWeight: 600 }}>✅ Uploaded</span>
-                      ) : (
-                        <span style={{ color: "#dc2626", fontWeight: 600 }}>❌ Missing</span>
-                      )}
-                    </td>
+  {emp.documents?.resume ? (
+    <span style={{ color: "#16a34a", fontWeight: 600 }}>
+      ✅ Uploaded
+    </span>
+  ) : (
+    <span style={{ color: "#dc2626", fontWeight: 600 }}>
+      ❌ Missing
+    </span>
+  )}
+</td>
                     <td style={td}>
-                      <span
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: 999,
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          background:
-                            (emp.status || "Active").toLowerCase() === "active"
-                              ? "#dcfce7"
-                              : "#fee2e2",
-                          color:
-                            (emp.status || "Active").toLowerCase() === "active"
-                              ? "#166534"
-                              : "#991b1b",
-                        }}
-                      >
-                        {emp.status || "Active"}
-                      </span>
-                    </td>
+  <span
+    style={{
+      padding: "5px 12px",
+      borderRadius: 999,
+      fontSize: 12.5,
+      fontWeight: 700,
+      background:
+        (emp.hrApprovalStatus || "Pending") === "Approved"
+          ? "#dcfce7"
+          : (emp.hrApprovalStatus || "Pending") === "Rejected"
+          ? "#fee2e2"
+          : "#fef3c7",
+      color:
+        (emp.hrApprovalStatus || "Pending") === "Approved"
+          ? "#166534"
+          : (emp.hrApprovalStatus || "Pending") === "Rejected"
+          ? "#991b1b"
+          : "#b45309",
+    }}
+  >
+    {emp.hrApprovalStatus || "Pending"}
+  </span>
+</td>
                     <td style={td}>
                       <button
                         onClick={() => {

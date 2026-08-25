@@ -23,6 +23,9 @@ import {
 db
 } from "../../../../lib/firebase";
 
+import { ROLES } from "../../../../lib/roles";
+import { logActivity } from "../../../../lib/activityLog";
+
 
 import toast from "react-hot-toast";
 
@@ -67,6 +70,9 @@ const [designation,setDesignation]=useState("");
 const [performance,setPerformance]=useState("");
 
 
+const [shifts,setShifts]=useState([]);
+
+
 
 const currentDate =
 new Date().toLocaleDateString("en-IN");
@@ -90,6 +96,17 @@ loadEmployee();
 
 
 },[id]);
+
+
+useEffect(()=>{
+
+getDoc(doc(db,"settings","attendanceRules")).then((snap)=>{
+if(snap.exists()){
+setShifts(snap.data().shifts||[]);
+}
+});
+
+},[]);
 
 
 
@@ -330,7 +347,7 @@ employee.lastName || "",
 
 
 phone:
-employee.phone || "",
+employee.mobile || "",
 
 
 department:
@@ -341,8 +358,16 @@ designation:
 employee.designation || "",
 
 
+officialEmail:
+employee.officialEmail || "",
+
+
 role:
 employee.role || "employee",
+
+
+shiftId:
+employee.shiftId || "",
 
 
 status:
@@ -369,6 +394,21 @@ merge:true
 
 
 
+
+// NOTE: "Role" here is just a title/designation shown on the employee's
+// record — it intentionally does NOT grant admin dashboard access.
+// Real access is granted only from Settings -> Access Management, by
+// email, so setting someone's title to "Head" here can't silently make
+// them an admin.
+
+await logActivity({
+  employeeName: `${employee.firstName || ""} ${employee.lastName || ""}`.trim(),
+  employeeEmail: employee.email,
+  uid: id,
+  activity: "Employee Profile Updated",
+  module: "Users",
+  description: `Role: ${employee.role || "employee"}, Status: ${employee.status || "inactive"}`,
+});
 
 toast.success(
 "Employee updated"
@@ -672,7 +712,7 @@ opacity: ".95",
 }}
 >
 <div>📧 {employee.email}</div>
-<div>📱 {employee.phone || "-"}</div>
+<div>📱 {employee.mobile || "-"}</div>
 </div>
 </div>
 </div>
@@ -720,7 +760,7 @@ edit={false}
 
 <Field
 label="Phone"
-value={employee.phone || ""}
+value={employee.mobile || ""}
 edit={editMode}
 onChange={(v)=>
 updateField(
@@ -956,29 +996,54 @@ e.target.value
 >
 
 
-<option value="employee">
-Employee
+{ROLES.map((r) => (
+<option key={r.value} value={r.value}>
+{r.label}
 </option>
-
-<option value="head">
-Head
-</option>
-
-<option value="HR Admin">
-HR
-</option>
-
-<option value="Admin">
-Admin
-</option>
-
-<option value="Super Admin">
-Super Admin
-</option>
+))}
 
 
 </select>
 
+
+</div>
+
+<div>
+
+<label>
+Shift
+</label>
+
+
+<select
+
+disabled={!editMode}
+
+style={input}
+
+value={
+employee.shiftId || ""
+}
+
+onChange={(e)=>
+
+updateField(
+"shiftId",
+e.target.value
+)
+
+}
+
+>
+
+<option value="">Default (office timing)</option>
+{shifts.map((s) => (
+<option key={s.id} value={s.id}>
+{s.name} ({s.startTime}–{s.endTime})
+</option>
+))}
+
+</select>
 
 </div>
 
@@ -1282,16 +1347,26 @@ Official Email
 
 <input
 
-style={{
-...input,
-background:"#f3f4f6"
-}}
+type="email"
+
+disabled={!editMode}
+
+style={input}
 
 value={
 employee.officialEmail || ""
 }
 
-disabled
+onChange={(e)=>
+
+updateField(
+"officialEmail",
+e.target.value
+)
+
+}
+
+placeholder="name@omtatvadigitals.com"
 
 />
 
@@ -1834,7 +1909,14 @@ v
 
 </div>
 {/* DOCUMENTS */}
-
+{/* This card used to check top-level fields like employee.resume /
+    employee.aadhaar, which don't exist — real uploads live nested at
+    employee.documents.resume / employee.documents.aadhaar (aadhaar,
+    pan, education and experience are arrays of files, not a single
+    URL), so every row always showed "Not Uploaded" regardless of
+    what was actually uploaded. Fixed to read the real shape below,
+    and the full multi-file view/download/upload UI (which this card
+    doesn't attempt to duplicate) lives at /admin/documents/[id]. */}
 
 <div style={sectionCard}>
 
@@ -1852,7 +1934,7 @@ v
 
 label="Resume"
 
-value={employee.resume ? "Uploaded" : "Not Uploaded"}
+value={employee.documents?.resume ? "Uploaded" : "Not Uploaded"}
 
 edit={false}
 
@@ -1865,9 +1947,9 @@ edit={false}
 label="Aadhaar Card"
 
 value={
-employee.aadhaar
+(employee.documents?.aadhaar?.length || 0) > 0
 ?
-"Uploaded"
+`Uploaded (${employee.documents.aadhaar.length})`
 :
 "Not Uploaded"
 }
@@ -1883,9 +1965,9 @@ edit={false}
 label="PAN Card"
 
 value={
-employee.pan
+(employee.documents?.pan?.length || 0) > 0
 ?
-"Uploaded"
+`Uploaded (${employee.documents.pan.length})`
 :
 "Not Uploaded"
 }
@@ -1901,9 +1983,9 @@ edit={false}
 label="Education Certificate"
 
 value={
-employee.education
+(employee.documents?.education?.length || 0) > 0
 ?
-"Uploaded"
+`Uploaded (${employee.documents.education.length})`
 :
 "Not Uploaded"
 }
@@ -1919,9 +2001,9 @@ edit={false}
 label="Experience Letter"
 
 value={
-employee.experience
+(employee.documents?.experienceLetter?.length || 0) > 0
 ?
-"Uploaded"
+`Uploaded (${employee.documents.experienceLetter.length})`
 :
 "Not Uploaded"
 }
@@ -1949,11 +2031,11 @@ marginTop:"25px"
 
 
 {
-employee.resume &&
+employee.documents?.resume &&
 
 <a
 
-href={employee.resume}
+href={employee.documents.resume}
 
 target="_blank"
 
@@ -1968,46 +2050,17 @@ style={documentBtn}
 }
 
 
-
-{
-employee.aadhaar &&
-
 <a
 
-href={employee.aadhaar}
-
-target="_blank"
+href={`/admin/documents/${id}`}
 
 style={documentBtn}
 
 >
 
-🪪 View Aadhaar
+📁 View / Upload All Documents →
 
 </a>
-
-}
-
-
-
-{
-employee.pan &&
-
-<a
-
-href={employee.pan}
-
-target="_blank"
-
-style={documentBtn}
-
->
-
-💳 View PAN
-
-</a>
-
-}
 
 
 </div>

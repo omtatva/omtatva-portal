@@ -3,6 +3,9 @@
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { lookupRoleForEmail } from "@/lib/adminAccess";
+import { isAdminTierRole } from "@/lib/roles";
+import { checkLoginAllowed } from "@/lib/security";
 
 export default function AdminLoginPage() {
   const login = async () => {
@@ -12,27 +15,22 @@ export default function AdminLoginPage() {
       const result = await signInWithPopup(auth, provider);
 
       const user = result.user;
+      const email = user.email || "";
 
-      // TEMPORARY DEBUG — remove once the access-denied issue is
-      // resolved. Open browser DevTools (F12) → Console tab before
-      // clicking "Continue with Google", then check what gets printed.
-      console.log("DEBUG — signed in email:", JSON.stringify(user.email));
+      // Who is allowed in, and with what role, is managed entirely from
+      // Settings -> Access Management (adminAccess collection) instead of
+      // a hardcoded email list here.
+      const role = await lookupRoleForEmail(email);
 
-      // Allowed Admin Emails
-      const allowedAdmins = [
-        "admin@omtatvadigitals.com",
-        "hr@omtatvadigitals.com",
-        "itsupport@omtatvadigitals.com",
-      ];
+      if (!isAdminTierRole(role)) {
+        alert("Access Denied!\nOnly accounts granted admin/HR access in Settings can log in here.");
+        await signOut(auth);
+        return;
+      }
 
-      console.log("DEBUG — allowedAdmins:", allowedAdmins);
-      console.log(
-        "DEBUG — email in allowedAdmins?",
-        allowedAdmins.includes(user.email || "")
-      );
-
-      if (!allowedAdmins.includes(user.email || "")) {
-        alert("Access Denied!\nOnly Admin / HR / Owner can login.");
+      const blockedReason = await checkLoginAllowed(email, role);
+      if (blockedReason) {
+        alert(blockedReason);
         await signOut(auth);
         return;
       }
@@ -42,10 +40,6 @@ export default function AdminLoginPage() {
 
       // First Login
       if (!userSnap.exists()) {
-        let role = "admin";
-
-        if (user.email === "hr@omtatvadigitals.com") role = "hr";
-
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
@@ -81,27 +75,15 @@ export default function AdminLoginPage() {
 
       const userData = userSnap.data();
 
-      // TEMPORARY DEBUG
-      console.log("DEBUG — Firestore role value:", JSON.stringify(userData.role));
-
-      // Double Security Check
-      // Access is based on the email whitelist (allowedAdmins) rather
-      // than the Firestore "role" field — avoids issues if role ever
-      // drifts out of sync (wrong casing, stale value from an older
-      // login flow, etc.). The email was already checked once above
-      // right after sign-in; this re-checks it here as the final gate
-      // before granting access to an EXISTING user's account.
-      if (!allowedAdmins.includes(user.email || "")) {
-        alert("Access Denied!");
-        await signOut(auth);
-        return;
+      // Existing user — make sure their Firestore role stays in sync with
+      // whatever Settings -> Access Management currently says for their
+      // email (covers the case where their role was changed while they
+      // were logged out).
+      if (userData.role !== role) {
+        await setDoc(userRef, { role }, { merge: true });
       }
 
-      if (userData.profileCompleted) {
-        window.location.href = "/admin";
-      } else {
-        window.location.href = "/admin";
-      }
+      window.location.href = "/admin";
     } catch (error) {
       console.error(error);
 

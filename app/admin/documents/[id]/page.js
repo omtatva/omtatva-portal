@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, getDoc, updateDoc, deleteDoc, deleteField, arrayRemove } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 import { db, storage } from "../../../../lib/firebase";
+import { employeeKeyForAdminField } from "../../../../lib/documentFields";
+import { usePermission } from "../../../../lib/usePermission";
 
 // Types marked `multiple: true` accept more than one file — HR can
 // keep adding files and every one shows up with its own View/Download.
@@ -22,6 +24,7 @@ const DOCUMENT_TYPES = [
   { title: "📄 Relieving Letter", type: "relievingLetter" },
   { title: "💰 Payslip", type: "salarySlip", multiple: true },
   { title: "🏢 Office Compliance Document", type: "officeCompliance" },
+  { title: "📂 Other Documents", type: "other", multiple: true },
 
 ];
 
@@ -91,10 +94,12 @@ async function viewInNewTab(url, fileName) {
 
 export default function EmployeeDocumentsPage() {
   const { id } = useParams();
+  const { canEdit } = usePermission("documents");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadingType, setUploadingType] = useState(null);
   const [downloadingKey, setDownloadingKey] = useState(null);
+  const [deletingKey, setDeletingKey] = useState(null);
 
   useEffect(() => {
     if (id) {
@@ -149,6 +154,70 @@ export default function EmployeeDocumentsPage() {
       alert("Upload Failed");
     } finally {
       setUploadingType(null);
+    }
+  };
+
+  // Deletes a document HR uploaded/reviewed here. `file` is the {name,url}
+  // being removed for multi-file types, or the plain url string for
+  // single-file types. Beyond clearing users/{id}.documents, this also
+  // mirrors the removal into employeeDocuments + employeeProfiles.documents
+  // — the collections the employee's own Profile > Document Upload page
+  // reads — so a deleted document actually disappears from the employee's
+  // side too, not just this admin view. Types HR uploads directly with no
+  // employee-upload equivalent (Passport, Relieving Letter, Payslip,
+  // Office Compliance) have nothing to mirror, so that step is skipped for
+  // those. Storage cleanup is best-effort — a failure there doesn't block
+  // the Firestore removal.
+  const deleteDocument = async (type, multiple, file) => {
+    const fileName = multiple ? file?.name : type;
+    if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+    const key = multiple ? `${type}-${file?.url}` : type;
+
+    try {
+      setDeletingKey(key);
+
+      if (multiple) {
+        await updateDoc(doc(db, "users", id), {
+          [`documents.${type}`]: arrayRemove({ name: file.name, url: file.url }),
+        });
+      } else {
+        await updateDoc(doc(db, "users", id), {
+          [`documents.${type}`]: deleteField(),
+        });
+      }
+
+      const employeeKey = employeeKeyForAdminField(type);
+      if (employeeKey) {
+        const employeeDocRef = doc(db, "employeeDocuments", `${id}_${employeeKey}`);
+        const profileRef = doc(db, "employeeProfiles", id);
+
+        if (multiple) {
+          await updateDoc(employeeDocRef, {
+            files: arrayRemove({ fileName: file.name, url: file.url }),
+          }).catch(() => {});
+          await updateDoc(profileRef, {
+            [`documents.${employeeKey}`]: arrayRemove({ name: file.name, url: file.url }),
+          }).catch(() => {});
+        } else {
+          await deleteDoc(employeeDocRef).catch(() => {});
+          await updateDoc(profileRef, {
+            [`documents.${employeeKey}`]: deleteField(),
+          }).catch(() => {});
+        }
+      }
+
+      const url = multiple ? file.url : file;
+      if (url) {
+        await deleteObject(ref(storage, url)).catch(() => {});
+      }
+
+      await loadEmployee();
+    } catch (err) {
+      console.error("DELETE DOCUMENT ERROR:", err);
+      alert("Could not delete document.");
+    } finally {
+      setDeletingKey(null);
     }
   };
 
@@ -286,8 +355,11 @@ export default function EmployeeDocumentsPage() {
               data={user.documents?.[type]}
               isUploading={uploadingType === type}
               downloadingKey={downloadingKey}
+              deletingKey={deletingKey}
+              canEdit={canEdit}
               onUpload={(file) => uploadDocument(type, file, multiple)}
               onDownload={handleDownload}
+              onDelete={(file) => deleteDocument(type, multiple, file)}
             />
           ))}
         </div>
@@ -303,8 +375,11 @@ function DocumentRow({
   data,
   isUploading,
   downloadingKey,
+  deletingKey,
+  canEdit,
   onUpload,
   onDownload,
+  onDelete,
 }) {
   const hasData = multiple ? data?.length > 0 : Boolean(data);
 
@@ -340,6 +415,7 @@ function DocumentRow({
         {multiple &&
           data?.map((file, index) => {
             const key = `${type}-${index}`;
+            const deleteKey = `${type}-${file.url}`;
             return (
               <div key={key} style={{ display: "flex", gap: 8 }}>
                 <button
@@ -355,6 +431,15 @@ function DocumentRow({
                 >
                   {downloadingKey === key ? "..." : "Download"}
                 </button>
+                {canEdit && (
+                  <button
+                    onClick={() => onDelete(file)}
+                    disabled={deletingKey === deleteKey}
+                    style={{ ...btnStyle("#dc2626"), border: "none", cursor: "pointer" }}
+                  >
+                    {deletingKey === deleteKey ? "..." : "Delete"}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -374,9 +459,19 @@ function DocumentRow({
             >
               {downloadingKey === type ? "..." : "Download"}
             </button>
+            {canEdit && (
+              <button
+                onClick={() => onDelete(data)}
+                disabled={deletingKey === type}
+                style={{ ...btnStyle("#dc2626"), border: "none", cursor: "pointer" }}
+              >
+                {deletingKey === type ? "..." : "Delete"}
+              </button>
+            )}
           </>
         )}
 
+        {canEdit && (
         <label
           style={{
             ...btnStyle(isUploading ? "#fbbf24" : "#f59e0b"),
@@ -395,6 +490,7 @@ function DocumentRow({
             }}
           />
         </label>
+        )}
       </div>
     </div>
   );

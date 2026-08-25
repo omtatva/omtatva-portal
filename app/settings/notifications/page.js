@@ -86,10 +86,10 @@ export default function AnnouncementsPage() {
   return (
     <div className="dashboard-content" style={{ maxWidth: 900 }}>
 
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8, color: "var(--text-color)" }}>
         📢 Announcements
       </h1>
-      <p style={{ color: "#64748b", marginBottom: 30 }}>
+      <p style={{ color: "var(--text-muted)", marginBottom: 30 }}>
         Post updates that appear on every employee's dashboard.
       </p>
 
@@ -123,9 +123,9 @@ export default function AnnouncementsPage() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: 999,
-                  border: priority === p.key ? `2px solid ${p.color}` : "1px solid #e2e8f0",
-                  background: priority === p.key ? p.bg : "#fff",
-                  color: priority === p.key ? p.color : "#64748b",
+                  border: priority === p.key ? `2px solid ${p.color}` : "1px solid var(--border-color)",
+                  background: priority === p.key ? p.bg : "var(--card-bg)",
+                  color: priority === p.key ? p.color : "var(--text-muted)",
                   fontWeight: 600,
                   fontSize: 13,
                   cursor: "pointer",
@@ -160,9 +160,9 @@ export default function AnnouncementsPage() {
 
       {/* LIST */}
       {loading ? (
-        <p style={{ color: "#94a3b8" }}>Loading announcements...</p>
+        <p style={{ color: "var(--text-muted)" }}>Loading announcements...</p>
       ) : announcements.length === 0 ? (
-        <div className="employee-card" style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>
+        <div className="employee-card" style={{ textAlign: "center", color: "var(--text-muted)", padding: 40 }}>
           No announcements posted yet.
         </div>
       ) : (
@@ -177,7 +177,7 @@ export default function AnnouncementsPage() {
               <div className="announcement-card-inner">
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text-color)" }}>
                       {a.title}
                     </h3>
                     <span
@@ -193,10 +193,10 @@ export default function AnnouncementsPage() {
                       {a.priority}
                     </span>
                   </div>
-                  <p style={{ margin: 0, color: "#475569", fontSize: 14.5, lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, color: "var(--text-color)", fontSize: 14.5, lineHeight: 1.5 }}>
                     {a.message}
                   </p>
-                  <p style={{ margin: "10px 0 0", color: "#94a3b8", fontSize: 12.5 }}>
+                  <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 12.5 }}>
                     {a.createdAt?.toDate ? a.createdAt.toDate().toLocaleString("en-IN") : "Just now"}
                   </p>
                 </div>

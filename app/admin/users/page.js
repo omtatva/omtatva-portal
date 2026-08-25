@@ -10,6 +10,7 @@ deleteDoc,
 } from "firebase/firestore";
 
 import { db } from "../../../lib/firebase";
+import { ROLES, isAdminTierRole, roleLabel } from "../../../lib/roles";
 
 export default function UsersPage() {
 const [users, setUsers] = useState([]);
@@ -138,7 +139,7 @@ const inactiveEmployees = users.filter(
 ).length;
 
 const adminCount = users.filter(
-  (user) => user.role === "admin"
+  (user) => isAdminTierRole(user.role)
 ).length;
 const filteredUsers = users.filter((user) => {
   const fullName =
@@ -417,10 +418,9 @@ onChange={(e)=>setRoleFilter(e.target.value)}
 style={filterStyle}
 >
 <option value="">Role</option>
-<option>employee</option>
-<option>hr</option>
-<option>admin</option>
-<option>owner</option>
+{ROLES.map((r) => (
+<option key={r.value} value={r.value}>{r.label}</option>
+))}
 </select>
 
 <select
@@ -504,9 +504,9 @@ minWidth:"1600px",
     <>
       <input
         type="text"
-        placeholder="Search Employee..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Employee ID"
+        value={employeeCode}
+        onChange={(e) => setEmployeeCode(e.target.value)}
         style={{
           padding: "6px",
           width: "90px",
@@ -554,7 +554,7 @@ minWidth:"1600px",
             </td>
 
             <td style={td}>
-              {user.role || "employee"}
+              {roleLabel(user.role)}
             </td>
 
           <td style={td}>

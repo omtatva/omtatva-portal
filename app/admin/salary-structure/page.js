@@ -28,12 +28,14 @@ Timestamp
 
 
 import { db } from "@/lib/firebase";
+import { usePermission } from "@/lib/usePermission";
 
 
 
 export default function SalaryStructurePage(){
 
 
+const { canEdit } = usePermission("salaryStructure");
 
 const [employees,setEmployees]=useState([]);
 
@@ -334,6 +336,12 @@ e.target.value
 const saveSalary=async()=>{
 
 
+if(!canEdit){
+alert("View only — you don't have edit access for Salary Structure");
+return;
+}
+
+
 try{
 
 
@@ -595,6 +603,12 @@ salary.tds
 const deleteSalary=async(id)=>{
 
 
+if(!canEdit){
+alert("View only — you don't have edit access for Salary Structure");
+return;
+}
+
+
 await deleteDoc(
 
 doc(
@@ -807,6 +821,7 @@ deleteSalary={deleteSalary}
 <BulkUpload
 
 loadSalary={loadSalary}
+canEdit={canEdit}
 
 />
 
@@ -856,6 +871,7 @@ payrollList={payrollList}
 salaryList={salaryList}
 
 loadSalary={loadPayroll}
+canEdit={canEdit}
 
 />
 
@@ -869,6 +885,7 @@ loadSalary={loadPayroll}
 payrollList={payrollList}
 
 loadPayroll={loadPayroll}
+canEdit={canEdit}
 
 />
 

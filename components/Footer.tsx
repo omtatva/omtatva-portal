@@ -3,6 +3,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+const DEFAULT_BRANDING = {
+  companyName: "OMTATVA DIGITALS",
+  logo: "/logo.ico",
+};
 
 const QUICK_LINKS = [
   { name: "Home", link: "/#top" },
@@ -31,6 +39,28 @@ const SOCIAL_LINKS = [
 ];
 
 export default function Footer() {
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+
+  // Live from Firestore, same pattern as DashboardNavbar.tsx / navbar.tsx
+  // — so a logo/company name change from Settings -> Branding shows up
+  // in the public site footer too.
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "settings", "branding"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setBranding({
+            companyName: data.companyName || DEFAULT_BRANDING.companyName,
+            logo: data.logo || DEFAULT_BRANDING.logo,
+          });
+        }
+      },
+      (error) => console.error("FOOTER BRANDING SNAPSHOT ERROR:", error)
+    );
+    return () => unsubscribe();
+  }, []);
+
   return (
     <footer style={{ background: "#111827", color: "#fff", marginTop: 70 }}>
       <div className="footer-grid">
@@ -45,8 +75,8 @@ export default function Footer() {
             }}
           >
             <img
-              src="/logo.ico"
-              alt="OMTATVA Logo"
+              src={branding.logo}
+              alt={`${branding.companyName} logo`}
               style={{ width: 90, height: 90, objectFit: "contain" }}
             />
             <div>
@@ -59,7 +89,7 @@ export default function Footer() {
                   lineHeight: 1.1,
                 }}
               >
-                OMTATVA DIGITALS
+                {branding.companyName}
               </h2>
               <p style={{ margin: "8px 0 0", color: "#bdbdbd", fontSize: 16 }}>
                 Driven by Stories • Powered by AI

@@ -13,8 +13,10 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../../lib/firebase";
+import { usePermission } from "../../../lib/usePermission";
 
 export default function HolidaysPage() {
+  const { canEdit } = usePermission("holidays");
   const [holidays, setHolidays] = useState([]);
 
   const [holidayName, setHolidayName] = useState("");
@@ -219,7 +221,7 @@ export default function HolidaysPage() {
           />
         </div>
 
-        <button className="save" onClick={saveHoliday}>
+        <button className="save" onClick={saveHoliday} disabled={!canEdit} title={canEdit ? undefined : "View only — you don't have edit access for Holidays"}>
           {loading ? "Saving..." : editId ? "Update Holiday" : "Add Holiday"}
         </button>
 
@@ -282,13 +284,19 @@ export default function HolidaysPage() {
                     </td>
 
                     <td>
-                      <button className="edit" onClick={() => editHoliday(item)}>
-                        ✏️
-                      </button>
+                      {canEdit ? (
+                        <>
+                          <button className="edit" onClick={() => editHoliday(item)}>
+                            ✏️
+                          </button>
 
-                      <button className="delete" onClick={() => deleteHoliday(item.id)}>
-                        🗑
-                      </button>
+                          <button className="delete" onClick={() => deleteHoliday(item.id)}>
+                            🗑
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ color: "#94a3b8", fontSize: 13 }}>View only</span>
+                      )}
                     </td>
                   </tr>
                 ))

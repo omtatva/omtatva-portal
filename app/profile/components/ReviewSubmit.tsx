@@ -89,8 +89,14 @@ email:user.email,
 profileCompleted:true,
 
 
-status:
-"Pending HR Verification",
+// NOTE: no "status" field here on purpose. This used to always write
+// status: "Pending HR Verification" on every submit/resubmit — a
+// completely separate vocabulary from the real HR approval workflow
+// (hrApprovalStatus: Pending/Approved/Rejected + status: active/
+// inactive, set from Admin -> Users). Because employees/{uid} is
+// merged in LAST when the admin page loads an employee, resubmitting
+// a profile after HR had already approved it silently flipped their
+// status back to "pending" on that screen.
 
 
 createdAt:
@@ -202,12 +208,14 @@ designation:
 profile.designation || "",
 
 
-role:
-"employee",
-
-
-status:
-"active",
+// NOTE: "role" and "status" are intentionally NOT written here. This
+// used to unconditionally set role:"employee" and status:"active" on
+// every submit/resubmit — which meant an HR/Admin/Head account that
+// re-saved their OWN profile (e.g. just updating a phone number) got
+// silently demoted back to "employee", and anyone HR had marked
+// inactive could reactivate themselves just by resubmitting. Both
+// fields are owned by Settings -> Access Management / Admin -> Users
+// now; merge:true leaves whatever is already there untouched.
 
 
 profileCompleted:true,

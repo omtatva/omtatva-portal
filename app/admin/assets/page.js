@@ -13,8 +13,10 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../../lib/firebase";
+import { usePermission } from "../../../lib/usePermission";
 
 export default function AssetsPage() {
+  const { canEdit } = usePermission("assets");
   const [employeeName, setEmployeeName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [assetType, setAssetType] = useState("");
@@ -295,14 +297,16 @@ const deleteAsset = async (id) => {
 
         <button
           onClick={assignAsset}
+          disabled={!canEdit}
+          title={canEdit ? undefined : "View only — you don't have edit access for Assets"}
           style={{
             marginTop: "30px",
-            background: "#3d6fa8",
+            background: canEdit ? "#3d6fa8" : "#94a3b8",
             color: "#fff",
             border: "none",
             padding: "15px 30px",
             borderRadius: "10px",
-            cursor: "pointer",
+            cursor: canEdit ? "pointer" : "not-allowed",
             fontWeight: "bold",
           }}
         >
@@ -445,6 +449,8 @@ a=>a.assetType
         </td>
 
         <td style={td}>
+        {canEdit ? (
+        <>
         <button
             style={greenBtn}
             onClick={() => returnAsset(asset.id)}
@@ -458,6 +464,10 @@ a=>a.assetType
         >
             Delete
         </button>
+        </>
+        ) : (
+        <span style={{ color: "#94a3b8", fontSize: 13 }}>View only</span>
+        )}
         </td>
 
         </tr>

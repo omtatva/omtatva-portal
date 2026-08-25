@@ -1,8 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ROLES } from "@/lib/roles";
+import type { Shift } from "@/lib/attendanceRules";
 export default function AddEmployeePage() {
 const [firstName, setFirstName] = useState("");
 const [lastName, setLastName] = useState("");
@@ -13,8 +15,18 @@ const [phone, setPhone] = useState("");
 const [department, setDepartment] = useState("");
 const [designation, setDesignation] = useState("");
 const [role, setRole] = useState("employee");
+const [shiftId, setShiftId] = useState("");
+const [shifts, setShifts] = useState<Shift[]>([]);
 const [status, setStatus] = useState("active");
 const [loading, setLoading] = useState(false);
+
+useEffect(() => {
+  getDoc(doc(db, "settings", "attendanceRules")).then((snap) => {
+    if (snap.exists()) {
+      setShifts(snap.data().shifts || []);
+    }
+  });
+}, []);
 const saveEmployee = async () => {
   if (!firstName || !email || !password) {
     alert("Please fill all required fields.");
@@ -43,9 +55,16 @@ const saveEmployee = async () => {
       department,
       designation,
       role,
+      shiftId,
       status,
       createdAt: new Date(),
     });
+
+    // NOTE: "Role" here is just a title/designation on the employee's
+    // record — it intentionally does NOT grant admin dashboard access.
+    // Real access is granted only from Settings -> Access Management,
+    // by email, so picking "Admin"/"Head" etc. here can't silently make
+    // someone an admin.
 
     alert("Employee Added Successfully ✅");
 
@@ -130,9 +149,20 @@ const saveEmployee = async () => {
   />
 
   <select value={role} onChange={(e) => setRole(e.target.value)}>
-    <option value="employee">Employee</option>
-    <option value="hr">HR</option>
-    <option value="admin">Admin</option>
+    {ROLES.map((r) => (
+      <option key={r.value} value={r.value}>
+        {r.label}
+      </option>
+    ))}
+  </select>
+
+  <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+    <option value="">Shift: Default (office timing)</option>
+    {shifts.map((s) => (
+      <option key={s.id} value={s.id}>
+        Shift: {s.name} ({s.startTime}–{s.endTime})
+      </option>
+    ))}
   </select>
 
   <select value={status} onChange={(e) => setStatus(e.target.value)}>

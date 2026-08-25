@@ -8,8 +8,9 @@ import {
   onSnapshot,
   query,
   where,
+  doc,
 } from "firebase/firestore";
-import { appSettings } from "@/config/appSettings";
+import { logActivity } from "@/lib/activityLog";
 
 export default function LeavePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -100,13 +101,13 @@ export default function LeavePage() {
         appliedOn: Timestamp.now(),
       });
 
-      await addDoc(collection(db, "activityLogs"), {
+      await logActivity({
         uid: user.uid,
         employeeName: user.displayName || user.email,
+        employeeEmail: user.email,
         activity: "Applied for Leave",
-        type: "Leave",
+        module: "Leave",
         description: `${leaveType} (${fromDate} - ${toDate})`,
-        createdAt: Timestamp.now(),
       });
 
       alert("Leave Request Submitted");
@@ -146,13 +147,13 @@ export default function LeavePage() {
         appliedOn: Timestamp.now(),
       });
 
-      await addDoc(collection(db, "activityLogs"), {
+      await logActivity({
         uid: user.uid,
         employeeName: user.displayName || user.email,
+        employeeEmail: user.email,
         activity: "Applied for WFH",
-        type: "WFH",
+        module: "WFH",
         description: `Work From Home (${wfhDate})`,
-        createdAt: Timestamp.now(),
       });
 
       alert("WFH Request Submitted");
@@ -191,11 +192,36 @@ export default function LeavePage() {
     });
   };
 
-  // Quotas come from company config instead of being hardcoded here, so
-  // HR can change policy (appSettings.leavePolicy) in one place.
-  const casualLeave = appSettings.leavePolicy?.casualLeave ?? 12;
-  const sickLeave = appSettings.leavePolicy?.sickLeave ?? 10;
-  const paidLeave = appSettings.leavePolicy?.paidLeave ?? 18;
+  // Quotas come from Settings -> Leave Policy (settings/leavePolicy in
+  // Firestore) instead of being hardcoded here, so HR can change policy
+  // in one place and it applies live, without a code change.
+  const [leavePolicy, setLeavePolicy] = useState({
+    casualLeave: 12,
+    sickLeave: 10,
+    paidLeave: 18,
+  });
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "settings", "leavePolicy"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setLeavePolicy({
+            casualLeave: data.casualLeave ?? 12,
+            sickLeave: data.sickLeave ?? 10,
+            paidLeave: data.paidLeave ?? 18,
+          });
+        }
+      },
+      (error) => console.error("LEAVE POLICY SNAPSHOT ERROR:", error)
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const casualLeave = leavePolicy.casualLeave;
+  const sickLeave = leavePolicy.sickLeave;
+  const paidLeave = leavePolicy.paidLeave;
 
   const approvedCasual = myLeaves.filter(
     (l) => l.leaveType === "Casual Leave" && l.status === "Approved"

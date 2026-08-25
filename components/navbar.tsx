@@ -5,9 +5,14 @@
 import Link from "next/link";
 import { useState, useEffect, useRef, CSSProperties } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, orderBy } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { usePathname } from "next/navigation";
+
+const DEFAULT_BRANDING = {
+  companyName: "OMTATVA DIGITALS",
+  logo: "/logo.ico",
+};
 
 const PLATFORM_LINKS: [string, string][] = [
   ["Dashboard", "/dashboard"],
@@ -34,6 +39,7 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
 
   const pathname = usePathname();
   const navRef = useRef<HTMLDivElement>(null);
@@ -60,6 +66,26 @@ export default function Navbar() {
         console.log("Load Announcements Error:", error);
         setAnnouncements([]);
       }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Live from Firestore, same pattern as DashboardNavbar.tsx — so a
+  // logo/company name change from Settings -> Branding shows up here on
+  // the public site too, not just inside the logged-in portal.
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "settings", "branding"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setBranding({
+            companyName: data.companyName || DEFAULT_BRANDING.companyName,
+            logo: data.logo || DEFAULT_BRANDING.logo,
+          });
+        }
+      },
+      (error) => console.error("NAVBAR BRANDING SNAPSHOT ERROR:", error)
     );
     return () => unsubscribe();
   }, []);
@@ -146,8 +172,8 @@ export default function Navbar() {
           }}
         >
           <img
-            src="/logo.ico"
-            alt="OMTATVA Digitals logo"
+            src={branding.logo}
+            alt={`${branding.companyName} logo`}
             style={{ width: 58, height: 58, objectFit: "contain" }}
           />
           <div>
@@ -160,7 +186,7 @@ export default function Navbar() {
                 lineHeight: 1.1,
               }}
             >
-              OMTATVA DIGITALS
+              {branding.companyName}
             </h2>
             <p style={{ margin: "2px 0 0", color: "#666", fontSize: "13px" }}>
               Driven by Stories • Powered by AI

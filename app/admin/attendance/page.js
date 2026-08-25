@@ -28,11 +28,16 @@ import {
 db
 } from "../../../lib/firebase";
 
+import { logActivity } from "../../../lib/activityLog";
+import { computeDisplayStatus } from "../../../lib/attendanceRules";
+import { usePermission } from "../../../lib/usePermission";
+
 
 
 export default function AttendancePage(){
 
 const router = useRouter();
+const { canEdit } = usePermission("attendance");
 const [attendance,setAttendance]=useState([]);
 
 
@@ -81,49 +86,6 @@ useEffect(() => {
   loadAttendance();
 }, []);
 
-// Determines Present / Late / Absent / Incomplete — mirrors the logic
-// used on the employee-facing AttendancePage.js, based on Firestore
-// settings/attendanceRules (officeStartTime + graceMinutes).
-// Firestore's raw "status" field is only ever "Present" or "Absent" —
-// "Late"/"Incomplete" are always computed here, never stored directly.
-function getDisplayStatus(item, rules) {
-  if (item.status === "Absent") {
-    return "Absent";
-  }
-
-  const punch = item.PunchIn?.toDate
-    ? item.PunchIn.toDate()
-    : item.PunchIn
-    ? new Date(item.PunchIn)
-    : null;
-
-  if (!punch) {
-    return item.status || "Present";
-  }
-
-  // Punched in, day already over, no punch-out — flag it instead of
-  // silently counting it as Present.
-  const punchOut = item.PunchOut?.toDate
-    ? item.PunchOut.toDate()
-    : item.PunchOut
-    ? new Date(item.PunchOut)
-    : null;
-
-  if (!punchOut && item.date !== todayStr) {
-    return "Incomplete";
-  }
-
-  const officeStartTime = rules?.officeStartTime || "10:00";
-  const graceMinutes = Number(rules?.graceMinutes ?? 15);
-
-  const [officeHour, officeMinute] = officeStartTime.split(":").map(Number);
-
-  const cutoff = new Date(punch);
-  cutoff.setHours(officeHour, officeMinute + graceMinutes, 0, 0);
-
-  return punch > cutoff ? "Late" : "Present";
-}
-
 async function loadAttendance() {
   try {
     // Attendance rules (needed to compute Late status)
@@ -164,7 +126,7 @@ async function loadAttendance() {
           employee.email ||
           attendance.email ||
           "--",
-        displayStatus: getDisplayStatus(attendance, rules),
+        displayStatus: computeDisplayStatus(attendance, rules, employee.shiftId, todayStr),
       };
     });
 
@@ -192,6 +154,7 @@ if(!confirmDelete)
 return;
 
 
+const record = attendance.find((item) => item.id === id);
 
 await deleteDoc(
 doc(
@@ -201,7 +164,16 @@ id
 )
 );
 
-
+if (record) {
+  await logActivity({
+    employeeName: record.employeeName,
+    employeeEmail: record.email,
+    uid: record.userId,
+    activity: "Attendance Record Deleted",
+    module: "Attendance",
+    description: `${record.date || ""}`,
+  });
+}
 
 loadAttendance();
 
@@ -267,12 +239,28 @@ async function saveEditPopup() {
       PunchIn: start,
       PunchOut: end,
       totalHours: end ? Number(((end - start) / (1000 * 60 * 60)).toFixed(2)) : 0,
+      // A record auto-marked "Absent" (missed punch-in) stays "Absent"
+      // forever otherwise — computeDisplayStatus() checks this field
+      // FIRST and short-circuits before ever looking at the corrected
+      // Punch In/Out time, so Present/Late never gets recalculated.
+      // Setting it back to "Present" here lets that time-based
+      // calculation actually run.
+      status: "Present",
       correctedBy: "Admin",
       correctedAt: new Date(),
       correctionRequest: null,
     };
 
     await updateDoc(doc(db, "attendance", editRecord.id), updates);
+
+    await logActivity({
+      employeeName: editRecord.employeeName,
+      employeeEmail: editRecord.email,
+      uid: editRecord.userId,
+      activity: "Attendance Corrected",
+      module: "Attendance",
+      description: `${editRecord.date}: Punch In/Out updated by admin`,
+    });
 
     closeEditPopup();
     await loadAttendance();
@@ -1317,13 +1305,16 @@ ${item.gpsStatus==="Inside Office"
   </span>
 )}
 
+{canEdit && (
 <button
 onClick={()=>openEditPopup(item)}
 className="bg-[#3d6fa8] hover:bg-[#325d8d] text-white px-4 py-2 rounded-lg text-sm"
 >
 ✏️ Update
 </button>
+)}
 
+{canEdit && (
 <button
 onClick={()=>deleteAttendance(item.id)}
 className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm"
@@ -1332,6 +1323,7 @@ className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm"
 🗑 Delete
 
 </button>
+)}
 
 </div>
 
