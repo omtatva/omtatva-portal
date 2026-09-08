@@ -8,7 +8,31 @@ runConfig:
   # memoryMiB: 512
 
 # Environment variables and secrets.
-# env:
+env:
+  # Maintenance mode — see proxy.ts. Flip to "true" and redeploy
+  # (`firebase deploy --only apphosting`, or trigger a new rollout from
+  # the Firebase Console) to take the whole portal down for maintenance;
+  # flip back to "false" and redeploy to restore normal access.
+  # RUNTIME-only is enough — proxy.ts reads this per-request on the
+  # server, it's never needed at build time.
+  - variable: MAINTENANCE_MODE
+    value: "true"
+    availability:
+      - RUNTIME
+
+  # Optional admin bypass while maintenance mode is on: visiting
+  # https://your-domain/any-page?bypass=<this value> once lets that
+  # browser through (via an HttpOnly cookie) while everyone else still
+  # sees the maintenance page. Leave unset to disable the bypass
+  # entirely. Set the real value as a secret, never commit it in plain
+  # text here:
+  #   firebase apphosting:secrets:set MAINTENANCE_BYPASS_TOKEN
+  # then uncomment below.
+  # - variable: MAINTENANCE_BYPASS_TOKEN
+  #   secret: MAINTENANCE_BYPASS_TOKEN
+  #   availability:
+  #     - RUNTIME
+
   # Configure environment variables.
   # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
   # - variable: MESSAGE
