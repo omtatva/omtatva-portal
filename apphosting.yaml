@@ -16,7 +16,7 @@ env:
   # RUNTIME-only is enough — proxy.ts reads this per-request on the
   # server, it's never needed at build time.
   - variable: MAINTENANCE_MODE
-    value: "true"
+    value: "false"
     availability:
       - RUNTIME
 
