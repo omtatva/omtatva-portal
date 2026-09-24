@@ -2,7 +2,7 @@
   "apphosting": [
     {
       "backendId": "omtatva-backend",
-      "rootDir": "/",
+      "rootDir": ".",
       "ignore": [
         "node_modules",
         ".git",
