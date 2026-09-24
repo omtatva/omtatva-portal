@@ -58,6 +58,13 @@ function toDate(value: AttendanceItem["PunchIn"]): Date | null {
 // Determines Present / Late / Absent / Incomplete. Firestore's raw
 // "status" field is only ever "Present" or "Absent" — "Late"/"Incomplete"
 // are always computed, never stored directly.
+//
+// TEMPORARY (2026-09-24): "Late" is disabled on purpose — anyone can
+// punch in at any time for now, only total working hours matter. The
+// original shift-cutoff calculation is commented out below, not
+// deleted — uncomment the block and delete the early `return` to bring
+// Late-marking back later. Absent/Incomplete are untouched; only the
+// Late-vs-Present timing check is affected.
 export function computeDisplayStatus(
   item: AttendanceItem,
   rules: AttendanceRules | null | undefined,
@@ -78,12 +85,21 @@ export function computeDisplayStatus(
     return "Incomplete";
   }
 
-  const { startTime } = getShiftTimes(rules, shiftId);
-  const graceMinutes = Number(rules?.graceMinutes ?? 15);
-  const [officeHour, officeMinute] = startTime.split(":").map(Number);
+  // Late-marking disabled for now — see note above. Once punched in
+  // (and either punched out or it's still today), it's just "Present";
+  // total hours are still calculated as normal wherever totalHours is
+  // computed (punchOut() in app/attendance/page.js), this only affects
+  // the Present/Late label.
+  return "Present";
 
-  const cutoff = new Date(punch);
-  cutoff.setHours(officeHour, officeMinute + graceMinutes, 0, 0);
-
-  return punch > cutoff ? "Late" : "Present";
+  // --- Late-marking logic (commented out, re-enable by restoring this
+  //     and removing the early `return "Present"` above) ---
+  // const { startTime } = getShiftTimes(rules, shiftId);
+  // const graceMinutes = Number(rules?.graceMinutes ?? 15);
+  // const [officeHour, officeMinute] = startTime.split(":").map(Number);
+  //
+  // const cutoff = new Date(punch);
+  // cutoff.setHours(officeHour, officeMinute + graceMinutes, 0, 0);
+  //
+  // return punch > cutoff ? "Late" : "Present";
 }
