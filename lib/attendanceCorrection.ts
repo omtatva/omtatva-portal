@@ -3,7 +3,7 @@
 // writes. A correction never deletes a record, never rewrites history
 // silently, and always needs a written reason.
 
-import { normalizeRole, type RoleValue } from "./roles";
+import { isAdminTierRole, normalizeRole, type RoleValue } from "./roles";
 import { computeTotalHours, round2 } from "./attendancePolicy";
 
 export const CORRECTION_STATUSES = ["Present", "Absent", "Leave", "Holiday", "Weekly Off"] as const;
@@ -176,7 +176,8 @@ type Matrix = Record<string, Partial<Record<string, "view" | "edit">>> | undefin
 export function canEditAttendance(roleRaw: string | null | undefined, matrix: Matrix): boolean {
   const role: RoleValue = normalizeRole(roleRaw);
   if (role === "super_admin") return true;
-  if (role === "employee") return false;
+  // Employees, Team Leads and Managers are never admin-tier.
+  if (!isAdminTierRole(roleRaw)) return false;
   const saved = matrix?.[role]?.attendance;
   return (saved ?? (role === "hr" ? "view" : "edit")) === "edit";
 }

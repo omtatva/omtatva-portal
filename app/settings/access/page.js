@@ -12,7 +12,7 @@ export default function AccessManagementPage() {
   const [error, setError] = useState("");
 
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState(ROLES[1].value); // default to "hr"
+  const [newRole, setNewRole] = useState(ROLES.find((r) => r.value === "hr").value); // default to "hr"
 
   const [matrix, setMatrix] = useState({});
   const [matrixLoading, setMatrixLoading] = useState(true);

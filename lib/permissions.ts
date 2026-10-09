@@ -84,5 +84,7 @@ export function resolveCanEdit(
   moduleKey: ModuleKey
 ): boolean {
   if (SUPER_ADMIN_ROLES.includes(role)) return true;
+  // Only admin-tier roles can ever edit admin modules (Manager / Team Lead / Employee cannot).
+  if (!ADMIN_TIER_ROLES.includes(role)) return false;
   return (matrix[role]?.[moduleKey] ?? "edit") === "edit";
 }

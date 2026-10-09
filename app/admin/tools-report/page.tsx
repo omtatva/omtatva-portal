@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
+import ActivityLogReport from "@/components/ActivityLogReport";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import {
   BarChart,
@@ -239,6 +240,9 @@ export default function AdminToolsReport() {
           </div>
         )}
       </div>
+
+      {/* ACTIVITY LOG (month-wise) — moved here from the Admin dashboard */}
+      <ActivityLogReport />
     </div>
   );
 }

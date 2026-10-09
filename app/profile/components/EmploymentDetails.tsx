@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { useOrgChart } from "@/lib/useOrgChart";
+import { useReportingLine } from "@/lib/useReportingLine";
+import { departmentOptions } from "@/lib/departments";
 import { useProfile } from "../ProfileContext";
 
 
@@ -29,7 +30,6 @@ const [isSaving,setIsSaving]=useState(false);
 // Reporting manager is assigned by HR (Admin -> Organization Hierarchy)
 // and read live from there — employees can't edit it, so the profile can
 // never disagree with the hierarchy shown on the dashboard.
-const {index:orgIndex,ready:orgReady}=useOrgChart();
 const [myUid,setMyUid]=useState<string|null>(null);
 
 useEffect(()=>{
@@ -37,9 +37,12 @@ const unsub=onAuthStateChanged(auth,(u)=>setMyUid(u?u.uid:null));
 return ()=>unsub();
 },[]);
 
+// Only my own reporting line is loaded (never the whole company).
+const {index:orgIndex,ready:orgReady}=useReportingLine(myUid);
+
 const myManager=(()=>{
-const me=myUid?orgIndex.byId.get(myUid):undefined;
-return me?.managerId?orgIndex.byId.get(me.managerId):undefined;
+const me=myUid?orgIndex?.byId.get(myUid):undefined;
+return me?.managerId?orgIndex?.byId.get(me.managerId):undefined;
 })();
 
 
@@ -146,32 +149,9 @@ e.target.value
 Select
 </option>
 
-<option>
-Production
-</option>
-
-<option>
-IT
-</option>
-<option>
-HR
-</option>
-
-<option>
-Marketing
-</option>
-
-<option>
-Management
-</option>
-
-<option>
-Operations
-</option>
-
-<option>
-Creative
-</option>
+{departmentOptions([profile.department]).map((d)=>(
+<option key={d}>{d}</option>
+))}
 
 
 </select>

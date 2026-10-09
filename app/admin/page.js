@@ -4,13 +4,7 @@ import { useEffect, useState } from "react";
 
 import { onAuthStateChanged } from "firebase/auth";
 
-import {
-  collection,
-  getDocs,
-  limit,
-  query,
-  orderBy,
-} from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebase";
 import { isAdminTierRole, isSuperAdminRole } from "../../lib/roles";
@@ -40,7 +34,6 @@ export default function AdminPage() {
   const [timesheetCount, setTimesheetCount] = useState(0);
   const [inactiveUsers, setInactiveUsers] = useState(0);
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
-  const [activities, setActivities] = useState([]);
   const [departmentData, setDepartmentData] = useState([]);
   const [trendData, setTrendData] = useState([]);
   // Attendance Reports are Super Admin only (also enforced by the API).
@@ -70,7 +63,6 @@ export default function AdminPage() {
         setIsSuperAdmin(isSuperAdminRole(role));
 
         await loadDashboard();
-        await loadActivities();
 
         setLoading(false);
       } catch (error) {
@@ -124,17 +116,6 @@ export default function AdminPage() {
       } catch (e) {
         console.error("Leave count error:", e);
       }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const loadActivities = async () => {
-    try {
-      const q = query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(10));
-      const snap = await getDocs(q);
-      const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setActivities(list);
     } catch (error) {
       console.error(error);
     }
@@ -350,75 +331,8 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* ACTIVITY + OVERVIEW */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "25px" }}>
-        {/* RECENT ACTIVITY */}
-        <div
-          style={{
-            background: "var(--card-bg)",
-            padding: "30px",
-            borderRadius: "22px",
-            boxShadow: "0 10px 25px rgba(61,111,168,0.12)",
-          }}
-        >
-          <h2 style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-color)" }}>
-            📢 Recent Activity
-          </h2>
-
-          <table style={{ width: "100%", marginTop: "20px", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Employee</th>
-                <th style={thStyle}>Activity</th>
-                <th style={thStyle}>Updated By</th>
-                <th style={thStyle}>Time</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {activities.length === 0 ? (
-                <tr>
-                  <td colSpan="4" style={{ textAlign: "center", padding: "25px", color: "var(--text-muted)" }}>
-                    No Activity Found
-                  </td>
-                </tr>
-              ) : (
-                activities.map((item) => (
-                  <tr key={item.id}>
-                    <td style={tdStyle}>
-                      <b>{item.employeeName || "-"}</b>
-                      {item.employeeEmail && (
-                        <div style={{ fontSize: 12.5, color: "var(--text-muted)", fontWeight: 400 }}>
-                          {item.employeeEmail}
-                        </div>
-                      )}
-                    </td>
-                    <td style={tdStyle}>
-                      <span
-                        style={{
-                          background: "var(--accent-bg)",
-                          color: "#3d6fa8",
-                          padding: "8px 14px",
-                          borderRadius: "20px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {item.activity}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      {item.updatedBy || "Self"}
-                    </td>
-                    <td style={tdStyle}>
-                      {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : "-"}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
+      {/* OVERVIEW (the Recent Activity table now lives in Reports -> Activity Log, month-wise) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "25px" }}>
         {/* OVERVIEW */}
         <div
           style={{
@@ -437,6 +351,13 @@ export default function AdminPage() {
             <OverviewItem title="Timesheets Submitted" value={timesheetCount} />
             <OverviewItem title="Pending Leave Approvals" value={pendingLeaveCount} />
           </div>
+
+          <a
+            href="/admin/tools-report"
+            style={{ display: "inline-block", marginTop: 22, color: "#3d6fa8", fontWeight: 700, textDecoration: "underline" }}
+          >
+            📢 Activity log has moved to Reports →
+          </a>
         </div>
       </div>
     </div>
@@ -555,21 +476,6 @@ function normalizeDate(value) {
   if (isNaN(d.getTime())) return null;
   return d.toISOString().split("T")[0];
 }
-
-const thStyle = {
-  padding: "15px",
-  textAlign: "left",
-  background: "var(--accent-bg)",
-  color: "var(--text-color)",
-  fontWeight: 700,
-  borderBottom: "1px solid var(--accent-border)",
-};
-
-const tdStyle = {
-  padding: "15px",
-  color: "var(--text-muted)",
-  borderBottom: "1px solid var(--border-color)",
-};
 
 // "use client";
 

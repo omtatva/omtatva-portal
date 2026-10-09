@@ -2,7 +2,7 @@
 // reads from this single source instead of keeping its own copy, which is
 // how the role strings used to drift out of sync with each other.
 
-export type RoleValue = "employee" | "hr" | "head" | "admin" | "super_admin";
+export type RoleValue = "employee" | "team_lead" | "manager" | "hr" | "head" | "admin" | "super_admin";
 
 export type Role = {
   value: RoleValue;
@@ -13,6 +13,12 @@ export type Role = {
 
 export const ROLES: Role[] = [
   { value: "employee", label: "Employee", adminTier: false },
+  // Team Lead and Manager are organisation roles, NOT admin-tier: they never
+  // get Admin dashboard access or admin permissions automatically, and they
+  // cannot be granted from Settings -> Access Management (which lists
+  // admin-tier roles only).
+  { value: "team_lead", label: "Team Lead", adminTier: false },
+  { value: "manager", label: "Manager", adminTier: false },
   { value: "hr", label: "HR Admin", adminTier: true },
   { value: "head", label: "Head", adminTier: true },
   { value: "admin", label: "Admin", adminTier: true },

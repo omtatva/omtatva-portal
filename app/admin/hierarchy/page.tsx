@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AccessRestricted from "@/components/AccessRestricted";
 import PersonAvatar from "@/components/PersonAvatar";
 import PersonPicker from "@/components/PersonPicker";
-import { OrgTree, ancestorsOf, useTreeExpansion } from "@/components/OrgTree";
+import { OrgFlowChart, ancestorsOf, useTreeExpansion } from "@/components/OrgFlowChart";
 import { ChainBar } from "@/components/OrgHierarchySection";
 import { useAccess } from "@/lib/useAccess";
 import { usePermission } from "@/lib/usePermission";
@@ -509,19 +509,17 @@ export default function AdminHierarchyPage() {
               Click a person to load them into the form above.
             </p>
             {employeeIds.length === 1 && <ChainBar index={index} uid={employeeIds[0]} />}
-            <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-              <OrgTree
-                index={index}
-                rootIds={index.roots}
-                expanded={expanded}
-                onToggle={toggle}
-                selectedId={employeeIds.length === 1 ? employeeIds[0] : undefined}
-                onSelect={(uid) => selectEmployee(uid)}
-                matchIds={chartMatch?.matches}
-                visibleIds={chartMatch?.visible}
-                forceOpen={chartMatch?.open}
-              />
-            </div>
+            <OrgFlowChart
+              index={index}
+              rootIds={index.roots}
+              expanded={expanded}
+              onToggle={toggle}
+              selectedId={employeeIds.length === 1 ? employeeIds[0] : undefined}
+              onSelect={(uid) => selectEmployee(uid)}
+              matchIds={chartMatch?.matches}
+              visibleIds={chartMatch?.visible}
+              forceOpen={chartMatch?.open}
+            />
           </>
         )}
       </div>

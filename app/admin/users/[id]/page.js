@@ -11,8 +11,10 @@ useParams
 
 
 import {
+collection,
 doc,
 getDoc,
+getDocs,
 updateDoc,
 setDoc,
 serverTimestamp
@@ -24,6 +26,7 @@ db
 } from "../../../../lib/firebase";
 
 import { ROLES } from "../../../../lib/roles";
+import { departmentOptions } from "../../../../lib/departments";
 import { logActivity } from "../../../../lib/activityLog";
 import PersonPicker from "../../../../components/PersonPicker";
 import { useOrgChart } from "../../../../lib/useOrgChart";
@@ -82,6 +85,41 @@ const [shifts,setShifts]=useState([]);
 const {index:orgIndex,ready:orgReady}=useOrgChart();
 
 const [pendingManagerId,setPendingManagerId]=useState(undefined);
+
+
+// Designation choices = the designations that appear in the Employee
+// Management table (users/{uid}.designation), so this dropdown always
+// offers exactly what the table already has.
+const [designationOptions,setDesignationOptions]=useState([]);
+
+useEffect(()=>{
+
+let cancelled=false;
+
+getDocs(collection(db,"users"))
+.then((snap)=>{
+
+if(cancelled) return;
+
+const seen=new Map();
+
+snap.docs.forEach((d)=>{
+const value=String(d.data().designation || "").trim();
+if(value && !seen.has(value.toLowerCase())){
+seen.set(value.toLowerCase(),value);
+}
+});
+
+setDesignationOptions(
+[...seen.values()].sort((a,b)=>a.localeCompare(b))
+);
+
+})
+.catch((error)=>console.log("Designation list error:",error));
+
+return ()=>{cancelled=true;};
+
+},[]);
 
 
 
@@ -941,32 +979,9 @@ e.target.value
 Select
 </option>
 
-<option>
-Production
-</option>
-
-<option>
-IT
-</option>
-<option>
-HR
-</option>
-
-<option>
-Marketing
-</option>
-
-<option>
-Management
-</option>
-
-<option>
-Operations
-</option>
-
-<option>
-Creative
-</option>
+{departmentOptions([employee.department]).map((d)=>(
+<option key={d}>{d}</option>
+))}
 
 
 </select>
@@ -985,7 +1000,7 @@ Designation
 </label>
 
 
-<input
+<select
 
 disabled={!editMode}
 
@@ -995,16 +1010,53 @@ value={
 employee.designation || ""
 }
 
-onChange={(e)=>
+onChange={(e)=>{
+
+if(e.target.value==="__new__"){
+
+const typed=(window.prompt("Enter the new designation") || "").trim();
+
+if(typed){
+updateField("designation",typed);
+}
+
+return;
+
+}
 
 updateField(
 "designation",
 e.target.value
-)
+);
 
-}
+}}
 
-/>
+>
+
+<option value="">
+Select
+</option>
+
+{employee.designation &&
+!designationOptions.some(
+(d)=>d.toLowerCase()===String(employee.designation).trim().toLowerCase()
+) && (
+<option value={employee.designation}>
+{employee.designation}
+</option>
+)}
+
+{designationOptions.map((d)=>(
+<option key={d} value={d}>
+{d}
+</option>
+))}
+
+<option value="__new__">
+➕ Add new designation…
+</option>
+
+</select>
 
 
 </div>

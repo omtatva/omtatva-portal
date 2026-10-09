@@ -25,11 +25,15 @@ import {
   shouldIncludeDemo,
   verifyDemoEnvironment,
 } from "../lib/demoAttendance";
-import { isCompletedMonthDate } from "../lib/attendanceCorrection";
+import { canEditAttendance, isCompletedMonthDate } from "../lib/attendanceCorrection";
+import { ADMIN_TIER_ROLES, ROLES, isAdminTierRole, normalizeRole, roleLabel } from "../lib/roles";
 import { calculatePayroll } from "../lib/payrollCalculation.js";
 import { ApiError, verifyRequest } from "../lib/server/firebaseAdmin";
 import { GET as reportsGET, POST as reportsPOST } from "../app/api/attendance/reports/[action]/route";
 import type { PolicyRules } from "../lib/attendancePolicy";
+import { buildLineIndex, chainIds, emptyEntry, lineReady, type LineDocs } from "../lib/reportingLine";
+import { getManagerChain } from "../lib/orgHierarchy";
+import { DEPARTMENTS, departmentOptions } from "../lib/departments";
 
 let passed = 0;
 const queue: Promise<void>[] = [];
@@ -551,6 +555,147 @@ test("demo: the script uses create() (never overwrites) and checks the environme
   assert.ok(!src.includes("batch.set("));
   assert.ok(src.indexOf("verifyDemoEnvironment(") < src.indexOf("batch.create("));
   assert.ok(src.indexOf("PREVIEW ONLY") < src.indexOf("batch.create("), "preview comes before any write");
+});
+
+// =====================================================================
+// 5. MANAGER / TEAM LEAD ROLES
+// =====================================================================
+test("roles: Team Lead and Manager exist, with labels, and normalise from any spelling", () => {
+  assert.deepEqual(ROLES.map((r) => r.value), ["employee", "team_lead", "manager", "hr", "head", "admin", "super_admin"]);
+  assert.equal(roleLabel("manager"), "Manager");
+  assert.equal(roleLabel("Team Lead"), "Team Lead");
+  assert.equal(normalizeRole("TEAM LEAD"), "team_lead");
+  assert.equal(normalizeRole("Manager"), "manager");
+});
+test("roles: existing roles are unchanged and the admin-tier list did NOT grow", () => {
+  assert.deepEqual(ADMIN_TIER_ROLES, ["hr", "head", "admin", "super_admin"]);
+  for (const r of ["employee", "hr", "head", "admin", "super_admin"]) assert.equal(normalizeRole(r), r);
+  assert.equal(normalizeRole("HR"), "hr");
+  assert.equal(normalizeRole("nonsense"), "employee");
+});
+test("roles: Manager and Team Lead are NOT admin-tier and get no admin permissions automatically", () => {
+  for (const r of ["manager", "Manager", "team_lead", "Team Lead"]) {
+    assert.equal(isAdminTierRole(r), false, r);
+    assert.equal(isSuperAdminAccess(r), false, r);
+    assert.equal(canEditAttendance(r, { [normalizeRole(r)]: { attendance: "edit" } }), false, r + " even if a matrix says edit");
+    assert.equal(canEditAttendance(r, undefined), false, r);
+  }
+  // others unchanged
+  assert.equal(canEditAttendance("admin", undefined), true);
+  assert.equal(canEditAttendance("hr", undefined), false);
+  assert.equal(canEditAttendance("super_admin", undefined), true);
+});
+test("roles: the position-based default in Access Management was replaced by a lookup of 'hr'", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../app/settings/access/page.js"), "utf8");
+  assert.ok(!src.includes("ROLES[1]"));
+  assert.ok(src.includes('r.value === "hr"'));
+});
+test("roles: every role dropdown reads the shared ROLES list (so Manager / Team Lead appear everywhere)", () => {
+  for (const f of ["../app/admin/users/add/page.tsx", "../app/admin/users/[id]/page.js", "../app/admin/users/page.js"]) {
+    assert.ok(fs.readFileSync(path.join(__dirname, f), "utf8").includes("ROLES.map"), f);
+  }
+});
+test("designation dropdown: options come from the users table's designations", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../app/admin/users/[id]/page.js"), "utf8");
+  assert.ok(src.includes('getDocs(collection(db,"users"))'));
+  assert.ok(src.includes("designationOptions.map"));
+  assert.ok(src.includes("Add new designation"));
+});
+
+// =====================================================================
+// 6. EMPLOYEE HIERARCHY PRIVACY, DEPARTMENTS, ACTIVITY LOG
+// =====================================================================
+const entry = (name: string, managerId = "", designation = "Staff") => ({
+  ...emptyEntry(),
+  user: { firstName: name, lastName: "", designation, status: "Active" },
+  profile: {},
+  rel: managerId ? { managerId } : {},
+  loaded: { user: true, profile: true, rel: true },
+});
+const lineDocs: LineDocs = {
+  me: entry("Me", "m1", "Editor"),
+  m1: entry("Manager One", "m2", "Dept Manager"),
+  m2: entry("Chief", "", "CEO"),
+  // people who must NEVER appear for "me":
+  peer: entry("Peer Pat", "m1"),
+  report: entry("Report Ray", "me"),
+  stranger: entry("Stranger Sam", ""),
+};
+
+test("privacy: an employee's line is themselves + people above, in order", () => {
+  assert.deepEqual(chainIds(lineDocs, "me"), ["me", "m1", "m2"]);
+  assert.deepEqual(chainIds(lineDocs, "m2"), ["m2"]);
+});
+test("privacy: peers, subordinates and strangers are never in the index (even if their docs were present)", () => {
+  const idx = buildLineIndex(lineDocs, "me");
+  assert.deepEqual(idx.people.map((p) => p.name).sort(), ["Chief", "Manager One", "Me"]);
+  for (const hidden of ["Peer Pat", "Report Ray", "Stranger Sam"]) assert.ok(!idx.people.some((p) => p.name === hidden), hidden);
+  assert.deepEqual(getManagerChain(idx, "me").map((p) => p.name), ["Manager One", "Chief"]);
+  // a manager's line still excludes the people below them
+  const mgr = buildLineIndex(lineDocs, "m1");
+  assert.deepEqual(mgr.people.map((p) => p.name).sort(), ["Chief", "Manager One"]);
+});
+test("privacy: loops, self-manager and missing manager records are handled", () => {
+  const loop: LineDocs = { a: entry("A", "b"), b: entry("B", "a") };
+  assert.deepEqual(chainIds(loop, "a"), ["a", "b"]);
+  assert.deepEqual(chainIds({ x: entry("X", "x") }, "x"), ["x"]);
+  const gone: LineDocs = {
+    me: entry("Me", "ghost"),
+    ghost: { ...emptyEntry(), loaded: { user: true, profile: true, rel: true } },
+  };
+  const idx = buildLineIndex(gone, "me");
+  assert.deepEqual(idx.people.map((p) => p.name), ["Me"]);
+  assert.equal(idx.danglingManager.get("me"), "ghost");
+});
+test("privacy: the line is 'ready' only after every document on it has loaded", () => {
+  assert.equal(lineReady({ me: { ...entry("Me", "m1"), loaded: { user: true, profile: false, rel: true } } }, "me"), false);
+  assert.equal(lineReady({ me: entry("Me") }, "me"), true);
+  assert.equal(lineReady({ me: entry("Me", "m1") }, "me"), false, "manager docs not yet loaded");
+});
+test("privacy contract: the dashboard section has no company-wide chart, search, peers or subordinates", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../components/OrgHierarchySection.tsx"), "utf8");
+  for (const banned of ["useOrgChart", "Full Organization", "Teammates", "Direct reports", "index.children", "index.people", "CompanyView", "type=\"search\""]) {
+    assert.ok(!src.includes(banned), `must not contain: ${banned}`);
+  }
+  assert.ok(src.includes("useReportingLine"));
+  assert.ok(src.includes("OrgFlowChart"));
+});
+test("privacy contract: employee-facing code never lists whole collections for the hierarchy", () => {
+  const hook = fs.readFileSync(path.join(__dirname, "../lib/useReportingLine.ts"), "utf8");
+  assert.ok(!/collection\(/.test(hook), "useReportingLine must only read single documents");
+  assert.ok(hook.includes("doc(db"));
+  const profile = fs.readFileSync(path.join(__dirname, "../app/profile/components/EmploymentDetails.tsx"), "utf8");
+  assert.ok(profile.includes("useReportingLine") && !profile.includes("useOrgChart"));
+});
+test("the full organisation chart is admin-only (admin Hierarchy page, flow chart)", () => {
+  const admin = fs.readFileSync(path.join(__dirname, "../app/admin/hierarchy/page.tsx"), "utf8");
+  assert.ok(admin.includes("OrgFlowChart") && admin.includes("isAdminTier"));
+  assert.ok(!fs.existsSync(path.join(__dirname, "../components/OrgTree.tsx")), "old indented tree removed");
+});
+test("departments: one shared list; unknown stored values are kept, never dropped", () => {
+  for (const d of ["HR", "Production", "AI", "Finance", "IT", "Marketing", "Management", "Operations", "Creative"]) {
+    assert.ok(DEPARTMENTS.includes(d as never), d);
+  }
+  assert.deepEqual(departmentOptions().slice(0, DEPARTMENTS.length), [...DEPARTMENTS]);
+  const opts = departmentOptions(["hr", "Legal", "legal", "", undefined, "Production"]);
+  assert.equal(opts.filter((o) => o.toLowerCase() === "hr").length, 1, "case-insensitive duplicates are not added");
+  assert.equal(opts.filter((o) => o.toLowerCase() === "legal").length, 1);
+  assert.equal(opts[opts.length - 1], "Legal");
+});
+test("departments: every department dropdown uses the shared list", () => {
+  for (const f of ["../app/admin/users/page.js", "../app/admin/users/[id]/page.js", "../app/profile/components/EmploymentDetails.tsx"]) {
+    assert.ok(fs.readFileSync(path.join(__dirname, f), "utf8").includes("departmentOptions("), f);
+  }
+  assert.ok(fs.readFileSync(path.join(__dirname, "../app/admin/users/add/page.tsx"), "utf8").includes("DEPARTMENTS.map"));
+});
+test("activity log: removed from the Admin dashboard, present (month-wise) in Reports", () => {
+  const admin = fs.readFileSync(path.join(__dirname, "../app/admin/page.js"), "utf8").split("// \"use client\";")[0];
+  assert.ok(!admin.includes("Recent Activity</h2>") && !admin.includes("📢 Recent Activity"), "dashboard must not show the table");
+  assert.ok(!admin.includes("activityLogs"), "dashboard no longer queries activityLogs");
+  const reports = fs.readFileSync(path.join(__dirname, "../app/admin/tools-report/page.tsx"), "utf8");
+  assert.ok(reports.includes("<ActivityLogReport />"));
+  const comp = fs.readFileSync(path.join(__dirname, "../components/ActivityLogReport.tsx"), "utf8");
+  assert.ok(comp.includes("availableMonths(") && comp.includes("addDays(to, 1)") && !comp.includes("limit("), "month range, next-day end bound, no row limit");
 });
 
 // Reference to avoid an unused-import error in strict setups.

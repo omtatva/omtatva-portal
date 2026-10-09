@@ -11,6 +11,7 @@ deleteDoc,
 
 import { db } from "../../../lib/firebase";
 import { ROLES, isAdminTierRole, roleLabel } from "../../../lib/roles";
+import { departmentOptions } from "../../../lib/departments";
 
 export default function UsersPage() {
 const [users, setUsers] = useState([]);
@@ -406,10 +407,9 @@ onChange={(e)=>setDepartmentFilter(e.target.value)}
 style={filterStyle}
 >
 <option value="">Department</option>
-<option>HR</option>
-<option>Production</option>
-<option>AI</option>
-<option>Finance</option>
+{departmentOptions(users.map((u) => u.department)).map((d) => (
+<option key={d}>{d}</option>
+))}
 </select>
 
 <select

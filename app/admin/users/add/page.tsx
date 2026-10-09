@@ -4,6 +4,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ROLES } from "@/lib/roles";
+import { DEPARTMENTS } from "@/lib/departments";
 import type { Shift } from "@/lib/attendanceRules";
 export default function AddEmployeePage() {
 const [firstName, setFirstName] = useState("");
@@ -136,11 +137,14 @@ const saveEmployee = async () => {
     onChange={(e) => setPhone(e.target.value)}
   />
 
-  <input
-    placeholder="Department"
-    value={department}
-    onChange={(e) => setDepartment(e.target.value)}
-  />
+  <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+    <option value="">Department</option>
+    {DEPARTMENTS.map((d) => (
+      <option key={d} value={d}>
+        {d}
+      </option>
+    ))}
+  </select>
 
   <input
     placeholder="Designation"
