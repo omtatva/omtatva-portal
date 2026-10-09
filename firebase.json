@@ -12,5 +12,12 @@
       ],
       "alwaysDeployFromSource": true
     }
-  ]
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "bucket": "omtatva-portal.firebasestorage.app",
+    "rules": "storage.rules"
+  }
 }

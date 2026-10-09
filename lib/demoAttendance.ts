@@ -44,6 +44,16 @@ export function makeDemoEmployees(count: number, shiftIds: (string | null)[] = [
   }));
 }
 
+// FNV-1a: turns (seed, uid) into a 32-bit seed for that employee's stream.
+export function hashSeed(seed: number, uid: string): number {
+  let h = 0x811c9dc5 ^ seed;
+  for (let i = 0; i < uid.length; i++) {
+    h ^= uid.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
 // Small deterministic PRNG so a given seed always yields the same data.
 export function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -94,13 +104,17 @@ export function generateDemoAttendance(input: {
   // "uid|date" pairs that already have an attendance record. Those days are
   // left completely alone (never overwritten, never duplicated).
   existingKeys?: Set<string>;
+  // Approved-leave dates that already exist per employee uid. Treated as
+  // leave: no attendance is generated on them and they stay out of the
+  // eligible-day denominator.
+  existingLeaveDates?: Map<string, Set<string>>;
   // Probability that a present day is missing its punch-out (Incomplete).
   // Defaults to 5% for untargeted data and 0 when monthTargets are used, so
   // the targets are hit exactly.
   missingPunchOutRate?: number;
 }): DemoOutput {
   const { employees, rules, holidays, from, to, batchId } = input;
-  const rand = mulberry32(input.seed ?? 20260701);
+  const seed = input.seed ?? 20260701;
   const now = input.now || new Date();
   const existing = input.existingKeys || new Set<string>();
   const targeted = !!input.monthTargets;
@@ -109,12 +123,17 @@ export function generateDemoAttendance(input: {
   const seenIds = new Set<string>();
 
   for (const emp of employees) {
+    // Each employee has their OWN random stream (seed + uid). What one
+    // employee gets never depends on the other employees or on which days
+    // already have records — that is what makes a re-run reproduce the same
+    // leave blocks (and therefore create nothing new).
+    const rand = mulberry32(hashSeed(seed, emp.uid));
     const shift = resolveShift(rules, emp.shiftId);
     const dates = datesBetween(from, to);
     const randomRate = 0.72 + rand() * 0.22;
 
     // Approved-leave blocks (1-2 days), a few times over the period.
-    const leaveDates = new Set<string>();
+    const leaveDates = new Set<string>(input.existingLeaveDates?.get(emp.uid) || []);
     const leaveBlocks = 2 + Math.floor(rand() * 2);
     for (let b = 0; b < leaveBlocks; b++) {
       const start = dates[Math.floor(rand() * Math.max(dates.length - 3, 1))];
@@ -122,9 +141,10 @@ export function generateDemoAttendance(input: {
       const blockDates: string[] = [];
       for (let i = 0; i < len; i++) {
         const d = addDays(start, i);
-        if (d <= to && shift.workdays.includes(weekdayOf(d)) && !holidays.has(d)) blockDates.push(d);
+        if (d <= to && shift.workdays.includes(weekdayOf(d)) && !holidays.has(d) && !existing.has(`${emp.uid}|${d}`)) blockDates.push(d);
       }
-      if (blockDates.length) {
+      // Only add a leave document if it brings at least one NEW leave day.
+      if (blockDates.some((d) => !leaveDates.has(d))) {
         blockDates.forEach((d) => leaveDates.add(d));
         out.leaves.push({
           id: `${DEMO_ID_PREFIX}leave_${emp.uid}_${blockDates[0]}`,
@@ -328,4 +348,19 @@ export function shouldIncludeDemo(
 ): boolean {
   if (projectId === PRODUCTION_PROJECT_ID) return false;
   return !!marker && marker.isDemoEnvironment === true && marker.projectId === projectId;
+}
+
+export type Environment = "production" | "demo" | "unverified";
+
+// What kind of Firebase project is this server connected to?
+//  - production: the real portal — synthetic data is NEVER allowed
+//  - demo: a non-production project carrying its own demo marker
+//  - unverified: a non-production project without the marker — treated as
+//    "cannot verify", so nothing is generated
+export function classifyEnvironment(
+  projectId: string,
+  marker: { isDemoEnvironment?: boolean; projectId?: string } | null | undefined
+): Environment {
+  if (projectId === PRODUCTION_PROJECT_ID) return "production";
+  return shouldIncludeDemo(projectId, marker) ? "demo" : "unverified";
 }

@@ -12,6 +12,9 @@ deleteDoc,
 import { db } from "../../../lib/firebase";
 import { ROLES, isAdminTierRole, roleLabel } from "../../../lib/roles";
 import { departmentOptions } from "../../../lib/departments";
+import { usePermission } from "../../../lib/usePermission";
+import { postJson } from "../../../lib/reportsClient";
+import { confirmText } from "../../../lib/employeeRemoval";
 
 export default function UsersPage() {
 const [users, setUsers] = useState([]);
@@ -22,6 +25,9 @@ const [statusFilter, setStatusFilter] = useState("");
 const [loading, setLoading] = useState(true);
 const [editingId, setEditingId] = useState("");
 const [employeeCode, setEmployeeCode] = useState("");
+const { canEdit } = usePermission("users");
+const [removingId, setRemovingId] = useState("");
+const [notice, setNotice] = useState(null);
 
 useEffect(() => {
 loadUsers();
@@ -117,6 +123,73 @@ try {
 
 };
 
+// Remove a REJECTED employee: the server disables their login, deletes their
+// profile and access-list entry, and keeps a removal record. Attendance,
+// leave, payroll history and files are kept.
+const nameOf = (u) =>
+  `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email || "this person";
+
+const removeOne = async (user, { ask = true, reason = "" } = {}) => {
+  if (ask && !window.confirm(confirmText(nameOf(user)))) return null;
+
+  let why = reason;
+  if (ask) {
+    const typed = window.prompt("Reason (optional, kept in the removal record):", "Rejected by HR");
+    if (typed === null) return null;
+    why = typed;
+  }
+
+  setRemovingId(user.id);
+  try {
+    const result = await postJson("/api/admin/employees/remove", { uid: user.id, reason: why });
+    setUsers((list) => list.filter((u) => u.id !== user.id));
+    return { ok: true, result };
+  } catch (error) {
+    console.error("Remove employee error:", error);
+    return { ok: false, message: error?.message || "Could not remove this employee." };
+  } finally {
+    setRemovingId("");
+  }
+};
+
+const removeRejected = async (user) => {
+  const out = await removeOne(user);
+  if (!out) return;
+  setNotice(
+    out.ok
+      ? {
+          type: "ok",
+          text: `${nameOf(user)} was removed. ${out.result.loginDisabled ? "Their login is disabled" : "They had no login account"}${out.result.accessEntryRemoved ? " and their access-list entry was deleted" : ""}.`,
+        }
+      : { type: "err", text: `${nameOf(user)}: ${out.message}` }
+  );
+};
+
+const removeAllRejected = async () => {
+  const targets = users.filter((u) => (u.hrApprovalStatus || "") === "Rejected");
+  if (targets.length === 0) return;
+
+  const ok = window.confirm(
+    `Remove ALL ${targets.length} rejected employee${targets.length === 1 ? "" : "s"} and revoke their access?\n\n` +
+      "Each one: login disabled, profile and access-list entry deleted, a removal record kept.\n" +
+      "Their attendance, leave, payroll history and files are kept."
+  );
+  if (!ok) return;
+
+  let done = 0;
+  const failures = [];
+  for (const u of targets) {
+    const out = await removeOne(u, { ask: false, reason: "Bulk removal of rejected employees" });
+    if (out && out.ok) done++;
+    else failures.push(`${nameOf(u)}: ${out ? out.message : "cancelled"}`);
+  }
+
+  setNotice({
+    type: failures.length ? "err" : "ok",
+    text: `Removed ${done} of ${targets.length} rejected employees.${failures.length ? " Not removed — " + failures.slice(0, 4).join("; ") : ""}`,
+  });
+};
+
 if (loading) {
 return (
 <div style={{ padding: "30px" }}>
@@ -142,6 +215,7 @@ const inactiveEmployees = users.filter(
 const adminCount = users.filter(
   (user) => isAdminTierRole(user.role)
 ).length;
+const rejectedCount = users.filter((u) => (u.hrApprovalStatus || "") === "Rejected").length;
 const filteredUsers = users.filter((user) => {
   const fullName =
     `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase();
@@ -458,6 +532,62 @@ Reset
 
 </div>
 
+  {notice && (
+    <div
+      role={notice.type === "err" ? "alert" : "status"}
+      style={{
+        marginBottom: "16px",
+        padding: "14px 18px",
+        borderRadius: 12,
+        fontWeight: 600,
+        fontSize: 15,
+        background: notice.type === "ok" ? "#dcfce7" : "#fee2e2",
+        color: notice.type === "ok" ? "#166534" : "#b91c1c",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <span>{notice.text}</span>
+      <button onClick={() => setNotice(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 800 }}>✕</button>
+    </div>
+  )}
+
+  {rejectedCount > 0 && (
+    <div
+      style={{
+        marginBottom: "16px",
+        padding: "14px 18px",
+        borderRadius: 12,
+        background: "#fff7ed",
+        border: "1px solid #fed7aa",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        fontSize: 15,
+      }}
+    >
+      <span>
+        <b>{rejectedCount}</b> rejected employee{rejectedCount === 1 ? "" : "s"}. Removing one disables their login and deletes their access.
+      </span>
+      <span style={{ display: "flex", gap: 10 }}>
+        <button onClick={() => setStatusFilter("Rejected")} style={{ ...orangeBtn, padding: "10px 14px" }}>
+          Show rejected
+        </button>
+        <button
+          onClick={removeAllRejected}
+          disabled={!canEdit || !!removingId}
+          title={canEdit ? undefined : "View only — your role cannot edit Employee Management"}
+          style={{ ...redBtn, padding: "10px 14px", opacity: !canEdit || removingId ? 0.5 : 1 }}
+        >
+          🗑 Remove all rejected ({rejectedCount})
+        </button>
+      </span>
+    </div>
+  )}
+
   <div
     style={{
       background: "#fff",
@@ -599,6 +729,17 @@ minWidth:"1600px",
                 >
                   👁 View
                 </button>
+
+                {(user.hrApprovalStatus || "") === "Rejected" && (
+                  <button
+                    style={{ ...redBtn, opacity: !canEdit || removingId === user.id ? 0.5 : 1 }}
+                    disabled={!canEdit || !!removingId}
+                    title={canEdit ? "Disable login, delete profile and access" : "View only"}
+                    onClick={() => removeRejected(user)}
+                  >
+                    {removingId === user.id ? "Removing…" : "🗑 Remove & revoke access"}
+                  </button>
+                )}
 
               </div>
             </td>

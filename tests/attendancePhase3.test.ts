@@ -31,9 +31,10 @@ import { calculatePayroll } from "../lib/payrollCalculation.js";
 import { ApiError, verifyRequest } from "../lib/server/firebaseAdmin";
 import { GET as reportsGET, POST as reportsPOST } from "../app/api/attendance/reports/[action]/route";
 import type { PolicyRules } from "../lib/attendancePolicy";
-import { buildLineIndex, chainIds, emptyEntry, lineReady, type LineDocs } from "../lib/reportingLine";
+import { buildLineIndex, chainIds, directReportIds, emptyEntry, lineReady, type LineDocs } from "../lib/reportingLine";
 import { getManagerChain } from "../lib/orgHierarchy";
 import { DEPARTMENTS, departmentOptions } from "../lib/departments";
+import { checkRemoval, checkRoleChange } from "../lib/accessGuards";
 
 let passed = 0;
 const queue: Promise<void>[] = [];
@@ -626,7 +627,7 @@ test("privacy: an employee's line is themselves + people above, in order", () =>
   assert.deepEqual(chainIds(lineDocs, "me"), ["me", "m1", "m2"]);
   assert.deepEqual(chainIds(lineDocs, "m2"), ["m2"]);
 });
-test("privacy: peers, subordinates and strangers are never in the index (even if their docs were present)", () => {
+test("privacy: with no direct-report ids, subordinates/peers/strangers are never in the index (even if their docs were present)", () => {
   const idx = buildLineIndex(lineDocs, "me");
   assert.deepEqual(idx.people.map((p) => p.name).sort(), ["Chief", "Manager One", "Me"]);
   for (const hidden of ["Peer Pat", "Report Ray", "Stranger Sam"]) assert.ok(!idx.people.some((p) => p.name === hidden), hidden);
@@ -634,6 +635,21 @@ test("privacy: peers, subordinates and strangers are never in the index (even if
   // a manager's line still excludes the people below them
   const mgr = buildLineIndex(lineDocs, "m1");
   assert.deepEqual(mgr.people.map((p) => p.name).sort(), ["Chief", "Manager One"]);
+});
+test("direct reports: the chart shows me + people above + MY direct reports only", () => {
+  const idx = buildLineIndex(lineDocs, "me", ["report"]);
+  assert.deepEqual(idx.people.map((p) => p.name).sort(), ["Chief", "Manager One", "Me", "Report Ray"]);
+  assert.ok(!idx.people.some((p) => p.name === "Peer Pat" || p.name === "Stranger Sam"));
+  assert.deepEqual((idx.children.get("me") || []).map((id) => idx.byId.get(id)!.name), ["Report Ray"]);
+  assert.equal(idx.byId.get("report")!.managerId, "me", "a direct report's manager is me");
+});
+test("direct reports: never include me or anyone above me, and are de-duplicated", () => {
+  assert.deepEqual(directReportIds(lineDocs, "me", ["me", "m1", "m2", "report", "report"]), ["report"]);
+  // a report with no loaded record yet is simply not shown, and readiness waits for it
+  const waiting: LineDocs = { ...lineDocs, late: emptyEntry() };
+  assert.equal(lineReady(waiting, "me", ["report", "late"]), false);
+  assert.equal(buildLineIndex(waiting, "me", ["report", "late"]).people.some((p) => p.uid === "late"), false);
+  assert.equal(lineReady(lineDocs, "me", ["report"]), true);
 });
 test("privacy: loops, self-manager and missing manager records are handled", () => {
   const loop: LineDocs = { a: entry("A", "b"), b: entry("B", "a") };
@@ -654,7 +670,7 @@ test("privacy: the line is 'ready' only after every document on it has loaded", 
 });
 test("privacy contract: the dashboard section has no company-wide chart, search, peers or subordinates", () => {
   const src = fs.readFileSync(path.join(__dirname, "../components/OrgHierarchySection.tsx"), "utf8");
-  for (const banned of ["useOrgChart", "Full Organization", "Teammates", "Direct reports", "index.children", "index.people", "CompanyView", "type=\"search\""]) {
+  for (const banned of ["useOrgChart", "Full Organization", "Teammates", "index.people", "CompanyView", "type=\"search\""]) {
     assert.ok(!src.includes(banned), `must not contain: ${banned}`);
   }
   assert.ok(src.includes("useReportingLine"));
@@ -662,7 +678,8 @@ test("privacy contract: the dashboard section has no company-wide chart, search,
 });
 test("privacy contract: employee-facing code never lists whole collections for the hierarchy", () => {
   const hook = fs.readFileSync(path.join(__dirname, "../lib/useReportingLine.ts"), "utf8");
-  assert.ok(!/collection\(/.test(hook), "useReportingLine must only read single documents");
+  assert.equal((hook.match(/collection\(/g) || []).length, 1, "the only collection query is the direct-reports one");
+  assert.ok(hook.includes('where("managerId", "==", myUid)'), "constrained to MY direct reports");
   assert.ok(hook.includes("doc(db"));
   const profile = fs.readFileSync(path.join(__dirname, "../app/profile/components/EmploymentDetails.tsx"), "utf8");
   assert.ok(profile.includes("useReportingLine") && !profile.includes("useOrgChart"));
@@ -697,6 +714,161 @@ test("activity log: removed from the Admin dashboard, present (month-wise) in Re
   const comp = fs.readFileSync(path.join(__dirname, "../components/ActivityLogReport.tsx"), "utf8");
   assert.ok(comp.includes("availableMonths(") && comp.includes("addDays(to, 1)") && !comp.includes("limit("), "month range, next-day end bound, no row limit");
 });
+
+// =====================================================================
+// 7. FIRESTORE RULES FILE (static checks — syntax is validated by Firebase on publish)
+// =====================================================================
+const rulesSrc = fs.readFileSync(path.join(__dirname, "../firestore.rules"), "utf8");
+
+test("rules: no open 'if true' access remains and there is no catch-all that would override the restrictions", () => {
+  assert.ok(!/if\s+true\b/.test(rulesSrc.replace(/\/\/.*$/gm, "")), "no `if true`");
+  assert.ok(!rulesSrc.includes("{document=**}"), "no wildcard match (rules are OR'd, a wildcard would defeat the rest)");
+});
+test("rules: firebase.json points at the rules files, and the app deploy config is untouched", () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "../firebase.json"), "utf8"));
+  assert.deepEqual(cfg.firestore, { rules: "firestore.rules" });
+  assert.deepEqual(cfg.storage, { bucket: "omtatva-portal.firebasestorage.app", rules: "storage.rules" });
+  assert.equal(cfg.apphosting.length, 1);
+  assert.equal(cfg.apphosting[0].backendId, "omtatva-backend");
+  assert.equal(cfg.apphosting[0].rootDir, ".");
+  assert.ok(fs.existsSync(path.join(__dirname, "../firestore.rules")) && fs.existsSync(path.join(__dirname, "../storage.rules")));
+});
+test("rules: package scripts only ever deploy the rules (never the app) and have a dry-run check", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf8"));
+  assert.equal(pkg.scripts["rules:deploy"], "firebase deploy --only firestore:rules,storage");
+  assert.equal(pkg.scripts["rules:check"], "firebase deploy --only firestore:rules,storage --dry-run");
+});
+test("rules: every collection the app uses has a rule (unlisted collections are denied)", () => {
+  for (const c of ["users", "employeeProfiles", "employees", "adminAccess", "settings", "attendance", "reportingStructure", "activityLogs",
+    "attendanceCorrections", "attendanceBackups", "payroll", "salaryStructure", "assets", "holidays", "announcements", "toolUsage",
+    "leaveRequests", "wfhRequests", "leaves", "timesheets", "documents", "commonDocuments", "employeeDocuments", "birthdayWishes"]) {
+    assert.ok(rulesSrc.includes(`match /${c}/`), c);
+  }
+});
+test("rules: admin status requires a verified email, comes from adminAccess, and sensitive data is locked", () => {
+  assert.ok(rulesSrc.includes("email_verified == true"));
+  assert.ok(/match \/payroll\/\{id\}\s*\{ allow read, write: if isAdminTier\(\)/.test(rulesSrc));
+  assert.ok(/match \/attendanceBackups\/\{id\}\s*\{ allow read, write: if false/.test(rulesSrc));
+  assert.ok(/match \/attendanceCorrections\/\{id\}\s*\{ allow read, write: if false/.test(rulesSrc));
+  assert.ok(rulesSrc.includes("allow update, delete: if isSuperAdmin();"), "only a Super Admin edits access");
+});
+test("rules: browsers cannot write punch data; only the placeholder create and correction-request update remain", () => {
+  const att = rulesSrc.slice(rulesSrc.indexOf("match /attendance/{recordId}"), rulesSrc.indexOf("match /attendanceCorrections"));
+  assert.ok(att.includes("hasOnly(['correctionRequest'])"));
+  assert.ok(att.includes("Auto-marked"));
+  assert.ok(att.includes("request.resource.data.PunchIn == null"));
+});
+test("rules: bootstrap admins match lib/adminAccess.ts exactly", () => {
+  const ts = fs.readFileSync(path.join(__dirname, "../lib/adminAccess.ts"), "utf8");
+  const block = ts.slice(ts.indexOf("BOOTSTRAP_ADMINS"), ts.indexOf("};", ts.indexOf("BOOTSTRAP_ADMINS")));
+  const pairs = [...block.matchAll(/"([^"]+@[^"]+)":\s*"([a-z_]+)"/g)].map((m) => [m[1], m[2]]);
+  assert.ok(pairs.length >= 4);
+  for (const [email, role] of pairs) {
+    assert.ok(new RegExp(`email == '${email.replace(/\./g, "\\.")}' \\? '${role}'`).test(rulesSrc), `${email} -> ${role}`);
+  }
+});
+
+test("rules: outsiders can do nothing — data rules require a verified company account (or adminAccess), not just any login", () => {
+  assert.ok(rulesSrc.includes("function isCompanyUser()"));
+  assert.ok(rulesSrc.includes("email_verified == true"));
+  assert.ok(rulesSrc.includes("@omtatvadigitals[.]com"));
+  assert.ok(rulesSrc.includes("function isMember()"));
+  // outside the helper functions and the adminAccess own-document lookup, no rule may rely on a bare login
+  const body = rulesSrc.slice(rulesSrc.indexOf("// Access control"));
+  const adminBlock = body.slice(body.indexOf("match /adminAccess/"), body.indexOf("// Settings: public pages"));
+  const rest = body.replace(adminBlock, "");
+  assert.ok(!rest.includes("signedIn()"), "data rules must use isMember(), not signedIn()");
+  // the only public reads are the three display settings
+  const publicReads = [...rulesSrc.matchAll(/allow read: if ([^;]+);/g)].map((m) => m[1]).filter((c) => !c.includes("isMember()") && !c.includes("isAdminTier()") && !c.includes("false"));
+  assert.deepEqual(publicReads.length, 0);
+  assert.ok(rulesSrc.includes("docId in ['appearance', 'branding', 'media']"));
+});
+
+// =====================================================================
+// 8. ACCESS MANAGEMENT (Settings)
+// =====================================================================
+const accessSrc = fs.readFileSync(path.join(__dirname, "../app/settings/access/page.js"), "utf8");
+
+test("access management: the role dropdowns offer EVERY role (incl. Employee, Team Lead, Manager), grouped", () => {
+  assert.equal((accessSrc.match(/<RoleSelect/g) || []).length, 2, "grant bar + each row use the shared dropdown");
+  assert.ok(!/ROLES\.filter\(\(r\) => r\.adminTier\)\.map\(\(r\) => \(\s*<option/.test(accessSrc.split("function RoleSelect")[0]), "no admin-only option list left in the page body");
+  const sel = accessSrc.slice(accessSrc.indexOf("function RoleSelect"), accessSrc.indexOf("function Section"));
+  assert.ok(sel.includes("!r.adminTier") && sel.includes("r.adminTier"), "both groups present");
+  assert.ok(sel.includes("Organisation roles") && sel.includes("Admin roles"));
+  assert.deepEqual(ROLES.map((r) => r.label), ["Employee", "Team Lead", "Manager", "HR Admin", "Head", "Admin", "Super Admin"]);
+});
+test("access management: assigning Manager / Team Lead / Employee never grants admin access", () => {
+  for (const r of ["employee", "team_lead", "manager"]) {
+    assert.equal(isAdminTierRole(r), false);
+    assert.equal(isSuperAdminAccess(r), false);
+  }
+});
+test("access management: the last Super Admin can't be demoted or removed (everyone else can)", () => {
+  const entries = [
+    { email: "root@x.com", role: "super_admin" },
+    { email: "hr@x.com", role: "hr" },
+    { email: "mgr@x.com", role: "manager" },
+  ];
+  assert.match(checkRoleChange(entries, "root@x.com", "admin")!, /At least one Super Admin/);
+  assert.match(checkRoleChange(entries, "root@x.com", "manager")!, /At least one Super Admin/);
+  assert.match(checkRemoval(entries, "root@x.com")!, /last Super Admin/);
+  assert.equal(checkRoleChange(entries, "root@x.com", "super_admin"), null);
+  assert.equal(checkRoleChange(entries, "hr@x.com", "manager"), null);
+  assert.equal(checkRoleChange(entries, "mgr@x.com", "admin"), null);
+  assert.equal(checkRemoval(entries, "mgr@x.com"), null);
+  const two = [...entries, { email: "root2@x.com", role: "Super Admin" }];
+  assert.equal(checkRoleChange(two, "root@x.com", "admin"), null, "allowed when another Super Admin exists");
+  assert.equal(checkRemoval(two, "root@x.com"), null);
+});
+test("settings: Backup lists whole collections, so the rules give Super Admin 'list' on settings and adminAccess", () => {
+  const backup = fs.readFileSync(path.join(__dirname, "../app/settings/backup/page.js"), "utf8");
+  assert.ok(backup.includes('getDocs(collection(db, "settings"))') && backup.includes('getDocs(collection(db, "adminAccess"))'));
+  const settingsRule = rulesSrc.slice(rulesSrc.indexOf("match /settings/{docId}"), rulesSrc.indexOf("match /users/{uid}"));
+  assert.ok(settingsRule.includes("allow list: if isSuperAdmin();"));
+  assert.ok(settingsRule.includes("allow get:"), "single-document reads are separate from listing");
+  assert.ok(rulesSrc.slice(rulesSrc.indexOf("match /adminAccess/")).includes("allow list: if isSuperAdmin();"));
+});
+
+// =====================================================================
+// 9. STORAGE RULES FILE (static checks)
+// =====================================================================
+const storageSrc = fs.readFileSync(path.join(__dirname, "../storage.rules"), "utf8");
+const storageCode = storageSrc.replace(/\/\/.*$/gm, "");
+
+test("storage rules: only branding logos are public; no catch-all, nothing else is 'if true'", () => {
+  const trues = storageCode.split("\n").filter((l) => /if\s+true\b/.test(l));
+  assert.equal(trues.length, 1, "exactly one public rule");
+  const brandingBlock = storageCode.slice(storageCode.indexOf("match /settings/branding/"));
+  assert.ok(brandingBlock.includes("allow read: if true;"));
+  assert.ok(!storageCode.includes("{allPaths=**}"), "no wildcard that would re-open the bucket");
+});
+test("storage rules: every path the app uploads to has a rule", () => {
+  const sources = [
+    ["../app/profile/components/PersonalInfo.tsx", "employees/${user.uid}/profile/", "match /employees/{uid}/profile/"],
+    ["../app/profile/components/DocumentUpload.tsx", "employees/${user.uid}/documents/", "match /employees/{uid}/documents/"],
+    ["../app/admin/documents/[id]/page.js", "documents/${id}/", "match /documents/{uid}/"],
+    ["../app/admin/documents/page.tsx", "commonDocuments/", "match /commonDocuments/"],
+    ["../app/settings/branding/page.tsx", "settings/branding/", "match /settings/branding/"],
+  ];
+  for (const [file, pathUsed, ruleStart] of sources) {
+    assert.ok(fs.readFileSync(path.join(__dirname, file), "utf8").includes(pathUsed), `${file} uses ${pathUsed}`);
+    assert.ok(storageCode.includes(ruleStart), `rule for ${pathUsed}`);
+  }
+});
+test("storage rules: admin status is checked against adminAccess with a verified email; uploads are size-limited", () => {
+  assert.ok(storageCode.includes("firestore.get(accessPath())"));
+  assert.ok(storageCode.includes("email_verified == true"));
+  assert.ok(storageCode.includes("@omtatvadigitals[.]com"));
+  assert.ok((storageCode.match(/smallerThanMb\(/g) || []).length >= 5);
+  assert.ok(storageCode.includes("function notRunnable()"));
+});
+test("storage rules: employees can only touch their own folder; HR files and company files are admin-written", () => {
+  assert.ok(/match \/employees\/\{uid\}\/profile[^]*?allow read: if isOwner\(uid\) \|\| isAdminTier\(\)/.test(storageCode));
+  assert.ok(/match \/documents\/\{uid\}[^]*?allow create, update: if isAdminTier\(\)/.test(storageCode));
+  assert.ok(/match \/commonDocuments[^]*?allow create, update: if isAdminTier\(\)/.test(storageCode));
+  assert.ok(/match \/settings\/branding[^]*?allow create, update: if isSuperAdmin\(\)/.test(storageCode));
+});
+
 
 // Reference to avoid an unused-import error in strict setups.
 void NOW;

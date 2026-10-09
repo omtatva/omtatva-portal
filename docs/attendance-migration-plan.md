@@ -160,3 +160,34 @@ DEMO_FIREBASE_PROJECT_ID=<test-project> GOOGLE_APPLICATION_CREDENTIALS=<key.json
 … same command with --apply                                                                                # write
 ```
 The preview prints record counts and each employee's expected Aug/Sep percentage first.
+
+## 10. Historical Attendance panel (main Attendance dashboard) — Jul · Aug · Sep 2026
+
+Super Admin only. Admin → Attendance → "Historical Attendance" panel.
+
+- **Always (any project):** one row per employee per month — existing records, Present, Absent, Leave,
+  Weekly offs / holidays, Eligible working days, Attendance %, and the list of **missing dates**
+  (shown separately, never counted as present). Eligible days exclude Sundays/configured weekly offs
+  (per shift), company holidays and approved leave, in company time.
+- **Production (`omtatva-portal`) and any unverified project:** read-only. The "Initialize Historical
+  Attendance" button only explains why nothing can be generated and links to the audited correction
+  workflow (Attendance Reports → correct: evidence, reason, verified backup, audit trail). The server
+  refuses the request regardless of the UI.
+- **Verified demo/test project only** (non-production id **and** its own `settings/demoEnvironment`
+  marker): the panel previews every employee x month with the proposed percentage and number of
+  records, then — after a typed confirmation `INITIALIZE <project id>` and a verified backup under 24 h
+  covering the range — creates the missing days. Aug ≈ 80 %, Sep ≈ 70 %, July varied, all < 95 %.
+  Records are flagged `isDemo: true`, source `DEMO-GENERATED`, and are ignored by payroll.
+- **Idempotent:** documents use fixed ids and `create()`; existing days are skipped, never overwritten;
+  a re-run creates 0. Per-month result: created / skipped / corrected (corrected is always 0 here —
+  corrections only happen through the audited workflow). Every run is stored in
+  `attendanceInitializations` and the activity log.
+- Rules: `attendanceInitializations` is server-only (already in `firestore.rules`).
+
+### Running it safely
+1. Create a separate Firebase TEST project; put its web config in `.env.local` (see `.env.local.example`)
+   and a service-account key in `FIREBASE_SERVICE_ACCOUNT_JSON`.
+2. Mark it once: `DEMO_FIREBASE_PROJECT_ID=<test> npx tsx scripts/generate-demo-attendance.ts --i-understand-this-is-not-production --init-test-project`
+3. `npm run dev`, sign in as Super Admin of the TEST project → Admin → Attendance → panel.
+4. Check the banner says **DEMO / TEST project** and shows the test project id.
+5. Attendance Reports → Backup & rollback: create + verify a backup. Then Initialize, type the phrase, confirm.

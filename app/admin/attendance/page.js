@@ -31,6 +31,7 @@ db
 import { logActivity } from "../../../lib/activityLog";
 import { computeDisplayStatus } from "../../../lib/attendanceRules";
 import { usePermission } from "../../../lib/usePermission";
+import HistoricalAttendancePanel from "../../../components/HistoricalAttendancePanel";
 
 
 
@@ -639,6 +640,14 @@ font-semibold
 
 
 </section>
+
+
+{/* Super Admin only (renders nothing for anyone else): historical
+    attendance for Jul-Sep 2026 — real records, missing dates, and (in a
+    verified demo/test project only) guarded synthetic initialisation. */}
+<HistoricalAttendancePanel />
+
+
 
 
 

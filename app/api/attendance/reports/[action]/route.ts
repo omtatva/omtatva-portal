@@ -1,4 +1,6 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
+import { initializeHistoricalDemo, previewHistorical } from "@/lib/server/historicalServer";
+import { applyBulkCorrections } from "@/lib/server/bulkCorrectionServer";
 import {
   buildExport,
   createBackup,
@@ -30,6 +32,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ action: 
 
       case "corrections":
         return Response.json({ corrections: await listCorrections() }, { headers: NO_STORE });
+
+      // Read-only preview of historical attendance (and, in a verified demo
+      // project only, of what would be generated).
+      case "historical-preview":
+        return Response.json(await previewHistorical(), { headers: NO_STORE });
 
       case "backups":
         return Response.json({ backups: await listBackups() }, { headers: NO_STORE });
@@ -78,6 +85,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
           headers: { "Content-Type": "application/json", ...NO_STORE },
         });
       }
+      // Demo/test projects only — the server refuses production.
+      case "historical-initialize":
+        return Response.json(await initializeHistoricalDemo(admin, body), { headers: NO_STORE });
+      // Many records at once — each still corrected and audited individually.
+      case "bulk-correct":
+        return Response.json(await applyBulkCorrections(admin, body as never), { headers: NO_STORE });
       case "backup-verify":
         return Response.json(await verifyBackup(admin, body.backupId, body.sha256), { headers: NO_STORE });
       default:

@@ -38,7 +38,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementsRaw, setAnnouncements] = useState<Announcement[]>([]);
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
 
   const pathname = usePathname();
@@ -52,7 +52,12 @@ export default function Navbar() {
     return () => unsubscribe();
   }, []);
 
+  // Announcements are internal: only subscribe once someone is signed in
+  // (the Firestore rules require it), and show nothing to visitors.
+  const signedInUid = user ? user.uid : null;
+
   useEffect(() => {
+    if (!signedInUid) return;
     const unsubscribe = onSnapshot(
       query(collection(db, "announcements"), orderBy("createdAt", "desc")),
       (snapshot) => {
@@ -68,7 +73,9 @@ export default function Navbar() {
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [signedInUid]);
+
+  const announcements = signedInUid ? announcementsRaw : [];
 
   // Live from Firestore, same pattern as DashboardNavbar.tsx — so a
   // logo/company name change from Settings -> Branding shows up here on

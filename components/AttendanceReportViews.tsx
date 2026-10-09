@@ -396,6 +396,8 @@ export function ReportStyles() {
       .ar-month { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-color); }
       .ar-month[data-active="true"] { border-color: ${BRAND}; box-shadow: 0 0 0 2px rgba(61,111,168,.25); }
       .ar-month-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: none; padding: 0; cursor: pointer; color: var(--text-color); text-align: left; font-size: 15px; }
+      .ar-bulkbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; margin: 10px 0; border-radius: 14px; background: var(--hover-bg); border: 1px solid ${BRAND}; }
+      .ar-bulkbar select { height: 32px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); padding: 0 8px; }
       .ar-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 2000; }
       .ar-modal { width: 100%; max-width: 620px; max-height: 92vh; overflow-y: auto; background: var(--card-bg); color: var(--text-color); border-radius: 20px; padding: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
       .ar-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }

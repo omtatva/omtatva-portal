@@ -38,6 +38,10 @@ export function adminDb() {
   return getFirestore(adminApp());
 }
 
+export function adminAuth() {
+  return getAuth(adminApp());
+}
+
 export type VerifiedUser = { uid: string; email: string; name: string };
 
 // Verifies the Firebase ID token sent as "Authorization: Bearer <token>".
@@ -48,7 +52,9 @@ export async function verifyRequest(req: Request): Promise<VerifiedUser> {
   if (!token) throw new ApiError(401, "unauthenticated", "Please sign in again.");
 
   try {
-    const decoded = await getAuth(adminApp()).verifyIdToken(token);
+    // checkRevoked: a removed/disabled account is refused immediately, not
+    // after its ID token expires.
+    const decoded = await getAuth(adminApp()).verifyIdToken(token, true);
     return { uid: decoded.uid, email: decoded.email || "", name: (decoded.name as string) || "" };
   } catch (error) {
     console.error("ID token verification failed:", (error as Error).message);

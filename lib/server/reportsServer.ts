@@ -279,6 +279,10 @@ export async function verifyBackup(admin: SuperAdmin, backupId: unknown, sha256:
 // A correction to a record in an already-completed month needs a verified,
 // fresh backup that covers that date.
 export async function assertVerifiedBackupCovers(date: string, now: Date = new Date()) {
+  return assertVerifiedBackupCoversRange(date, date, now);
+}
+
+export async function assertVerifiedBackupCoversRange(from: string, to: string, now: Date = new Date()) {
   const list = await listBackups();
   const gate = bulkChangeGate(
     list.map(
@@ -291,7 +295,7 @@ export async function assertVerifiedBackupCovers(date: string, now: Date = new D
         sha256: b.sha256,
       })
     ),
-    { from: date, to: date },
+    { from, to },
     now
   );
   if (!gate.allowed) {

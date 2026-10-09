@@ -4,6 +4,7 @@ import "./globals.css";
 import "react-phone-number-input/style.css";
 import { Toaster } from "react-hot-toast";
 import ThemeSync from "@/components/ThemeSync";
+import IdleLogout from "@/components/IdleLogout";
 export const metadata: Metadata = {
   title: "OMTATVA DIGITALS | AI Production & HR Platform",
   description:
@@ -34,6 +35,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <ThemeSync />
+        {/* Signs people out after 1 hour of inactivity (see lib/idleSession.ts) */}
+        <IdleLogout />
         <Navbar />
         <main style={{ width: "100%", padding: 0, margin: 0 }}>
           {children}

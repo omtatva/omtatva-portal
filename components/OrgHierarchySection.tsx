@@ -11,10 +11,11 @@ import { OrgFlowChart } from "./OrgFlowChart";
 const BRAND = "#3d6fa8";
 
 // Employee/manager dashboard section. By design it shows ONLY the signed-in
-// person and the management ABOVE them, as a top-down flow chart. No
-// teammates, no subordinates and no company-wide chart — and the data layer
-// (useReportingLine) never even loads those people into this browser. The
-// full organisation chart lives in Admin -> Organization Hierarchy.
+// person, the management ABOVE them and the people who report DIRECTLY to
+// them, as a top-down flow chart. No teammates, no other teams and no
+// company-wide chart — and the data layer (useReportingLine) never even
+// loads those people into this browser. The full organisation chart lives
+// in Admin -> Organization Hierarchy.
 export default function OrgHierarchySection() {
   const [uid, setUid] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -27,7 +28,7 @@ export default function OrgHierarchySection() {
     return () => unsub();
   }, []);
 
-  const { index, ready } = useReportingLine(uid);
+  const { index, ready } = useReportingLine(uid, true);
 
   return <OrgHierarchyPanel index={index} currentUid={uid || ""} loading={!authChecked || !ready} />;
 }
@@ -78,13 +79,14 @@ function MyLine({ index, meUid }: { index: OrgIndex; meUid: string }) {
   const selfLoop = !!me.managerId && me.managerId === meUid;
 
   const rootId = chain.length ? chain[chain.length - 1].uid : meUid;
-  const visibleIds = useMemo(() => new Set<string>([meUid, ...chain.map((p) => p.uid)]), [meUid, chain]);
+  const reports = useMemo(() => (index.children.get(meUid) || []).filter((id) => index.byId.has(id)), [index, meUid]);
+  const visibleIds = useMemo(() => new Set<string>([meUid, ...chain.map((p) => p.uid), ...reports]), [meUid, chain, reports]);
   const forceOpen = visibleIds;
 
   return (
     <>
       <style>{`
-        .org-summary { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 18px; }
+        .org-summary { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
         @media (max-width: 700px) { .org-summary { grid-template-columns: 1fr; } }
       `}</style>
 
@@ -106,6 +108,9 @@ function MyLine({ index, meUid }: { index: OrgIndex; meUid: string }) {
             </span>
           )}
         </SummaryTile>
+        <SummaryTile label="Direct reports">
+          <strong style={{ fontSize: 22 }}>{reports.length}</strong>
+        </SummaryTile>
         <SummaryTile label="Your level">
           <strong style={{ fontSize: 22 }}>L{chain.length + 1}</strong>
           <span style={{ color: "var(--text-muted)", fontSize: 12.5 }}> from the top</span>
@@ -119,7 +124,7 @@ function MyLine({ index, meUid }: { index: OrgIndex; meUid: string }) {
             : "Your assigned reporting manager’s record no longer exists. Please ask HR to assign a new manager."}
         </Notice>
       )}
-      {!manager && !danglingId && !selfLoop && (
+      {!manager && !danglingId && !selfLoop && reports.length === 0 && (
         <Notice tone="info">No reporting manager has been assigned to you yet. HR can assign one from the admin portal.</Notice>
       )}
 

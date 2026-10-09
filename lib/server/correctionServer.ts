@@ -56,7 +56,16 @@ const toPlain = (v: RecordValues) => ({
 
 const ts = (d: Date | null) => (d ? Timestamp.fromDate(d) : null);
 
-export async function applyCorrection(admin: Admin, req: CorrectionRequest) {
+export type CorrectionOptions = {
+  // The caller already verified a backup covering every date it will touch.
+  backupChecked?: boolean;
+  // Groups the corrections of one bulk run (stored on each correction document).
+  batchId?: string;
+  // A bulk run writes ONE summary activity entry instead of one per record.
+  skipActivityLog?: boolean;
+};
+
+export async function applyCorrection(admin: Admin, req: CorrectionRequest, opts: CorrectionOptions = {}) {
   const db = adminDb();
   const now = new Date();
 
@@ -87,7 +96,7 @@ export async function applyCorrection(admin: Admin, req: CorrectionRequest) {
     if (admin.role !== "super_admin") {
       throw new ApiError(403, "super-admin-required", "Corrections to a completed month can only be made by a Super Admin.");
     }
-    await assertVerifiedBackupCovers(targetDate, now);
+    if (!opts.backupChecked) await assertVerifiedBackupCovers(targetDate, now);
   }
 
   const result = await db.runTransaction(async (tx) => {
@@ -134,6 +143,7 @@ export async function applyCorrection(admin: Admin, req: CorrectionRequest) {
 
       tx.update(ref, patch);
       tx.create(correctionRef, {
+        ...(opts.batchId ? { batchId: opts.batchId } : {}),
         kind: "update",
         recordId: ref.id,
         userId: data.userId || "",
@@ -200,6 +210,7 @@ export async function applyCorrection(admin: Admin, req: CorrectionRequest) {
       });
 
       tx.create(correctionRef, {
+        ...(opts.batchId ? { batchId: opts.batchId } : {}),
         kind: "create",
         recordId: ref.id,
         userId: req.userId,
@@ -286,6 +297,7 @@ export async function applyCorrection(admin: Admin, req: CorrectionRequest) {
   });
 
   // Best-effort entry in the shared Recent Activity feed.
+  if (opts.skipActivityLog) return { correctionId: result.correctionId, changes: result.changes };
   try {
     await db.collection("activityLogs").add({
       employeeName: result.name || "",

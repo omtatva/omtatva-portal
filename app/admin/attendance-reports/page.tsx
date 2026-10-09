@@ -36,6 +36,9 @@ import {
   type LiveComparison,
 } from "@/lib/attendanceBackup";
 import { companyTimezone, type PolicyRules } from "@/lib/attendancePolicy";
+import BulkCorrectionDialog, { type BulkGroup } from "@/components/BulkCorrectionDialog";
+import { groupBySuggestion, toBulkItem, type BulkResult } from "@/lib/bulkCorrection";
+import { CORRECTION_STATUSES } from "@/lib/attendanceCorrection";
 
 type Tab = "report" | "audit" | "corrections" | "backup";
 
@@ -83,6 +86,12 @@ export default function AttendanceReportsPage() {
   const [auditShown, setAuditShown] = useState(100);
 
   const [modal, setModal] = useState<ModalTarget | null>(null);
+
+  // Bulk correction: ticked audit findings -> one confirmation -> each record
+  // is still corrected and audited individually by the server.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<{ groups: BulkGroup[]; dateRange: { from: string; to: string } } | null>(null);
+  const [bulkStatus, setBulkStatus] = useState<string>("Leave");
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [downloading, setDownloading] = useState<string>("");
 
@@ -222,6 +231,57 @@ export default function AttendanceReportsPage() {
     () => (audit ? audit.findings.filter((f) => auditType === "all" || f.type === auditType) : []),
     [audit, auditType]
   );
+
+  // Findings that can be bulk-corrected (not duplicates / bad ids / orphans).
+  const selectableRows = useMemo(() => auditRows.filter((f) => toBulkItem(f) !== null), [auditRows]);
+  const selectedFindings = useMemo(
+    () => (audit ? audit.findings.filter((f) => selected.has(f.id) && toBulkItem(f) !== null) : []),
+    [audit, selected]
+  );
+  const allTicked = selectableRows.length > 0 && selectableRows.every((f) => selected.has(f.id));
+
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (selectableRows.every((f) => next.has(f.id))) selectableRows.forEach((f) => next.delete(f.id));
+      else selectableRows.forEach((f) => next.add(f.id));
+      return next;
+    });
+
+  const rangeOf = (list: Finding[]) => {
+    const dates = list.map((f) => f.date).sort();
+    return { from: dates[0], to: dates[dates.length - 1] };
+  };
+
+  const openSuggested = () => {
+    const groups = groupBySuggestion(selectedFindings).map((g) => ({ status: g.status, items: g.items }));
+    if (groups.length === 0) return;
+    const suggested = selectedFindings.filter((f) => f.proposedStatus);
+    setBulk({ groups, dateRange: rangeOf(suggested) });
+  };
+
+  const openSetStatus = () => {
+    const items = selectedFindings.map((f) => toBulkItem(f)!).filter(Boolean);
+    if (items.length === 0) return;
+    setBulk({ groups: [{ status: bulkStatus, items }], dateRange: rangeOf(selectedFindings) });
+  };
+
+  const onBulkFinished = async (r: BulkResult) => {
+    setSelected(new Set());
+    setToast({
+      type: r.failed ? "err" : "ok",
+      text: `Bulk correction finished: ${r.updated} updated, ${r.created} created, ${r.skipped} skipped, ${r.failed} failed. Press “Run audit” again to see what is left.`,
+    });
+    await loadAll();
+  };
 
   const exportAudit = (format: "csv" | "json") => {
     if (!audit) return;
@@ -437,6 +497,12 @@ export default function AttendanceReportsPage() {
             review. Nothing is changed, moved or deleted by running it, and nothing is fixed automatically.
           </Banner>
 
+          <p className="ar-note">
+            <b>One record:</b> press “Review &amp; correct” on a row. <b>Many records:</b> tick the boxes (or the top box to tick
+            everything matching the filter), then use the bar that appears — “Apply suggested fix” or “Set status…”.
+            Both need a reason; completed months also need a verified backup, and every record is logged separately.
+          </p>
+
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
             <button className="ar-btn ar-primary" onClick={runTheAudit} disabled={loading || !auditRange}>
               ▶ Run audit{auditRange ? ` (${auditRange.from} → ${auditRange.to})` : ""}
@@ -472,17 +538,46 @@ export default function AttendanceReportsPage() {
                 ))}
               </div>
 
+              {canEdit && selected.size > 0 && (
+                <div className="ar-bulkbar" role="region" aria-label="Bulk actions">
+                  <b>{selectedFindings.length} selected</b>
+                  <button className="ar-btn ar-primary ar-small" onClick={openSuggested} disabled={!selectedFindings.some((f) => f.proposedStatus)}>
+                    Apply suggested fix ({selectedFindings.filter((f) => f.proposedStatus).length})
+                  </button>
+                  <span className="ar-sub">or set all to</span>
+                  <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} aria-label="Status for all selected">
+                    {CORRECTION_STATUSES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                  <button className="ar-btn ar-ghost ar-small" onClick={openSetStatus}>Set status…</button>
+                  <button className="ar-link ar-sub" onClick={() => setSelected(new Set())}>Clear selection</button>
+                </div>
+              )}
+
               {audit.findings.length === 0 ? (
                 <p style={{ color: "#15803d", fontWeight: 700 }}>✓ No problems found in the scanned range.</p>
               ) : (
                 <div className="ar-scroll">
                   <table className="ar-table">
                     <thead>
-                      <tr><th>Severity</th><th>Employee</th><th>Date</th><th>Problem</th><th>Suggested review</th><th /></tr>
+                      <tr>
+                        <th style={{ width: 34 }}>
+                          {canEdit && selectableRows.length > 0 && (
+                            <input type="checkbox" checked={allTicked} onChange={toggleAll} aria-label={`Select all ${selectableRows.length} matching records`} title={`Select all ${selectableRows.length} matching`} />
+                          )}
+                        </th>
+                        <th>Severity</th><th>Employee</th><th>Date</th><th>Problem</th><th>Suggested review</th><th />
+                      </tr>
                     </thead>
                     <tbody>
                       {auditRows.slice(0, auditShown).map((f) => (
-                        <tr key={f.id}>
+                        <tr key={f.id} style={selected.has(f.id) ? { background: "rgba(61,111,168,.08)" } : undefined}>
+                          <td>
+                            {canEdit && toBulkItem(f) !== null && (
+                              <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleOne(f.id)} aria-label={`Select ${f.employeeName} ${f.date}`} />
+                            )}
+                          </td>
                           <td><SeverityPill s={f.severity} /></td>
                           <td><b>{f.employeeName}</b></td>
                           <td style={{ whiteSpace: "nowrap" }}>{f.date}</td>
@@ -519,6 +614,15 @@ export default function AttendanceReportsPage() {
         <div className="ar-card">
           <p style={{ color: "var(--text-muted)" }}>No completed month yet — there is nothing to back up.</p>
         </div>
+      )}
+
+      {bulk && (
+        <BulkCorrectionDialog
+          groups={bulk.groups}
+          dateRange={bulk.dateRange}
+          onClose={() => setBulk(null)}
+          onFinished={onBulkFinished}
+        />
       )}
 
       {modal && (

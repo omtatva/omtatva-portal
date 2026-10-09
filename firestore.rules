@@ -1,0 +1,239 @@
+rules_version = '2';
+
+// ===================================================================
+// OMTATVA PORTAL — Firestore rules (STAGE 1)
+//
+// Referenced by firebase.json. Check with `npm run rules:check` (dry run),
+// publish with `npm run rules:deploy` — or paste into Firebase Console ->
+// Firestore -> Rules. Publishing takes effect immediately.
+//
+// Before this file the database was fully open to the whole internet
+// (`allow read, write: if true`). Stage 1 closes that without changing
+// what signed-in people can do in areas that have not been reviewed yet:
+//
+//   * nothing is readable/writable by outsiders: you must be signed in with
+//     a VERIFIED company account (or be listed in adminAccess). The only
+//     exception is three display settings the public login/home pages need
+//     (appearance, branding, media)
+//   * admin access is decided ONLY by adminAccess/{email} (verified email)
+//   * sensitive areas (payroll, salary, assets, activity log, backups,
+//     corrections, admin access list) are locked to the right roles
+//   * attendance punch data can't be written from a browser any more
+//     (punching/corrections go through the server, which bypasses rules)
+//   * reporting lines: an employee can read only single documents, and list
+//     only the people who report DIRECTLY to them
+//
+// Stage 2 (not done): scope leave/WFH/timesheets/documents to owner+admin,
+// then Manager/Team Lead team scoping.
+// ===================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isMember() && request.auth.uid == uid;
+    }
+
+    function accessDoc() {
+      return /databases/$(database)/documents/adminAccess/$(request.auth.token.email.lower());
+    }
+
+    // Role granted in Settings -> Access Management, '' if none. Requires a
+    // VERIFIED email so nobody can register an unverified account that
+    // merely claims an admin's address.
+    function roleOf() {
+      return (signedIn()
+              && request.auth.token.email != null
+              && request.auth.token.email_verified == true
+              && exists(accessDoc()))
+        ? get(accessDoc()).data.role.lower().replace(' ', '_')
+        : '';
+    }
+
+    function isSuperAdmin() {
+      return roleOf() == 'super_admin';
+    }
+
+    // A real member of the company: a VERIFIED Google account on the company
+    // domain. Anyone on the internet can create a Firebase login with the
+    // public app key, so "signed in" alone is NOT enough to read or write
+    // company data. (To allow another domain, add it to the pattern below;
+    // anyone listed in adminAccess is a member regardless of domain.)
+    // People removed by an administrator (rejected employees) are locked out
+    // immediately — even while their old sign-in token is still valid.
+    function isRemoved() {
+      return exists(/databases/$(database)/documents/removedEmployees/$(request.auth.uid));
+    }
+
+    function isCompanyUser() {
+      return signedIn()
+          && request.auth.token.email != null
+          && request.auth.token.email_verified == true
+          && request.auth.token.email.lower().matches('.*@omtatvadigitals[.]com')
+          && !isRemoved();
+    }
+
+    function isMember() {
+      return isCompanyUser() || isAdminTier();
+    }
+
+    function isAdminTier() {
+      return roleOf() in ['hr', 'head', 'admin', 'super_admin'];
+    }
+
+    // One-time bootstrap accounts (same list as lib/adminAccess.ts). Each may
+    // create ITS OWN adminAccess doc, with exactly this role, only.
+    function bootstrapRole(email) {
+      return email == 'admin@omtatvadigitals.com' ? 'admin'
+           : email == 'hr@omtatvadigitals.com' ? 'hr'
+           : email == 'itsupport@omtatvadigitals.com' ? 'super_admin'
+           : email == 'sudhanshu@omtatvadigitals.com' ? 'head'
+           : '';
+    }
+
+    // ---------------------------------------------------------------
+    // Access control
+    // ---------------------------------------------------------------
+    match /adminAccess/{email} {
+      allow get: if signedIn()
+                 && request.auth.token.email != null
+                 && (email == request.auth.token.email.lower() || isAdminTier());
+      allow list: if isSuperAdmin();
+      allow create: if isSuperAdmin()
+                    || (signedIn()
+                        && request.auth.token.email != null
+                        && request.auth.token.email_verified == true
+                        && email == request.auth.token.email.lower()
+                        && bootstrapRole(email) != ''
+                        && request.resource.data.role == bootstrapRole(email));
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // Settings: public pages (login, home) need appearance/branding/media.
+    match /settings/{docId} {
+      // Single documents: the public display settings for everyone, the rest
+      // for members. (Listing the whole collection — Settings -> Backup — is
+      // a separate permission: Super Admin only.)
+      allow get: if docId in ['appearance', 'branding', 'media']
+                 || (isMember() && docId != 'demoEnvironment');
+      allow list: if isSuperAdmin();
+      allow write: if docId == 'demoEnvironment' ? false
+                    : docId == 'permissions'     ? isSuperAdmin()
+                    : isAdminTier();
+    }
+
+    // ---------------------------------------------------------------
+    // People
+    // ---------------------------------------------------------------
+    match /users/{uid} {
+      allow get: if isMember();
+      allow list: if isAdminTier();
+      allow create, update: if isOwner(uid) || isAdminTier();
+      allow delete: if isAdminTier();
+    }
+
+    match /employeeProfiles/{uid} {
+      allow read: if isMember();      // dashboard birthday widget lists everyone
+      allow create, update: if isOwner(uid) || isAdminTier();
+      allow delete: if isAdminTier();
+    }
+
+    match /employees/{uid} {
+      allow read: if isMember();
+      allow create, update: if isOwner(uid) || isAdminTier();
+      allow delete: if isAdminTier();
+    }
+
+    // Reporting lines (who reports to whom). Admin-managed.
+    //  - get: any signed-in user (needed to walk up their own chain)
+    //  - list: admins, or a query limited to people who report DIRECTLY to me
+    match /reportingStructure/{employeeUid} {
+      allow get: if isMember();
+      allow list: if isAdminTier()
+                  || (isMember() && resource.data.managerId == request.auth.uid);
+      allow create, update: if isAdminTier()
+                  && request.resource.data.keys().hasOnly(['employeeUid', 'managerId', 'updatedAt', 'updatedBy', 'updatedByUid'])
+                  && request.resource.data.employeeUid == employeeUid
+                  && request.resource.data.managerId is string
+                  && request.resource.data.managerId != employeeUid;
+      allow delete: if isAdminTier();
+    }
+
+    // ---------------------------------------------------------------
+    // Attendance
+    // ---------------------------------------------------------------
+    // Punch-in/out and corrections are written by the server (Admin SDK,
+    // not subject to rules). A browser may only:
+    //  - read its own records (admins read all)
+    //  - create the automatic "Absent (no punch-in)" placeholder for itself
+    //  - attach a punch-out correction REQUEST to its own record
+    match /attendance/{recordId} {
+      allow read: if isAdminTier()
+                  || (isMember() && resource.data.userId == request.auth.uid);
+      allow create: if isAdminTier()
+                    || (isMember()
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.PunchIn == null
+                        && request.resource.data.status == 'Absent'
+                        && request.resource.data.attendanceSource.matches('Auto-marked.*'));
+      allow update: if isAdminTier()
+                    || (isMember()
+                        && resource.data.userId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['correctionRequest']));
+      allow delete: if isAdminTier();
+    }
+
+    // Server-only (Admin SDK). No browser access at all.
+    match /attendanceCorrections/{id} { allow read, write: if false; }
+    match /attendanceBackups/{id}     { allow read, write: if false; }
+    match /attendanceInitializations/{id} { allow read, write: if false; }
+    match /removedEmployees/{id}          { allow read, write: if false; }
+
+    // ---------------------------------------------------------------
+    // Admin-only data
+    // ---------------------------------------------------------------
+    match /payroll/{id}         { allow read, write: if isAdminTier(); }
+    match /salaryStructure/{id} { allow read, write: if isAdminTier(); }
+    match /assets/{id}          { allow read, write: if isAdminTier(); }
+
+    // Activity feed: anyone signed in can add an entry about their action;
+    // only admins can read it; entries are never edited or deleted.
+    match /activityLogs/{id} {
+      allow create: if isMember();
+      allow read: if isAdminTier();
+      allow update, delete: if false;
+    }
+
+    match /toolUsage/{id} {
+      allow create: if isMember();
+      allow read: if isAdminTier();
+      allow update, delete: if false;
+    }
+
+    // Company-wide content: everyone signed in reads, admins write.
+    match /holidays/{id}      { allow read: if isMember(); allow write: if isAdminTier(); }
+    match /announcements/{id} { allow read: if isMember(); allow write: if isAdminTier(); }
+
+    // ---------------------------------------------------------------
+    // Not yet reviewed (STAGE 2): company members only — same behaviour as
+    // today, minus the outside-world access.
+    // ---------------------------------------------------------------
+    match /leaveRequests/{id}      { allow read, write: if isMember(); }
+    match /wfhRequests/{id}        { allow read, write: if isMember(); }
+    match /leaves/{id}             { allow read, write: if isMember(); }
+    match /timesheets/{id}         { allow read, write: if isMember(); }
+    match /documents/{id}          { allow read, write: if isMember(); }
+    match /commonDocuments/{id}    { allow read, write: if isMember(); }
+    match /employeeDocuments/{id}  { allow read, write: if isMember(); }
+    match /birthdayWishes/{id}     { allow read, write: if isMember(); }
+
+    // Anything not listed above is denied.
+  }
+}

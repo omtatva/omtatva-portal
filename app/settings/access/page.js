@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { listAdminAccess, upsertAdminAccess, removeAdminAccess } from "@/lib/adminAccess";
-import { ROLES } from "@/lib/roles";
+import { ROLES, normalizeRole } from "@/lib/roles";
+import { checkRemoval, checkRoleChange } from "@/lib/accessGuards";
 import { MODULES, getPermissionMatrix, savePermissionMatrix } from "@/lib/permissions";
 
 export default function AccessManagementPage() {
@@ -98,6 +99,11 @@ export default function AccessManagementPage() {
 
   async function changeRole(email, role) {
     if (saving) return;
+    const blocked = checkRoleChange(entries, email, role);
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -113,6 +119,11 @@ export default function AccessManagementPage() {
 
   async function removePerson(email) {
     if (saving) return;
+    const blocked = checkRemoval(entries, email);
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -136,9 +147,10 @@ export default function AccessManagementPage() {
         🔐 Access Management
       </h1>
       <p style={{ color: "var(--text-muted)", marginBottom: 12 }}>
-        Grant or change admin dashboard access by email — no code changes needed. Everyone
-        listed here can sign in at <code>/admin/login</code> with the role you assign; anyone
-        not listed only gets regular employee access.
+        Assign a role by email — no code changes needed. <b>Admin roles</b> (HR Admin, Head,
+        Admin, Super Admin) unlock the Admin dashboard at <code>/admin/login</code>.{" "}
+        <b>Employee, Team Lead and Manager</b> set the person&apos;s role only — they never get
+        admin access automatically. Anyone not listed is a regular employee.
         {saving && <span style={{ color: "#3d6fa8", marginLeft: 10 }}>Saving...</span>}
       </p>
 
@@ -176,8 +188,8 @@ export default function AccessManagementPage() {
       )}
 
       <Section
-        title="Grant Access"
-        subtitle="Add someone by email and pick the role they should have."
+        title="Assign Role"
+        subtitle="Add someone by email and pick their role from the full list."
       >
         <div style={{ display: "flex", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
           <input
@@ -188,30 +200,24 @@ export default function AccessManagementPage() {
             disabled={saving}
             style={{ ...inputStyle, minWidth: 220 }}
           />
-          <select
+          <RoleSelect
             value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
+            onChange={setNewRole}
             disabled={saving}
-            style={{ ...inputStyle, flex: "0 0 180px" }}
-          >
-            {ROLES.filter((r) => r.adminTier).map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+            style={{ ...inputStyle, flex: "0 0 220px" }}
+          />
           <button onClick={addPerson} disabled={saving} style={addBtnStyle(saving)}>
-            + Grant Access
+            + Assign Role
           </button>
         </div>
       </Section>
 
       <Section
-        title="Current Access"
-        subtitle="Everyone with admin-tier access right now. Change a role or remove access any time."
+        title="Current Roles"
+        subtitle="Everyone who has a role assigned here. Change a role or remove it any time. At least one Super Admin must always remain."
       >
         {entries.length === 0 ? (
-          <EmptyRow text="No one has admin access yet — grant it above." />
+          <EmptyRow text="No roles assigned yet — assign one above." />
         ) : (
           entries.map((entry) => (
             <div
@@ -233,18 +239,12 @@ export default function AccessManagementPage() {
               </span>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <select
-                  value={entry.role}
-                  onChange={(e) => changeRole(entry.email, e.target.value)}
+                <RoleSelect
+                  value={normalizeRole(entry.role)}
+                  onChange={(role) => changeRole(entry.email, role)}
                   disabled={saving}
                   style={{ ...inputStyle, padding: "8px 10px", width: "auto" }}
-                >
-                  {ROLES.filter((r) => r.adminTier).map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+                />
 
                 <button
                   onClick={() => removePerson(entry.email)}
@@ -322,6 +322,34 @@ export default function AccessManagementPage() {
         )}
       </Section>
     </div>
+  );
+}
+
+// Every role, grouped: organisation roles never unlock the Admin dashboard.
+function RoleSelect({ value, onChange, disabled, style }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      style={style}
+      aria-label="Role"
+    >
+      <optgroup label="Organisation roles (no admin access)">
+        {ROLES.filter((r) => !r.adminTier).map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </optgroup>
+      <optgroup label="Admin roles (Admin dashboard access)">
+        {ROLES.filter((r) => r.adminTier).map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </optgroup>
+    </select>
   );
 }
 

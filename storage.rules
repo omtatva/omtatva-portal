@@ -1,0 +1,139 @@
+rules_version = '2';
+
+// ===================================================================
+// OMTATVA PORTAL — Firebase Storage rules
+//
+// Referenced by firebase.json. Publish with `npm run rules:deploy`, or paste into
+// Firebase Console -> Storage -> Rules. Check first with `npm run rules:check`.
+//
+// Before this file the bucket was open to the whole internet
+// (`allow read, write: if true`): anyone could upload, overwrite or
+// delete any file, including employees' identity documents.
+//
+// Paths the app uses (and who may touch them):
+//   employees/{uid}/profile/...      profile photo      owner or admin
+//   employees/{uid}/documents/...    employee uploads   owner or admin
+//   documents/{uid}/...              HR uploads         admin write; owner/admin read
+//   commonDocuments/...              company files      admin write; members read
+//   settings/branding/...            logos              Super Admin write; public read
+// Everything else is denied.
+//
+// NOTE: file download LINKS (…?alt=media&token=…) work without these rules
+// by design — that is how the portal shows photos and opens documents.
+// The rules protect uploading, replacing, deleting and SDK reads.
+//
+// Admin status comes from Firestore (adminAccess/{email}), so Firebase
+// will ask you to allow Storage to read Firestore the first time you
+// publish these rules — click Allow.
+// ===================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ---------------------------------------------------------------
+    // Helpers (same logic as firestore.rules)
+    // ---------------------------------------------------------------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function accessPath() {
+      return /databases/(default)/documents/adminAccess/$(request.auth.token.email.lower());
+    }
+
+    function roleOf() {
+      return (signedIn()
+              && request.auth.token.email != null
+              && request.auth.token.email_verified == true
+              && firestore.exists(accessPath()))
+        ? firestore.get(accessPath()).data.role.lower().replace(' ', '_')
+        : '';
+    }
+
+    function isSuperAdmin() {
+      return roleOf() == 'super_admin';
+    }
+
+    function isAdminTier() {
+      return roleOf() in ['hr', 'head', 'admin', 'super_admin'];
+    }
+
+    // Verified account on the company domain (add other domains here).
+    // Removed (rejected) employees are locked out immediately.
+    function isRemoved() {
+      return firestore.exists(/databases/(default)/documents/removedEmployees/$(request.auth.uid));
+    }
+
+    function isCompanyUser() {
+      return signedIn()
+          && request.auth.token.email != null
+          && request.auth.token.email_verified == true
+          && request.auth.token.email.lower().matches('.*@omtatvadigitals[.]com')
+          && !isRemoved();
+    }
+
+    function isMember() {
+      return isCompanyUser() || isAdminTier();
+    }
+
+    function isOwner(uid) {
+      return isMember() && request.auth.uid == uid;
+    }
+
+    // Upload limits.
+    function smallerThanMb(mb) {
+      return request.resource.size < mb * 1024 * 1024;
+    }
+
+    function isImage() {
+      return request.resource.contentType != null
+          && request.resource.contentType.matches('image/.*');
+    }
+
+    // Blocks types a browser could run if served as a page.
+    function notRunnable() {
+      return request.resource.contentType == null
+          || !request.resource.contentType.matches('(?i)text/html.*|application/javascript.*|text/javascript.*|application/x-.*');
+    }
+
+    // ---------------------------------------------------------------
+    // Employee files
+    // ---------------------------------------------------------------
+    match /employees/{uid}/profile/{file=**} {
+      allow read: if isOwner(uid) || isAdminTier();
+      allow create, update: if (isOwner(uid) || isAdminTier()) && isImage() && smallerThanMb(5);
+      allow delete: if isOwner(uid) || isAdminTier();
+    }
+
+    match /employees/{uid}/documents/{file=**} {
+      allow read: if isOwner(uid) || isAdminTier();
+      allow create, update: if (isOwner(uid) || isAdminTier()) && smallerThanMb(20) && notRunnable();
+      allow delete: if isOwner(uid) || isAdminTier();
+    }
+
+    // Files HR uploads on an employee's behalf (Admin -> Documents).
+    match /documents/{uid}/{file=**} {
+      allow read: if isOwner(uid) || isAdminTier();
+      allow create, update: if isAdminTier() && smallerThanMb(20) && notRunnable();
+      allow delete: if isAdminTier();
+    }
+
+    // ---------------------------------------------------------------
+    // Company files
+    // ---------------------------------------------------------------
+    match /commonDocuments/{file=**} {
+      allow read: if isMember();
+      allow create, update: if isAdminTier() && smallerThanMb(25) && notRunnable();
+      allow delete: if isAdminTier();
+    }
+
+    // Logos shown on the public login/home pages.
+    match /settings/branding/{file=**} {
+      allow read: if true;
+      allow create, update: if isSuperAdmin() && isImage() && smallerThanMb(5);
+      allow delete: if isSuperAdmin();
+    }
+
+    // Anything not listed above is denied.
+  }
+}
