@@ -10,6 +10,14 @@ setDoc
 
 import {db} from "../../../lib/firebase";
 import {usePermission} from "../../../lib/usePermission";
+import {
+DEFAULT_TIMEZONE,
+ABSENT_POLICY_DEFAULT_EFFECTIVE_FROM,
+isValidTimezone
+} from "../../../lib/attendancePolicy";
+
+const WEEKDAY_LABELS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DEFAULT_SHIFT_WORKDAYS=[1,2,3,4,5,6];
 
 export default function AttendanceSettings(){
 
@@ -65,13 +73,27 @@ workingDays:[
 // employee can be assigned to from Admin -> Users, instead of everyone
 // being held to the single officeStartTime/officeEndTime above. Any
 // employee with no shift assigned keeps using the office timing above.
-shifts:[]
+shifts:[],
+
+// Company-local timezone every shift/date is evaluated in.
+timezone:DEFAULT_TIMEZONE,
+
+// Punch-in after (shift start + grace) is recorded as Absent, from this
+// date onward. The old "Late" logic is kept (commented) in
+// lib/attendanceRules.ts and is untouched by this switch.
+absentPolicy:{
+enabled:true,
+effectiveFrom:ABSENT_POLICY_DEFAULT_EFFECTIVE_FROM
+}
 
 });
 
 const [newShiftName,setNewShiftName]=useState("");
 const [newShiftStart,setNewShiftStart]=useState("10:00");
 const [newShiftEnd,setNewShiftEnd]=useState("19:00");
+const [newShiftGrace,setNewShiftGrace]=useState("");
+const [newShiftTz,setNewShiftTz]=useState("");
+const [newShiftDays,setNewShiftDays]=useState(DEFAULT_SHIFT_WORKDAYS);
 
 useEffect(()=>{
 
@@ -107,6 +129,20 @@ setLoading(false);
 }
 
 async function saveSettings(){
+
+if(!isValidTimezone(settings.timezone||"")){
+alert("Company timezone is not a valid IANA timezone (e.g. Asia/Kolkata).");
+return;
+}
+
+const badShift=(settings.shifts||[]).find(
+s=>s.timezone && !isValidTimezone(s.timezone)
+);
+
+if(badShift){
+alert(`Shift "${badShift.name}" has an invalid timezone.`);
+return;
+}
 
 setSaving(true);
 
@@ -153,11 +189,26 @@ alert("Enter a shift name");
 return;
 }
 
+if(newShiftTz && !isValidTimezone(newShiftTz)){
+alert("Shift timezone is not valid (example: Asia/Kolkata).");
+return;
+}
+
+if(newShiftDays.length===0){
+alert("Select at least one working day for this shift.");
+return;
+}
+
 const shift={
 id: `${Date.now()}`,
 name: newShiftName.trim(),
 startTime: newShiftStart,
 endTime: newShiftEnd,
+graceMinutes: newShiftGrace===""
+? Number(settings.graceMinutes ?? 15)
+: Math.max(0,Number(newShiftGrace)),
+timezone: newShiftTz || settings.timezone || DEFAULT_TIMEZONE,
+workdays: [...newShiftDays].sort(),
 };
 
 handleInput("shifts",[...(settings.shifts||[]),shift]);
@@ -165,6 +216,18 @@ handleInput("shifts",[...(settings.shifts||[]),shift]);
 setNewShiftName("");
 setNewShiftStart("10:00");
 setNewShiftEnd("19:00");
+setNewShiftGrace("");
+setNewShiftTz("");
+setNewShiftDays(DEFAULT_SHIFT_WORKDAYS);
+
+}
+
+function updateShift(id,patch){
+
+handleInput(
+"shifts",
+(settings.shifts||[]).map(s=>s.id===id?{...s,...patch}:s)
+);
 
 }
 
@@ -393,7 +456,7 @@ className="w-full border border-[#dbeafe] rounded-xl p-3"
 />
 
 <p className="text-xs text-[#888] mt-1">
-Punch-in allowed this many minutes after Office In Time before being marked Late.
+Default grace for shifts without their own. A punch-in after (start time + grace) is marked Absent from the policy start date below; exactly at the deadline is still on time.
 </p>
 
 </div>
@@ -490,7 +553,7 @@ of these shifts from Admin → Users. Late-marking and hours are then calculated
 their own shift instead of the office timing.
 </p>
 
-<div className="grid sm:grid-cols-[1fr_140px_140px_auto] gap-3 items-end mb-6">
+<div className="grid sm:grid-cols-[1fr_140px_140px_120px] gap-3 items-end mb-4">
 
 <div>
 <label className="block text-sm text-[#444] mb-2">Shift Name</label>
@@ -523,14 +586,62 @@ className="w-full border border-[#dbeafe] rounded-xl p-3"
 />
 </div>
 
+<div>
+<label className="block text-sm text-[#444] mb-2">Grace (min)</label>
+<input
+type="number"
+min="0"
+placeholder={String(settings.graceMinutes ?? 15)}
+value={newShiftGrace}
+onChange={(e)=>setNewShiftGrace(e.target.value)}
+className="w-full border border-[#dbeafe] rounded-xl p-3"
+/>
+</div>
+
+</div>
+
+<div className="grid sm:grid-cols-[1fr_auto] gap-4 items-end mb-6">
+
+<div>
+<label className="block text-sm text-[#444] mb-2">
+Timezone (blank = company timezone: {settings.timezone})
+</label>
+<input
+type="text"
+placeholder="Asia/Kolkata"
+value={newShiftTz}
+onChange={(e)=>setNewShiftTz(e.target.value)}
+className="w-full border border-[#dbeafe] rounded-xl p-3"
+/>
+<div className="flex flex-wrap gap-3 mt-3">
+{WEEKDAY_LABELS.map((label,i)=>(
+<label key={label} className="flex items-center gap-1 text-sm cursor-pointer">
+<input
+type="checkbox"
+checked={newShiftDays.includes(i)}
+onChange={()=>setNewShiftDays(prev=>prev.includes(i)?prev.filter(d=>d!==i):[...prev,i])}
+className="accent-[#3d6fa8]"
+/>
+{label}
+</label>
+))}
+</div>
+</div>
+
 <button
 onClick={addShift}
-className="bg-[#3d6fa8] hover:bg-[#325d8d] text-white px-6 py-3 rounded-xl font-semibold"
+disabled={!canEdit}
+className="bg-[#3d6fa8] hover:bg-[#325d8d] disabled:opacity-50 text-white px-6 py-3 rounded-xl font-semibold"
 >
 + Add Shift
 </button>
 
 </div>
+
+<p className="text-xs text-[#888] mb-5">
+An end time at or before the start time means the shift runs overnight into the next day.
+Days not ticked are weekly offs for that shift.
+</p>
 
 {(settings.shifts||[]).length===0 ? (
 <p className="text-sm text-[#888]">No custom shifts yet — everyone uses the office timing above.</p>
@@ -539,18 +650,36 @@ className="bg-[#3d6fa8] hover:bg-[#325d8d] text-white px-6 py-3 rounded-xl font-
 {(settings.shifts||[]).map((shift)=>(
 <div
 key={shift.id}
-className="flex justify-between items-center bg-[#f8fafc] rounded-xl px-5 py-3"
+className="flex flex-wrap justify-between items-center gap-3 bg-[#f8fafc] rounded-xl px-5 py-3"
 >
 <div>
 <b className="text-[#111]">{shift.name}</b>
 <span className="text-sm text-[#666] ml-3">{shift.startTime} – {shift.endTime}</span>
+<div className="text-xs text-[#888] mt-1">
+{shift.timezone || settings.timezone} ·{" "}
+{(shift.workdays||DEFAULT_SHIFT_WORKDAYS).map(d=>WEEKDAY_LABELS[d]).join(", ")}
 </div>
+</div>
+<div className="flex items-center gap-3">
+<label className="text-xs text-[#666] flex items-center gap-2">
+Grace (min)
+<input
+type="number"
+min="0"
+disabled={!canEdit}
+value={shift.graceMinutes ?? settings.graceMinutes ?? 15}
+onChange={(e)=>updateShift(shift.id,{graceMinutes:Math.max(0,Number(e.target.value))})}
+className="w-20 border border-[#dbeafe] rounded-lg p-2"
+/>
+</label>
 <button
 onClick={()=>removeShift(shift.id)}
-className="text-red-600 font-semibold text-sm"
+disabled={!canEdit}
+className="text-red-600 font-semibold text-sm disabled:opacity-50"
 >
 Remove
 </button>
+</div>
 </div>
 ))}
 </div>
@@ -558,6 +687,62 @@ Remove
 
 </div>
 
+
+{/* GRACE-PERIOD POLICY + TIMEZONE */}
+
+<div className="bg-white rounded-3xl border border-[#eaf3ff] shadow-sm p-7 mb-7">
+
+<h2 className="text-xl font-bold text-[#111] mb-2">
+🌐 Timezone &amp; Grace-Period Policy
+</h2>
+
+<p className="text-sm text-[#666] mb-6">
+When enabled, a punch-in after the shift start time plus its grace period is recorded as
+<b> Absent</b> (the original punch time is always kept). Leave days, holidays and weekly
+offs are never turned into Absent. Records before the start date are never changed.
+</p>
+
+<div className="grid sm:grid-cols-3 gap-5">
+
+<div>
+<label className="block text-sm text-[#444] mb-2">Company Timezone</label>
+<input
+type="text"
+disabled={!canEdit}
+value={settings.timezone||""}
+onChange={(e)=>handleInput("timezone",e.target.value.trim())}
+className="w-full border border-[#dbeafe] rounded-xl p-3"
+/>
+<p className="text-xs text-[#888] mt-1">IANA name, e.g. Asia/Kolkata</p>
+</div>
+
+<div>
+<label className="block text-sm text-[#444] mb-2">Policy Start Date</label>
+<input
+type="date"
+disabled={!canEdit}
+value={settings.absentPolicy?.effectiveFrom||""}
+onChange={(e)=>handleInput("absentPolicy",{...(settings.absentPolicy||{}),effectiveFrom:e.target.value})}
+className="w-full border border-[#dbeafe] rounded-xl p-3"
+/>
+</div>
+
+<div className="flex items-end">
+<label className="flex items-center gap-3 cursor-pointer">
+<input
+type="checkbox"
+disabled={!canEdit}
+checked={settings.absentPolicy?.enabled!==false}
+onChange={(e)=>handleInput("absentPolicy",{...(settings.absentPolicy||{}),enabled:e.target.checked})}
+className="w-5 h-5 accent-[#3d6fa8]"
+/>
+<span>Mark punch-in after grace as Absent</span>
+</label>
+</div>
+
+</div>
+
+</div>
 
 {/* WORKING DAYS + ATTENDANCE RULES */}
 

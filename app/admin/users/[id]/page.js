@@ -25,6 +25,10 @@ db
 
 import { ROLES } from "../../../../lib/roles";
 import { logActivity } from "../../../../lib/activityLog";
+import PersonPicker from "../../../../components/PersonPicker";
+import { useOrgChart } from "../../../../lib/useOrgChart";
+import { assignManager } from "../../../../lib/reportingStructure";
+import { getDescendantIds, validateAssignment } from "../../../../lib/orgHierarchy";
 
 
 import toast from "react-hot-toast";
@@ -71,6 +75,13 @@ const [performance,setPerformance]=useState("");
 
 
 const [shifts,setShifts]=useState([]);
+
+// Reporting manager comes from the live org hierarchy
+// (reportingStructure/{uid}.managerId) — the single source of truth —
+// not from the employee document. undefined = not touched while editing.
+const {index:orgIndex,ready:orgReady}=useOrgChart();
+
+const [pendingManagerId,setPendingManagerId]=useState(undefined);
 
 
 
@@ -290,6 +301,36 @@ try{
 setSaving(true);
 
 
+// Reporting manager first: it validates against loops and may be
+// rejected, in which case nothing else should be half-saved.
+const currentManagerId=orgIndex.byId.get(id)?.managerId || "";
+
+if(
+pendingManagerId!==undefined &&
+pendingManagerId!==currentManagerId
+){
+
+const check=validateAssignment(orgIndex,id,pendingManagerId);
+
+if(!check.ok){
+toast.error(check.reason);
+setSaving(false);
+return;
+}
+
+await assignManager(
+id,
+pendingManagerId,
+{
+employee:`${employee.firstName || ""} ${employee.lastName || ""}`.trim(),
+employeeEmail:employee.email,
+manager:orgIndex.byId.get(pendingManagerId)?.name
+}
+);
+
+}
+
+
 await setDoc(
 
 doc(
@@ -415,6 +456,8 @@ toast.success(
 );
 
 
+
+setPendingManagerId(undefined);
 
 setEditMode(false);
 
@@ -683,6 +726,7 @@ cursor: saving ? "default" : "pointer"
 
 <button
 onClick={()=>{
+setPendingManagerId(undefined);
 setEditMode(false);
 loadEmployee();
 }}
@@ -1058,26 +1102,45 @@ Reporting Manager
 </label>
 
 
-<input
+<div style={{marginTop:8}}>
 
-disabled={!editMode}
+<PersonPicker
 
-style={input}
+options={orgIndex.people
+.slice()
+.sort((a,b)=>a.name.localeCompare(b.name))}
 
-value={
-employee.reportingManager || ""
+selected={
+(()=>{
+const v=pendingManagerId!==undefined
+?pendingManagerId
+:(orgIndex.byId.get(id)?.managerId || "");
+return v?[v]:[];
+})()
 }
 
-onChange={(e)=>
-
-updateField(
-"reportingManager",
-e.target.value
-)
-
+onChange={(ids)=>
+setPendingManagerId(ids[0] ?? "")
 }
+
+placeholder="No manager (top level)"
+
+clearLabel="No manager (top level)"
+
+disabledReason={(p)=>{
+if(p.uid===id) return "Cannot be their own manager";
+if(getDescendantIds(orgIndex,id).has(p.uid)) return "Reports to this employee — would create a loop";
+if(!p.active) return "Inactive — cannot manage a team";
+return undefined;
+}}
+
+disabled={!editMode || !orgReady}
+
+ariaLabel="Reporting manager"
 
 />
+
+</div>
 
 
 </div>

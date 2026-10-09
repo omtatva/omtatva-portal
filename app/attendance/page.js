@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -33,6 +33,15 @@ import {
 
 import AttendanceCalendar from "./AttendanceCalendar";
 import { computeDisplayStatus, getShiftTimes } from "@/lib/attendanceRules";
+import {
+  DEFAULT_TIMEZONE,
+  addDays,
+  companyTimezone,
+  listShifts,
+  localDateString,
+  resolveShift,
+  weekdayOf,
+} from "@/lib/attendancePolicy";
 
 export default function AttendancePage() {
   const [user, setUser] = useState(null);
@@ -43,6 +52,10 @@ export default function AttendancePage() {
   // employee is assigned to, if any — determines their late cutoff and
   // extra-hours cutoff instead of the office-wide default.
   const [shiftId, setShiftId] = useState(null);
+  // Shift the employee picks at punch-in when HR has not assigned one.
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [punching, setPunching] = useState(false);
+  const tzRef = useRef(DEFAULT_TIMEZONE);
   const [locationStatus, setLocationStatus] = useState("");
   const [distance, setDistance] = useState(0);
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -61,7 +74,10 @@ export default function AttendancePage() {
   const [requestNotes, setRequestNotes] = useState({});
   const [submittingId, setSubmittingId] = useState(null);
 
-  const today = new Date().toISOString().substring(0, 10);
+  // Company-local calendar date — NOT the UTC date, which is wrong for
+  // several hours every day in India (e.g. 01:00 IST is still "yesterday"
+  // in UTC). The timezone comes from Admin -> Attendance Settings.
+  const getToday = () => localDateString(new Date(), tzRef.current);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -91,7 +107,7 @@ export default function AttendancePage() {
       // loading history, so the dashboard (and anything reading the
       // attendance collection, e.g. payroll) sees them. Company
       // holidays are excluded so they don't get marked Absent.
-      await syncMissingAbsences(currentUser.uid, holidays);
+      await syncMissingAbsences(currentUser.uid, holidays, rules, employeeShiftId, currentUser);
       await loadHistory(currentUser.uid, rules, employeeShiftId);
 
       if (rules) {
@@ -112,6 +128,7 @@ export default function AttendancePage() {
 
       if (snap.exists()) {
         const rules = snap.data();
+        tzRef.current = companyTimezone(rules);
         setAttendanceRules(rules);
         return rules;
       }
@@ -151,26 +168,20 @@ export default function AttendancePage() {
     }
   }
 
-  // Returns working dates (all days except Sunday and company holidays)
-  // as "YYYY-MM-DD", from the 1st of the current month up to (but not
-  // including) today — since today isn't "over" yet, it shouldn't be
-  // marked absent prematurely.
-  function getWorkingDaysBeforeToday(todayStr, holidayDates = new Set()) {
-    const todayDate = new Date(todayStr);
-    const year = todayDate.getFullYear();
-    const month = todayDate.getMonth();
-
+  // Returns the dates ("YYYY-MM-DD") from the 1st of the current month up to
+  // (but not including) today that are expected working days: not a weekly
+  // off for this employee's shift, not a company holiday, and not on
+  // approved leave. Pure string date maths, so the browser's timezone can
+  // never shift a date by one day.
+  function getWorkingDaysBeforeToday(todayStr, holidayDates = new Set(), workdays = [1, 2, 3, 4, 5, 6], leaveDates = new Set()) {
     const dates = [];
-    const cursor = new Date(year, month, 1);
+    let cursor = `${todayStr.slice(0, 7)}-01`;
 
-    while (cursor < todayDate) {
-      const dow = cursor.getDay(); // 0 = Sun
-      const dateStr = cursor.toISOString().slice(0, 10);
-
-      if (dow !== 0 && !holidayDates.has(dateStr)) {
-        dates.push(dateStr);
+    while (cursor < todayStr) {
+      if (workdays.includes(weekdayOf(cursor)) && !holidayDates.has(cursor) && !leaveDates.has(cursor)) {
+        dates.push(cursor);
       }
-      cursor.setDate(cursor.getDate() + 1);
+      cursor = addDays(cursor, 1);
     }
 
     return dates;
@@ -294,39 +305,62 @@ export default function AttendancePage() {
     }
   }
 
+  // Today's session = the open overnight session from yesterday (if its
+  // shift hasn't ended yet), otherwise today's record.
   async function loadToday(uid) {
+    const todayStr = getToday();
+
     const q = query(
       collection(db, "attendance"),
       where("userId", "==", uid),
-      where("date", "==", today)
+      where("date", "in", [addDays(todayStr, -1), todayStr])
     );
 
     const snap = await getDocs(q);
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    if (!snap.empty) {
-      setTodayData({ id: snap.docs[0].id, ...snap.docs[0].data() });
-    } else {
-      setTodayData(null);
-    }
+    const now = Date.now();
+    const running = docs.find((d) => {
+      if (d.date === todayStr || !d.PunchIn || d.PunchOut) return false;
+      const end = convertDate(d.shiftEndAt);
+      return !!end && now <= end.getTime();
+    });
+
+    setTodayData(running || docs.find((d) => d.date === todayStr) || null);
   }
 
-  // Fills in "Absent" attendance docs for any working day this month
-  // (before today, excluding Sundays and company holidays) that has no
-  // attendance record at all for this user.
-  async function syncMissingAbsences(uid, holidayDates = new Set()) {
+  // Fills in "Absent" attendance docs for any expected working day this
+  // month (before today) that has no attendance record at all for this
+  // user. Weekly offs (per the employee's shift), company holidays and
+  // approved-leave days are never turned into Absent.
+  async function syncMissingAbsences(uid, holidayDates = new Set(), rules = null, employeeShiftId = null, authUser = null) {
     try {
       const q = query(collection(db, "attendance"), where("userId", "==", uid));
       const snap = await getDocs(q);
 
       const existingDates = new Set(snap.docs.map((d) => d.data().date));
-      const workingDays = getWorkingDaysBeforeToday(today, holidayDates);
+
+      const leaveSnap = await getDocs(
+        query(collection(db, "leaveRequests"), where("uid", "==", uid), where("status", "==", "Approved"))
+      );
+      const leaveDates = new Set();
+      leaveSnap.docs.forEach((d) => {
+        const { fromDate, toDate } = d.data();
+        if (!fromDate || !toDate) return;
+        for (let c = fromDate; c <= toDate && leaveDates.size < 400; c = addDays(c, 1)) leaveDates.add(c);
+      });
+
+      const { workdays } = resolveShift(rules, employeeShiftId);
+      const workingDays = getWorkingDaysBeforeToday(getToday(), holidayDates, workdays, leaveDates);
       const missingDays = workingDays.filter((d) => !existingDates.has(d));
+
+      const who = authUser || user;
 
       for (const date of missingDays) {
         await addDoc(collection(db, "attendance"), {
           userId: uid,
-          employeeName: user?.displayName || "",
-          email: user?.email || "",
+          employeeName: who?.displayName || "",
+          email: who?.email || "",
           date,
           PunchIn: null,
           PunchOut: null,
@@ -355,7 +389,7 @@ export default function AttendancePage() {
           item,
           rules || attendanceRules,
           employeeShiftId !== undefined ? employeeShiftId : shiftId,
-          today
+          getToday()
         ),
       }))
       .sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -399,189 +433,143 @@ export default function AttendancePage() {
     return "Unknown Device";
   }
 
-  async function punchIn() {
+  // Every punch goes through the server (app/api/attendance/*): it uses the
+  // server clock, the saved shift schedule and the grace-period policy, and
+  // it rejects duplicates and invalid sequences. The browser only supplies
+  // its GPS reading and (when HR has not assigned one) the chosen shift id.
+  async function callAttendanceApi(path, body) {
+    const token = await auth.currentUser.getIdToken();
+
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+
+    let data = null;
     try {
-      if (!user) return;
+      data = await res.json();
+    } catch {
+      data = null;
+    }
 
-      if (todayData) {
-        alert("Already punched in today");
-        return;
-      }
+    if (!res.ok) {
+      const err = new Error(data?.error?.message || "Request failed. Please try again.");
+      err.apiCode = data?.error?.code || "error";
+      throw err;
+    }
 
-      const snap = await getDoc(doc(db, "settings", "attendanceRules"));
+    return data;
+  }
 
-      if (!snap.exists()) {
-        alert("Attendance Rules not found.");
-        return;
-      }
+  function showPunchError(error) {
+    console.log(error);
+    // API errors carry a readable message; GeolocationPositionError has a
+    // numeric code and gets the GPS-specific help text.
+    alert(error?.apiCode ? error.message : getLocationErrorMessage(error));
+  }
 
-      const rules = snap.data();
+  async function punchIn() {
+    if (!user || punching) return;
 
-      const officeLatitude = Number(rules.officeLatitude);
-      const officeLongitude = Number(rules.officeLongitude);
-      const allowedRadius = Number(rules.officeRadius);
+    if (todayData) {
+      alert("Already punched in for this shift");
+      return;
+    }
 
+    if (needsShiftChoice && !selectedShiftId) {
+      alert("Please select your shift before punching in.");
+      return;
+    }
+
+    setPunching(true);
+
+    try {
       const position = await getCurrentLocation();
 
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
       const accuracy = position.coords.accuracy;
 
-      const meter = calculateDistance(latitude, longitude, officeLatitude, officeLongitude);
+      if (attendanceRules) {
+        const meter = calculateDistance(
+          latitude,
+          longitude,
+          Number(attendanceRules.officeLatitude),
+          Number(attendanceRules.officeLongitude)
+        );
+        const inside = meter <= Number(attendanceRules.officeRadius);
 
-      setDistance(meter);
-      setCurrentLocation({ latitude, longitude, accuracy });
-
-      const inside = meter <= allowedRadius;
-      setInsideOffice(inside);
-      setLocationStatus(inside ? "Inside Office" : "Outside Office");
-
-      if (!inside && rules.restrictOutsideOffice && !rules.allowRemotePunch) {
-        alert(`You are outside office range.\n\nDistance: ${meter} m`);
-        return;
+        setDistance(meter);
+        setCurrentLocation({ latitude, longitude, accuracy });
+        setInsideOffice(inside);
+        setLocationStatus(inside ? "Inside Office" : "Outside Office");
       }
 
-      await addDoc(collection(db, "attendance"), {
-        userId: user.uid,
-        employeeName: user.displayName || "",
-        email: user.email,
-        date: today,
-        PunchIn: new Date(),
-        PunchOut: null,
-        totalHours: 0,
-        extraHours: 0,
-        status: "Present",
-        attendanceSource: getAttendanceSource(),
-        sourceDetails: {
-          deviceType: getAttendanceSource(),
-          userAgent: navigator.userAgent,
-        },
+      const result = await callAttendanceApi("/api/attendance/punch-in", {
+        shiftId: selectedShiftId || null,
         latitude,
         longitude,
         accuracy,
-        distanceFromOffice: meter,
-        gpsStatus: inside ? "Inside Office" : "Outside Office",
-        createdAt: new Date(),
-      });
-
-      await loadToday(user.uid);
-      await loadHistory(user.uid, attendanceRules);
-
-      alert("Punch In Successful");
-    } catch (error) {
-      console.log(error);
-      alert(getLocationErrorMessage(error));
-    }
-  }
-
-  async function punchOut() {
-    try {
-      if (!todayData) {
-        alert("Please punch in first");
-        return;
-      }
-
-      if (todayData.PunchOut) {
-        alert("Already punched out");
-        return;
-      }
-
-      const q = query(
-        collection(db, "attendance"),
-        where("userId", "==", user.uid),
-        where("date", "==", today)
-      );
-
-      const snap = await getDocs(q);
-      const ref = snap.docs[0].ref;
-
-      const start = convertDate(todayData.PunchIn);
-      const end = new Date();
-      const hours = ((end - start) / (1000 * 60 * 60)).toFixed(2);
-
-      // Re-fetch fresh rules (mirrors punchIn) instead of relying on
-      // possibly-stale state.
-      const rulesSnap = await getDoc(doc(db, "settings", "attendanceRules"));
-      const rules = rulesSnap.exists() ? rulesSnap.data() : attendanceRules;
-
-      // Extra (overtime) hours — time worked PAST a buffer window after
-      // this employee's shift end time (their assigned shift from
-      // Admin -> Users, or the office-wide officeEndTime if none).
-      // Punching out anytime up to the buffer window after that (e.g.
-      // 19:00–20:00) is treated as normal — no extra hours. Only time
-      // worked beyond that buffer counts as extra. Punching out before
-      // end time simply results in fewer totalHours, which is already
-      // reflected automatically — no separate logic needed for that case.
-      const { endTime: officeEndTime } = getShiftTimes(rules, shiftId);
-      const extraBufferMinutes = Number(rules?.extraBufferMinutes ?? 60);
-
-      const [endHour, endMinute] = officeEndTime.split(":").map(Number);
-
-      const extraCutoff = new Date(end);
-      extraCutoff.setHours(endHour, endMinute + extraBufferMinutes, 0, 0);
-
-      const extraHours =
-        end > extraCutoff
-          ? Number(
-              ((end - extraCutoff) / (1000 * 60 * 60)).toFixed(2)
-            )
-          : 0;
-
-      const position = await getCurrentLocation();
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      const accuracy = position.coords.accuracy;
-
-      const meter = calculateDistance(
-        latitude,
-        longitude,
-        Number(rules?.officeLatitude),
-        Number(rules?.officeLongitude)
-      );
-
-      const inside = meter <= Number(rules?.officeRadius);
-      const punchOutGpsStatus = inside ? "Inside Office" : "Outside Office";
-
-      // Keep the on-screen GPS status/UI in sync with what was just
-      // measured, same as checkOfficeRange/punchIn already do.
-      setDistance(meter);
-      setCurrentLocation({ latitude, longitude, accuracy });
-      setInsideOffice(inside);
-      setLocationStatus(punchOutGpsStatus);
-
-      // Block the punch-out itself when outside the office radius —
-      // mirrors the exact same restriction punchIn() already enforces,
-      // so the same admin toggles (restrictOutsideOffice /
-      // allowRemotePunch) govern both punch-in and punch-out.
-      if (!inside && rules?.restrictOutsideOffice && !rules?.allowRemotePunch) {
-        alert(
-          `You are outside office range, so Punch Out isn't allowed.\n\nDistance: ${meter} m`
-        );
-        return;
-      }
-
-      await updateDoc(ref, {
-        PunchOut: end,
-        totalHours: Number(hours),
-        extraHours: extraHours,
-        punchOutLatitude: latitude,
-        punchOutLongitude: longitude,
-        punchOutAccuracy: accuracy,
-        punchOutDistanceFromOffice: meter,
-        punchOutGpsStatus: punchOutGpsStatus,
+        deviceType: getAttendanceSource(),
+        userAgent: navigator.userAgent,
       });
 
       await loadToday(user.uid);
       await loadHistory(user.uid, attendanceRules);
 
       alert(
-        extraHours > 0
-          ? `Punch Out Successful! Extra hours: ${extraHours} hrs`
+        result.status === "Absent"
+          ? `Punch In recorded, but it is after the grace deadline for ${result.shift.name} (${result.shift.startTime} + ${result.shift.graceMinutes} min), so today is marked Absent.`
+          : "Punch In Successful"
+      );
+    } catch (error) {
+      showPunchError(error);
+    } finally {
+      setPunching(false);
+    }
+  }
+
+  async function punchOut() {
+    if (punching) return;
+
+    if (!todayData) {
+      alert("Please punch in first");
+      return;
+    }
+
+    if (todayData.PunchOut) {
+      alert("Already punched out");
+      return;
+    }
+
+    setPunching(true);
+
+    try {
+      const position = await getCurrentLocation();
+
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+
+      const result = await callAttendanceApi("/api/attendance/punch-out", {
+        latitude,
+        longitude,
+        accuracy,
+      });
+
+      await loadToday(user.uid);
+      await loadHistory(user.uid, attendanceRules);
+
+      alert(
+        result.extraHours > 0
+          ? `Punch Out Successful! Extra hours: ${result.extraHours} hrs`
           : "Punch Out Successful"
       );
     } catch (error) {
-      console.log(error);
-      alert(getLocationErrorMessage(error));
+      showPunchError(error);
+    } finally {
+      setPunching(false);
     }
   }
 
@@ -658,10 +646,21 @@ export default function AttendancePage() {
   // to them. Not editable here on purpose: letting employees pick their
   // own shift each day would let anyone dodge being marked "Late".
   const myShift = attendanceRules?.shifts?.find((s) => s.id === shiftId);
+  const shiftOptions = listShifts(attendanceRules);
+  // HR-assigned shift wins; otherwise, when shifts exist, the employee
+  // must pick one before punching in.
+  const needsShiftChoice = !myShift && (attendanceRules?.shifts?.length || 0) > 0;
+  const effectiveShift = myShift
+    ? resolveShift(attendanceRules, myShift.id)
+    : needsShiftChoice
+    ? shiftOptions.find((o) => o.id === selectedShiftId) || null
+    : shiftOptions[0] || null;
   const { startTime: myShiftStart, endTime: myShiftEnd } = getShiftTimes(attendanceRules, shiftId);
-  const myShiftLabel = myShift
+  const myShiftLabel = effectiveShift
+    ? `${effectiveShift.name} (${effectiveShift.startTime}–${effectiveShift.endTime})`
+    : myShift
     ? `${myShift.name} (${myShiftStart}–${myShiftEnd})`
-    : `Default Office Timing (${myShiftStart}–${myShiftEnd})`;
+    : "Select a shift before punching in";
 
   return (
     <div className="w-full flex flex-col gap-4">
@@ -697,7 +696,7 @@ export default function AttendancePage() {
             <div className="bg-[#3d6fa8] text-white px-6 sm:px-8 py-4 sm:py-5 rounded-2xl shadow-md text-center w-full sm:w-auto sm:min-w-[220px]">
               <p className="text-sm opacity-80">Today's Status</p>
               <h2 className="text-xl sm:text-2xl font-bold mt-2">
-                {todayData ? "🟢 Present" : "⚪ Not Checked"}
+                {todayData ? (todayData.status === "Absent" ? "🔴 Absent" : "🟢 Present") : "⚪ Not Checked"}
               </h2>
               {todayData?.PunchIn && (
                 <p className="text-sm mt-2">Punch In: {formatTime(todayData.PunchIn)}</p>
@@ -786,10 +785,57 @@ export default function AttendancePage() {
               <InfoBox title="Punch Out" value={formatTime(todayData?.PunchOut)} />
             </div>
 
+            {/* SHIFT — chosen before punch-in, then locked for the session */}
+            <div className="mt-5">
+              <label htmlFor="shift-select" className="text-sm text-[var(--text-muted)]">
+                Shift
+              </label>
+
+              {todayData ? (
+                <div className="mt-2 rounded-xl border border-[var(--border-color)] bg-[var(--accent-bg)] px-4 py-3 text-sm text-[var(--text-color)]">
+                  <b>{todayData.shiftName || "Office timing"}</b>
+                  {todayData.shiftSnapshot && (
+                    <span className="text-[var(--text-muted)]">
+                      {" "}
+                      ({todayData.shiftSnapshot.startTime}–{todayData.shiftSnapshot.endTime}, grace{" "}
+                      {todayData.shiftSnapshot.graceMinutes} min)
+                    </span>
+                  )}
+                  <span className="text-[var(--text-muted)]"> · locked for this session</span>
+                  {todayData.status === "Absent" && todayData.statusReason && (
+                    <p className="mt-2 text-red-600">{todayData.statusReason}</p>
+                  )}
+                </div>
+              ) : myShift ? (
+                <div className="mt-2 rounded-xl border border-[var(--border-color)] bg-[var(--accent-bg)] px-4 py-3 text-sm text-[var(--text-color)]">
+                  <b>{myShiftLabel}</b>
+                  <span className="text-[var(--text-muted)]"> · assigned by HR</span>
+                </div>
+              ) : needsShiftChoice ? (
+                <select
+                  id="shift-select"
+                  value={selectedShiftId}
+                  onChange={(e) => setSelectedShiftId(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-3 text-sm text-[var(--text-color)]"
+                >
+                  <option value="">Select your shift…</option>
+                  {shiftOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} ({o.startTime}–{o.endTime})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="mt-2 rounded-xl border border-[var(--border-color)] bg-[var(--accent-bg)] px-4 py-3 text-sm text-[var(--text-color)]">
+                  <b>{myShiftLabel}</b>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6 sm:mt-8">
               <button
                 onClick={punchIn}
-                disabled={todayData}
+                disabled={!!todayData || punching || (needsShiftChoice && !selectedShiftId)}
                 className="flex-1 bg-[#3d6fa8] text-white py-3 rounded-xl font-semibold disabled:bg-gray-300 hover:bg-[#325d8d] transition"
               >
                 Punch In
@@ -797,7 +843,7 @@ export default function AttendancePage() {
 
               <button
                 onClick={punchOut}
-                disabled={!todayData || todayData.PunchOut}
+                disabled={!todayData || !!todayData.PunchOut || punching}
                 className="flex-1 bg-[#66a8e0] text-white py-3 rounded-xl font-semibold disabled:bg-gray-300 hover:bg-[#5595ca] transition"
               >
                 Punch Out

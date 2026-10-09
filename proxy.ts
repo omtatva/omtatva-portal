@@ -84,9 +84,8 @@ export const config = {
      * - favicon.ico, logo.ico, profile.png (top-level public assets
      *   referenced directly, e.g. by the maintenance page itself)
      * - robots.txt, sitemap.xml
-     * This app has no app/api/* routes — all data access goes straight
-     * from the browser to Firebase, not through this Next.js server —
-     * so there is no separate "/api" segment to special-case here.
+     * app/api/attendance/* (server-validated punch-in/out) is deliberately
+     * NOT excluded: while maintenance mode is on, punching is blocked too.
      */
     "/((?!_next/static|_next/image|favicon.ico|logo.ico|profile.png|robots.txt|sitemap.xml).*)",
   ],

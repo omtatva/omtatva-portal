@@ -16,16 +16,10 @@ import {
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import AvatarIllustration, { HeroAvatar } from "../../components/AvatarIllustration";
+import OrgHierarchySection from "../../components/OrgHierarchySection";
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip,
-  CartesianGrid,
   PieChart,
   Pie,
   Cell,
@@ -410,9 +404,6 @@ export default function DashboardPage() {
   ];
   const LEAVE_PIE_COLORS = [COLORS.warning, COLORS.success];
 
-  // ---------- CHART DATA: last 14 days attendance + hours trend ----------
-  const chartData = buildTrendData(myAttendance, myTimesheets);
-
   // ---------- TODAY'S CHECK-IN STATUS ----------
   // Attendance records are written with "PunchIn"/"PunchOut" fields (see
   // app/attendance/page.js's punchIn()/punchOut()) — this used to read
@@ -552,12 +543,6 @@ export default function DashboardPage() {
             margin-bottom: 14px;
           }
         }
-        .dash-charts-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 25px;
-          margin-bottom: 35px;
-        }
         .dash-summary-grid {
           display: grid;
           grid-template-columns: 350px 350px 1fr;
@@ -573,11 +558,6 @@ export default function DashboardPage() {
           }
           .dash-summary-grid > div:last-child {
             grid-column: 1 / -1;
-          }
-        }
-        @media (max-width: 768px) {
-          .dash-charts-grid {
-            grid-template-columns: 1fr;
           }
         }
         @media (max-width: 600px) {
@@ -1074,64 +1054,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ================= CHARTS ================= */}
-      <h2 style={{ marginBottom: "20px", color: "#0f172a", fontWeight: 700 }}>
-        📉 Trends
-      </h2>
-
-      <div className="dash-charts-grid">
-        <div
-          style={{
-            background: "var(--card-bg)",
-            borderRadius: 22,
-            padding: 30,
-            border: `1px solid ${COLORS.soft}`,
-            boxShadow: "0 10px 30px rgba(0,0,0,.06)",
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: 20, color: COLORS.text }}>
-            Hours Logged (Last 14 Days)
-          </h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.soft} />
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="hours"
-                stroke={COLORS.primary}
-                strokeWidth={3}
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div
-          style={{
-            background: "var(--card-bg)",
-            borderRadius: 22,
-            padding: 30,
-            border: `1px solid ${COLORS.soft}`,
-            boxShadow: "0 10px 30px rgba(0,0,0,.06)",
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: 20, color: COLORS.text }}>
-            Attendance (Last 14 Days)
-          </h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.soft} />
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="present" fill={COLORS.accent} radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      {/* ================= ORGANIZATION HIERARCHY ================= */}
+      <OrgHierarchySection />
 
       {/* ================= PERFORMANCE + LEAVE BALANCE ================= */}
       <div className="dash-summary-grid">
@@ -1499,47 +1423,6 @@ export default function DashboardPage() {
       )}
     </div>
   );
-}
-
-/**
- * Builds a 14-day trend array combining attendance presence and timesheet hours,
- * grouped by date. Expects attendance docs to have a "date" field and
- * timesheet docs to have "date" and "hours" fields (adjust field names below
- * if your schema differs).
- */
-function buildTrendData(attendance, timesheets) {
-  const days = [];
-  const today = new Date();
-
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = d.toISOString().split("T")[0];
-    days.push({
-      key,
-      label: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
-      hours: 0,
-      present: 0,
-    });
-  }
-
-  const dayMap = Object.fromEntries(days.map((d) => [d.key, d]));
-
-  attendance.forEach((a) => {
-    const dateKey = normalizeDate(a.date);
-    if (dateKey && dayMap[dateKey]) {
-      dayMap[dateKey].present = 1;
-    }
-  });
-
-  timesheets.forEach((t) => {
-    const dateKey = normalizeDate(t.date);
-    if (dateKey && dayMap[dateKey]) {
-      dayMap[dateKey].hours += Number(t.hours || 0);
-    }
-  });
-
-  return days;
 }
 
 function formatTime(value) {

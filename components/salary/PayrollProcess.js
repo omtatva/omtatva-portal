@@ -72,6 +72,7 @@ id:doc.id,
 
 return attendance.filter(
   (item) =>
+    item.isDemo !== true &&
     item.date &&
     item.date.startsWith(month)
 );
@@ -155,6 +156,10 @@ const totalDays=30;
 
 const presentDays = attendance.filter(
 
+item=>item.isDemo!==true
+
+).filter(
+
 item=>item.status==="Present"
 
 ).length;
@@ -163,6 +168,10 @@ item=>item.status==="Present"
 
 
 const absentDays = attendance.filter(
+
+item=>item.isDemo!==true
+
+).filter(
 
 item=>item.status==="Absent"
 

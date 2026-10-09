@@ -47,3 +47,6 @@ next-env.d.ts
 /public/*.mp4
 /public/*.mov
 /public/*.webm
+# attendance backups contain employee data - never commit
+/backups/
+attendance-backup_*.json

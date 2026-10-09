@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebase";
-import { isAdminTierRole } from "../../lib/roles";
+import { isAdminTierRole, isSuperAdminRole } from "../../lib/roles";
 import { lookupRoleForEmail } from "../../lib/adminAccess";
 
 import {
@@ -43,6 +43,8 @@ export default function AdminPage() {
   const [activities, setActivities] = useState([]);
   const [departmentData, setDepartmentData] = useState([]);
   const [trendData, setTrendData] = useState([]);
+  // Attendance Reports are Super Admin only (also enforced by the API).
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -64,6 +66,8 @@ export default function AdminPage() {
           window.location.href = "/";
           return;
         }
+
+        setIsSuperAdmin(isSuperAdminRole(role));
 
         await loadDashboard();
         await loadActivities();
@@ -304,7 +308,9 @@ export default function AdminPage() {
         >
           {[
             ["👥 Employee Management", "/admin/users"],
+            ["🧭 Organization Hierarchy", "/admin/hierarchy"],
             ["🕒 Attendance", "/admin/attendance"],
+            ["📈 Attendance Reports & Audit", "/admin/attendance-reports"],
             ["🏖 Leave", "/admin/leave"],
             ["💰 Payroll", "/admin/payroll"],
             ["📋 Timesheets", "/admin/timesheet"],
@@ -312,7 +318,9 @@ export default function AdminPage() {
             ["📊 Reports", "/admin/tools-report"],
             ["🎬 AI Production", "/admin/production"],
             ["📅 Holidays", "/admin/holidays"],
-          ].map(([title, link]) => (
+          ]
+            .filter(([, link]) => link !== "/admin/attendance-reports" || isSuperAdmin)
+            .map(([title, link]) => (
             <button
               key={title}
               onClick={() => (window.location.href = link)}

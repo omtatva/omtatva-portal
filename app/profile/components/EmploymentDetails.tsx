@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useOrgChart } from "@/lib/useOrgChart";
 import { useProfile } from "../ProfileContext";
 
 
@@ -21,6 +24,23 @@ const {
 
 
 const [isSaving,setIsSaving]=useState(false);
+
+
+// Reporting manager is assigned by HR (Admin -> Organization Hierarchy)
+// and read live from there — employees can't edit it, so the profile can
+// never disagree with the hierarchy shown on the dashboard.
+const {index:orgIndex,ready:orgReady}=useOrgChart();
+const [myUid,setMyUid]=useState<string|null>(null);
+
+useEffect(()=>{
+const unsub=onAuthStateChanged(auth,(u)=>setMyUid(u?u.uid:null));
+return ()=>unsub();
+},[]);
+
+const myManager=(()=>{
+const me=myUid?orgIndex.byId.get(myUid):undefined;
+return me?.managerId?orgIndex.byId.get(me.managerId):undefined;
+})();
 
 
 
@@ -205,19 +225,16 @@ Reporting Manager
 
 <input
 
-style={input}
+readOnly
+
+style={{...input,background:"#f1f5f9",cursor:"not-allowed"}}
 
 value={
-profile.reportingManager || ""
-}
-
-onChange={(e)=>
-
-updateField(
-"reportingManager",
-e.target.value
-)
-
+!orgReady
+?"Loading…"
+:myManager
+?`${myManager.name}${myManager.designation?` — ${myManager.designation}`:""}`
+:"Not assigned yet (set by HR)"
 }
 
 />

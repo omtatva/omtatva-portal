@@ -45,6 +45,7 @@ type AttendanceItem = {
   status?: string;
   PunchIn?: { toDate?: () => Date } | string | Date | null;
   PunchOut?: { toDate?: () => Date } | string | Date | null;
+  shiftEndAt?: { toDate?: () => Date } | string | Date | null;
   date?: string;
 };
 
@@ -65,6 +66,11 @@ function toDate(value: AttendanceItem["PunchIn"]): Date | null {
 // deleted — uncomment the block and delete the early `return` to bring
 // Late-marking back later. Absent/Incomplete are untouched; only the
 // Late-vs-Present timing check is affected.
+//
+// NOTE: the "punch-in after grace deadline = Absent" policy (effective
+// 2026-10-10, see lib/attendancePolicy.ts) is applied by the server at
+// punch-in and saved in `status`, so it is honoured by the first check
+// below ("Absent" stays Absent) — no timing maths is needed here.
 export function computeDisplayStatus(
   item: AttendanceItem,
   rules: AttendanceRules | null | undefined,
@@ -82,7 +88,12 @@ export function computeDisplayStatus(
 
   const punchOut = toDate(item.PunchOut);
   if (!punchOut && item.date !== todayStr) {
-    return "Incomplete";
+    // An overnight shift punched in yesterday evening is still legitimately
+    // running this morning — only flag it once its saved shift end passed.
+    const shiftEnd = toDate(item.shiftEndAt);
+    if (!(shiftEnd && Date.now() <= shiftEnd.getTime())) {
+      return "Incomplete";
+    }
   }
 
   // Late-marking disabled for now — see note above. Once punched in
