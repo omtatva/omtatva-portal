@@ -110,6 +110,9 @@ export async function applyCorrection(admin: Admin, req: CorrectionRequest, opts
       const before = toValues(data);
       const { after, list } = diffChanges(before, req.changes || {});
       if (list.length === 0) throw new ApiError(409, "no-change", "The record already has these values.");
+      if (after.punchIn && after.punchOut && after.punchOut.getTime() <= after.punchIn.getTime()) {
+        throw new ApiError(400, "invalid-correction", "Punch-out must be after punch-in.");
+      }
 
       const correctionRef = corrections.doc();
       const patch: Record<string, unknown> = {

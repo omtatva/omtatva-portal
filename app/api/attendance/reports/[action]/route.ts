@@ -1,6 +1,6 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
 import { initializeHistoricalDemo, previewHistorical } from "@/lib/server/historicalServer";
-import { applyBulkCorrections } from "@/lib/server/bulkCorrectionServer";
+import { applyBulkCorrections, applyBulkPunchOut } from "@/lib/server/bulkCorrectionServer";
 import {
   buildExport,
   createBackup,
@@ -91,6 +91,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       // Many records at once — each still corrected and audited individually.
       case "bulk-correct":
         return Response.json(await applyBulkCorrections(admin, body as never), { headers: NO_STORE });
+      // Fill in missing punch-outs with one rule (shift end / fixed time / hours).
+      case "bulk-punchout":
+        return Response.json(await applyBulkPunchOut(admin, body as never), { headers: NO_STORE });
       case "backup-verify":
         return Response.json(await verifyBackup(admin, body.backupId, body.sha256), { headers: NO_STORE });
       default:

@@ -35,8 +35,9 @@ import {
   type BackupMetaRecord,
   type LiveComparison,
 } from "@/lib/attendanceBackup";
-import { companyTimezone, type PolicyRules } from "@/lib/attendancePolicy";
+import { companyTimezone, resolveShift, type PolicyRules } from "@/lib/attendancePolicy";
 import BulkCorrectionDialog, { type BulkGroup } from "@/components/BulkCorrectionDialog";
+import BulkPunchOutDialog, { type PunchOutRow } from "@/components/BulkPunchOutDialog";
 import { groupBySuggestion, toBulkItem, type BulkResult } from "@/lib/bulkCorrection";
 import { CORRECTION_STATUSES } from "@/lib/attendanceCorrection";
 
@@ -92,6 +93,7 @@ export default function AttendanceReportsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<{ groups: BulkGroup[]; dateRange: { from: string; to: string } } | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>("Leave");
+  const [punchOutBulk, setPunchOutBulk] = useState<{ rows: PunchOutRow[]; dateRange: { from: string; to: string } } | null>(null);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [downloading, setDownloading] = useState<string>("");
 
@@ -266,6 +268,31 @@ export default function AttendanceReportsPage() {
     if (groups.length === 0) return;
     const suggested = selectedFindings.filter((f) => f.proposedStatus);
     setBulk({ groups, dateRange: rangeOf(suggested) });
+  };
+
+  // Records with a punch-in but no punch-out among the ticked findings.
+  const missingPunchOutCount = selectedFindings.filter((f) => f.type === "missing-punch-out").length;
+
+  const openPunchOut = () => {
+    if (!data) return;
+    const picked = selectedFindings.filter((f) => f.type === "missing-punch-out");
+    const rows: PunchOutRow[] = [];
+    for (const f of picked) {
+      const rec = data.records.find((r) => r.id === f.recordId);
+      if (!rec) continue;
+      const emp = data.employees.find((e) => e.uid === f.userId);
+      const snap = rec.shiftSnapshot;
+      const base = resolveShift(data.rules, rec.shiftId || emp?.shiftId);
+      rows.push({
+        recordId: rec.id,
+        name: emp?.name || f.employeeName,
+        date: rec.date,
+        punchIn: rec.punchIn,
+        shiftEndAt: rec.shiftEndAt,
+        shift: snap?.startTime ? { ...base, ...snap } as typeof base : base,
+      });
+    }
+    if (rows.length) setPunchOutBulk({ rows, dateRange: rangeOf(picked) });
   };
 
   const openSetStatus = () => {
@@ -499,7 +526,8 @@ export default function AttendanceReportsPage() {
 
           <p className="ar-note">
             <b>One record:</b> press “Review &amp; correct” on a row. <b>Many records:</b> tick the boxes (or the top box to tick
-            everything matching the filter), then use the bar that appears — “Apply suggested fix” or “Set status…”.
+            everything matching the filter), then use the bar that appears — “Apply suggested fix”, “Set status…”, or, for
+            days with a punch-in but no punch-out, “Set punch-out…”.
             Both need a reason; completed months also need a verified backup, and every record is logged separately.
           </p>
 
@@ -551,6 +579,11 @@ export default function AttendanceReportsPage() {
                     ))}
                   </select>
                   <button className="ar-btn ar-ghost ar-small" onClick={openSetStatus}>Set status…</button>
+                  {missingPunchOutCount > 0 && (
+                    <button className="ar-btn ar-primary ar-small" onClick={openPunchOut}>
+                      Set punch-out… ({missingPunchOutCount})
+                    </button>
+                  )}
                   <button className="ar-link ar-sub" onClick={() => setSelected(new Set())}>Clear selection</button>
                 </div>
               )}
@@ -614,6 +647,16 @@ export default function AttendanceReportsPage() {
         <div className="ar-card">
           <p style={{ color: "var(--text-muted)" }}>No completed month yet — there is nothing to back up.</p>
         </div>
+      )}
+
+      {punchOutBulk && (
+        <BulkPunchOutDialog
+          rows={punchOutBulk.rows}
+          tz={tz}
+          dateRange={punchOutBulk.dateRange}
+          onClose={() => setPunchOutBulk(null)}
+          onFinished={onBulkFinished}
+        />
       )}
 
       {bulk && (
