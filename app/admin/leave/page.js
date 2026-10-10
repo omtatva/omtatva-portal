@@ -12,12 +12,38 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import { logActivity } from "../../../lib/activityLog";
 import { usePermission } from "../../../lib/usePermission";
+import { getJson } from "../../../lib/reportsClient";
 
 
 export default function LeaveAdminPage() {
 
 const { canEdit } = usePermission("leave");
 const [requests,setRequests]=useState([]);
+
+// Balance and pay impact per employee/request, from the server — the same
+// ledger and the same leave records payroll uses for salary.
+const [overview,setOverview]=useState(null);
+const [overviewError,setOverviewError]=useState("");
+const [typeChoice,setTypeChoice]=useState({});
+const requestsSignature = requests.map((r)=>`${r.id}:${r.status}:${r.leaveType}`).join("|");
+
+useEffect(()=>{
+let alive=true;
+getJson("/api/payroll/leave-overview")
+.then((r)=>{ if(alive){ setOverview(r); setOverviewError(""); } })
+.catch((e)=>{ if(alive) setOverviewError(e.message||"Could not load balances"); });
+return ()=>{ alive=false; };
+},[requestsSignature]);
+
+const balanceOf = (uid) => overview?.employees.find((e)=>e.uid===uid) || null;
+const impactOf = (id) => overview?.impacts?.[id] || null;
+const impactText = (item) => {
+const i = impactOf(item.id);
+if(!i) return "—";
+if(item.status==="Rejected") return "—";
+const t = i.unpaidDays===0 ? "No salary deduction" : i.paidDays===0 ? `${i.unpaidDays} day(s) unpaid (LOP)` : `${i.paidDays} paid, ${i.unpaidDays} unpaid (LOP)`;
+return item.status==="Pending" ? `If approved: ${t}` : t;
+};
 const [remarks,setRemarks]=useState({});
 
 const [wfhRequests,setWfhRequests]=useState([]);
@@ -115,13 +141,18 @@ const updateLeaveStatus = async (id, status) => {
 
     // 1. Update leave status in Firestore
 
+    const chosenType = typeChoice[id] || leave.leaveType;
+    const typeChanged = chosenType !== leave.leaveType;
+
     await updateDoc(
       doc(db, "leaveRequests", id),
       {
         status: status,
         approvedBy: auth.currentUser?.displayName || "Admin",
         approvedAt: Timestamp.now(),
-        remarks: remarks[id] || ""
+        remarks: remarks[id] || "",
+        // the leave type on this record is what payroll uses to decide paid / unpaid
+        ...(typeChanged ? { leaveType: chosenType, requestedLeaveType: leave.requestedLeaveType || leave.leaveType } : {})
       }
     );
 
@@ -350,7 +381,8 @@ borderCollapse:"collapse"
 
 <th style={th}>Leave</th>
 
-<th style={th}>Days</th>
+<th style={th}>Working days</th>
+<th style={th}>Balance &amp; salary effect</th>
 
 <th style={th}>From</th>
 
@@ -390,7 +422,16 @@ marginTop:"4px"
 
 <td style={td}>{item.leaveType}</td>
 
-<td style={td}>{item.totalDays || "-"}</td>
+<td style={td}>{impactOf(item.id)?.workingDays ?? (item.totalDays || "-")}</td>
+<td style={td}>
+{(()=>{ const b=balanceOf(item.uid); return b ? (
+<div style={{fontSize:13}}>
+Balance: <b>{b.available}</b> day(s)
+<div style={{color:"#64748b"}}>earned {b.accrued} · used {b.used}</div>
+</div>
+) : (overviewError ? <div style={{fontSize:12,color:"#dc2626"}}>{overviewError}</div> : null); })()}
+<div style={{fontSize:13,marginTop:4,color: impactOf(item.id)?.unpaidDays ? "#b45309" : "#15803d", fontWeight:600}}>{impactText(item)}</div>
+</td>
 
 <td style={td}>{item.fromDate}</td>
 
@@ -497,6 +538,16 @@ fontSize:"14px",
 
 {canEdit ? (
 <>
+{item.status==="Pending" && overview && (
+<select
+value={typeChoice[item.id] || item.leaveType}
+onChange={(e)=>setTypeChoice({...typeChoice,[item.id]:e.target.value})}
+title="The leave type decides whether salary is deducted. Choose LOP to make it unpaid."
+style={{display:"block",marginBottom:8,padding:6,borderRadius:8,border:"1px solid #ddd",width:"100%"}}
+>
+{[...new Set([item.leaveType,...overview.policy.paidLeaveTypes,...overview.policy.unpaidLeaveTypes])].map((t)=>(<option key={t}>{t}</option>))}
+</select>
+)}
 <button
 
 style={greenBtn}

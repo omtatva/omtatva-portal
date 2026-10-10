@@ -41,7 +41,7 @@ test("PDF: a valid PDF is produced and contains the employee, components, attend
   assert.equal(text.slice(0, 5), "%PDF-");
   assert.ok(text.trimEnd().endsWith("%%EOF"));
   assert.ok(bytes.length > 2000);
-  for (const needle of ["Asha Rao", "E001", "Payslip for August 2026", "Basic Salary", "HRA", "Special Allowance", "Provident Fund (PF)", "Loss of pay (3 days @ Rs.", "Payable days", "28", "Rs. 45,297.00", "45,297.00", "50,000.00", "4,703.00", "Forty Five Thousand Two Hundred Ninety Seven Rupees Only"]) {
+  for (const needle of ["Asha Rao", "E001", "Payslip for August 2026", "Basic Salary", "HRA", "Special Allowance", "Provident Fund (PF)", "Absence (3 days @ Rs.", "Payable days", "28", "Rs. 45,297.00", "45,297.00", "50,000.00", "4,703.00", "Forty Five Thousand Two Hundred Ninety Seven Rupees Only"]) {
     assert.ok(text.includes(needle), `missing in PDF: ${needle}`);
   }
   assert.ok(!text.includes("₹"), "no rupee glyph (Helvetica cannot draw it)");

@@ -127,7 +127,8 @@ export function renderPayslip(r: EmployeeResult, meta: PayslipMeta): Uint8Array 
   // earnings | deductions
   const earn = r.earnings.map((e) => [e.label, formatRs(e.amount)]);
   const ded: string[][] = [];
-  if (r.lopDeduction > 0) ded.push([`Loss of pay (${r.lopDays} day${r.lopDays === 1 ? "" : "s"} @ Rs. ${formatRs(r.perDayRate)})`, formatRs(r.lopDeduction)]);
+  if (r.attendanceDeduction > 0) ded.push([`Absence (${r.attendanceLopDays} day${r.attendanceLopDays === 1 ? "" : "s"} @ Rs. ${formatRs(r.perDayRate)})`, formatRs(r.attendanceDeduction)]);
+  if (r.leaveDeduction > 0) ded.push([`Unpaid leave (${r.leaveLopDays} day${r.leaveLopDays === 1 ? "" : "s"} @ Rs. ${formatRs(r.perDayRate)})`, formatRs(r.leaveDeduction)]);
   if (r.notEmployedDeduction > 0) ded.push([`Pro-rata (${r.notEmployedDays} day${r.notEmployedDays === 1 ? "" : "s"} not employed)`, formatRs(r.notEmployedDeduction)]);
   for (const d of r.deductions) ded.push([d.label, formatRs(d.amount)]);
   const rows = Math.max(earn.length, ded.length, 1);

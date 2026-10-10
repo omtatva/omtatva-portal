@@ -3,7 +3,7 @@
 
 import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import { companyTimezone, localDateString, resolveShift, type PolicyRules } from "../attendancePolicy";
-import { MONTH_RE } from "../payroll/calendar";
+import { MONTH_RE, leaveYearOf } from "../payroll/calendar";
 import {
   PayrollForbidden, assertCan, assertSuperAdmin, can, type Level, type Matrix, type PayrollModule,
 } from "../payroll/access";
@@ -161,6 +161,11 @@ export async function loadDecisions(period: string): Promise<Record<string, Over
   return o && typeof o === "object" ? (o as Record<string, Override>) : {};
 }
 
+export function leaveYearStart(period: string, startMonth: number): string {
+  const y = leaveYearOf(`${period}-01`, startMonth);
+  return `${y}-${String(startMonth).padStart(2, "0")}-01`;
+}
+
 export async function computeRun(period: string, policyIn?: PayrollPolicy): Promise<ComputedRun> {
   const db = adminDb();
   const policy = policyIn || (await loadPolicy());
@@ -169,7 +174,8 @@ export async function computeRun(period: string, policyIn?: PayrollPolicy): Prom
   const [users, structures, attSnap, leaveSnap, holSnap, decisions, removedSnap] = await Promise.all([
     loadUsers(),
     loadStructures(policy),
-    db.collection("attendance").where("date", ">=", `${period}-01`).where("date", "<=", `${period}-31`).get(),
+    // from the start of the leave year, so leave on days worked earlier in the year is recognised
+    db.collection("attendance").where("date", ">=", leaveYearStart(period, policy.leave.leaveYearStartMonth)).where("date", "<=", `${period}-31`).get(),
     db.collection("leaveRequests").where("status", "==", "Approved").get(),
     db.collection("holidays").get(),
     loadDecisions(period),

@@ -71,6 +71,11 @@ export default function LeavePolicyPage() {
 
   return (
     <div style={{ padding: "30px", background: "var(--bg-color)", minHeight: "100vh" }}>
+      <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", padding: "14px 18px", borderRadius: 12, marginBottom: 20, maxWidth: 760 }}>
+        <b>These per-type quotas are no longer used.</b> Leave balances and salary deductions now follow the company leave policy
+        (annual entitlement, monthly accrual, paid / unpaid leave types, carry-forward…), which is set by a Super Admin under{" "}
+        <a href="/admin/payroll" style={{ textDecoration: "underline" }}>Payroll → Policy &amp; leave rules</a>.
+      </div>
       <h1
         style={{
           fontSize: "30px",

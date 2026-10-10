@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ApiClientError, getBlob, getJson, postJson } from "@/lib/reportsClient";
+import { ApiClientError, getBlob, getJson, postJson, triggerDownload } from "@/lib/reportsClient";
+import EmailPanel from "@/components/payroll/EmailPanel";
 import type { PayslipRow, PreviewResponse } from "@/lib/payroll/apiTypes";
 import type { DayClass, EmployeeResult, Flag } from "@/lib/payroll/engine";
 
@@ -107,6 +108,13 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       return `Decision removed for ${date}.`;
     });
 
+  const download = async (path: string, filename: string) => {
+    setError("");
+    try {
+      triggerDownload(await getBlob(path), filename);
+    } catch (e) { setError(msg(e)); }
+  };
+
   const openPdf = async (id: string) => {
     try {
       const blob = await getBlob(`/api/payroll/payslip-pdf?id=${encodeURIComponent(id)}`);
@@ -152,18 +160,21 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              ["Employees", String(data.summary.employees)],
-              ["Ready", String(data.summary.ready)],
-              ["Need a decision", String(data.summary.needsReview)],
-              ["Gross", rs(data.summary.gross)],
-              ["Deductions", rs(data.summary.totalDeductions)],
+              ["Employees (ready / total)", `${data.summary.ready} / ${data.summary.employees}`],
+              ["Gross salary", rs(data.summary.gross)],
+              ["Basic salary", rs(data.summary.basic)],
+              ["Allowances", rs(data.summary.allowances)],
+              ["Attendance (absence) deductions", rs(data.summary.attendanceDeduction)],
+              ["Leave (unpaid) deductions", rs(data.summary.leaveDeduction)],
+              ["Other deductions (PF, ESI, PT, TDS, pro-rata)", rs(data.summary.otherDeductions)],
               ["Net payable", rs(data.summary.netPay)],
             ].map(([k, v]) => (
-              <div key={k} className="bg-white rounded-xl shadow p-4"><div className="text-xs text-gray-500">{k}</div><div className="text-lg font-bold">{v}</div></div>
+              <div key={k} className={`bg-white rounded-xl shadow p-4 ${k === "Net payable" ? "ring-2 ring-green-600" : ""}`}><div className="text-xs text-gray-500">{k}</div><div className="text-lg font-bold">{v}</div></div>
             ))}
           </div>
+          {data.summary.needsReview > 0 && <p className="text-sm text-yellow-800">{data.summary.needsReview} employee(s) still need a decision — their figures below are provisional.</p>}
           {data.skipped.length > 0 && (
             <p className="text-xs text-gray-500">Not in this payroll: {data.skipped.map((s) => `${s.name} (${s.employeeId}: ${s.reason})`).join("; ")}</p>
           )}
@@ -194,7 +205,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <div className="overflow-x-auto bg-white rounded-xl shadow">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left">
-                <tr>{["Employee", "ID", "Payable days", "Unpaid days", "Gross", "Deductions", "Net pay", "Status"].map((h) => <th key={h} className="p-3 whitespace-nowrap">{h}</th>)}</tr>
+                <tr>{["Employee", "ID", "Payable days", "Gross", "Basic", "Allowances", "Absence", "Unpaid leave", "Other ded.", "Net pay", "Status"].map((h) => <th key={h} className="p-3 whitespace-nowrap">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -202,8 +213,8 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     <tr className="border-t cursor-pointer hover:bg-slate-50" onClick={() => setOpen(open === r.uid ? null : r.uid)}>
                       <td className="p-3 font-medium">{r.name}</td><td className="p-3">{r.employeeId}</td>
                       <td className="p-3">{r.status === "excluded" ? "—" : `${r.payableDays} / ${r.daysInMonth}`}</td>
-                      <td className="p-3">{r.lopDays}</td>
-                      <td className="p-3">{rs(r.grossEarnings)}</td><td className="p-3">{rs(r.totalDeductions)}</td>
+                      <td className="p-3">{rs(r.grossEarnings)}</td><td className="p-3">{rs(r.basicSalary)}</td><td className="p-3">{rs(r.allowances)}</td>
+                      <td className="p-3">{rs(r.attendanceDeduction)}</td><td className="p-3">{rs(r.leaveDeduction)}</td><td className="p-3">{rs(r.otherDeductions)}</td>
                       <td className="p-3 font-bold">{r.status === "excluded" ? "—" : rs(r.netPay)}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status === "ready" ? "bg-green-100 text-green-700" : r.status === "review" ? "bg-yellow-200 text-yellow-900" : "bg-gray-200 text-gray-600"}`}>
@@ -212,13 +223,19 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                       </td>
                     </tr>
                     {open === r.uid && (
-                      <tr className="bg-slate-50"><td colSpan={8} className="p-4">
+                      <tr className="bg-slate-50"><td colSpan={11} className="p-4">
                         <Detail r={r} canEdit={canEdit && !approved} why={why} setWhy={setWhy} decide={decide} clear={clearDecision} decisions={data.decisions} busy={!!busy} />
                       </td></tr>
                     )}
                   </Fragment>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-gray-500">No employees to show.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={11} className="p-6 text-center text-gray-500">No employees to show.</td></tr>}
+                {rows.length > 0 && filter === "all" && (
+                  <tr className="border-t-2 font-bold bg-slate-100">
+                    <td className="p-3" colSpan={3}>Total (paid employees)</td><td className="p-3">{rs(data.summary.gross)}</td><td className="p-3">{rs(data.summary.basic)}</td><td className="p-3">{rs(data.summary.allowances)}</td>
+                    <td className="p-3">{rs(data.summary.attendanceDeduction)}</td><td className="p-3">{rs(data.summary.leaveDeduction)}</td><td className="p-3">{rs(data.summary.otherDeductions)}</td><td className="p-3">{rs(data.summary.netPay)}</td><td />
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -248,6 +265,13 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   className="px-4 py-2 rounded-lg bg-blue-700 text-white disabled:opacity-40">{busy === "gen" ? "Generating…" : "Generate Payslips"}</button>
                 <span className="text-sm text-gray-500">{slips.filter((s) => s.status === "issued").length} issued</span>
               </div>
+              <div className="flex flex-wrap gap-2 items-center text-sm">
+                <b>Export (approved figures only):</b>
+                <button className="px-3 py-1.5 rounded bg-slate-700 text-white" disabled={!!busy} onClick={() => download(`/api/payroll/payroll-export?period=${period}&format=xlsx`, `Payroll_${period}_r${data.run!.revision}.xlsx`)}>⬇ Summary XLSX</button>
+                <button className="px-3 py-1.5 rounded bg-slate-700 text-white" disabled={!!busy} onClick={() => download(`/api/payroll/payroll-export?period=${period}&format=csv`, `Payroll_${period}_r${data.run!.revision}.csv`)}>⬇ Summary CSV</button>
+                <button className="px-3 py-1.5 rounded bg-slate-700 text-white disabled:opacity-40" disabled={!!busy || data.run!.status !== "payslips_generated"} onClick={() => download(`/api/payroll/payslips-zip?period=${period}`, `Payslips_${period}_r${data.run!.revision}.zip`)}>⬇ All payslips (ZIP)</button>
+                <span className="text-xs text-gray-500">These files contain salary data. Share them only with people authorized for payroll.</span>
+              </div>
               {slips.length > 0 && (
                 <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>
                   {slips.map((s) => (
@@ -257,6 +281,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   ))}
                 </tbody></table></div>
               )}
+              {data.run!.status === "payslips_generated" && <EmailPanel period={period} isSuperAdmin={isSuperAdmin} canEdit={canEdit} />}
               {isSuperAdmin && (
                 <details className="border-t pt-3">
                   <summary className="cursor-pointer text-red-700 font-medium">Reverse this approval (Super Admin)</summary>
@@ -307,6 +332,12 @@ function Detail({ r, canEdit, why, setWhy, decide, clear, decisions, busy }: {
           {r.deductions.map((l) => <div key={l.key} className="flex justify-between"><span>{l.label}</span><span>{rs(l.amount)}</span></div>)}
           <div className="flex justify-between font-semibold border-t mt-1"><span>Net pay</span><span>{rs(r.netPay)}</span></div></div>
       </div>
+      {r.leaveDays.length > 0 && (
+        <div className="text-xs text-gray-700">
+          <b>Leave taken (from the Leave records):</b>{" "}
+          {r.leaveDays.map((l) => `${l.date} ${l.leaveType} → ${l.kind === "paid" ? "paid" : l.kind === "unpaid-type" ? "unpaid (LOP)" : "unpaid (no balance)"}`).join(" · ")}
+        </div>
+      )}
       {r.leave && <p className="text-xs text-gray-600">Leave balance {r.leave.leaveYear}: opening {r.leave.opening}, accrued {r.leave.accruedToDate}, used {r.leave.usedYearToDate}, available <b>{r.leave.available}</b>{r.leave.encashableDays ? `, encashable ${r.leave.encashableDays} (not paid automatically)` : ""}</p>}
       {r.flags.filter((f) => !(f.date && DECIDABLE.has(f.code) && r.dayClasses[f.date] === "review")).map((f, i) => (
         <div key={i} className={f.severity === "block" ? "text-red-700" : f.severity === "warn" ? "text-amber-700" : "text-blue-700"}>• {f.message}</div>

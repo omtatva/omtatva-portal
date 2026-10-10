@@ -1,4 +1,7 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
+import { leaveOverview, myLeave } from "@/lib/server/leaveServer";
+import { exportPayroll, exportPayslipsZip } from "@/lib/server/payrollExports";
+import { continueSending, emailDns, emailPreview, emailStatus, resendPayslipEmails, sendPayslipEmails, sendTestEmail, setLive } from "@/lib/server/payslipEmail";
 import {
   applySalarySheet, approveRun, deleteSalary, generatePayslips, getPolicy, listPeriodPayslips, listRuns, myPayslips,
   payslipPdf, previewRun, previewSalarySheet, resolveMissing, reverseRun, saveDecisions, savePolicy, saveSalary, salaryHistory,
@@ -25,6 +28,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ action: 
         return Response.json(await previewRun(user, url.searchParams.get("period")), { headers: NO_STORE });
       case "payslips":
         return Response.json(await listPeriodPayslips(user, url.searchParams.get("period")), { headers: NO_STORE });
+      case "payroll-export": {
+        const out = await exportPayroll(user, url.searchParams.get("period"), url.searchParams.get("format"));
+        return new Response(new Blob([out.bytes as BlobPart], { type: out.contentType }), {
+          headers: { "Content-Type": out.contentType, "Content-Disposition": `attachment; filename="${out.filename}"`, "X-Content-Type-Options": "nosniff", ...NO_STORE },
+        });
+      }
+      case "payslips-zip": {
+        const out = await exportPayslipsZip(user, url.searchParams.get("period"));
+        return new Response(new Blob([out.bytes as BlobPart], { type: out.contentType }), {
+          headers: { "Content-Type": out.contentType, "Content-Disposition": `attachment; filename="${out.filename}"`, "X-Content-Type-Options": "nosniff", ...NO_STORE },
+        });
+      }
+      case "email-status":
+        return Response.json(await emailStatus(user, url.searchParams.get("period")), { headers: NO_STORE });
+      case "email-preview":
+        return Response.json(await emailPreview(user, url.searchParams.get("period")), { headers: NO_STORE });
+      case "email-dns":
+        return Response.json(await emailDns(user), { headers: NO_STORE });
+      case "my-leave":
+        return Response.json(await myLeave(user), { headers: NO_STORE });
+      case "leave-overview":
+        return Response.json(await leaveOverview(user), { headers: NO_STORE });
       case "my-payslips":
         return Response.json(await myPayslips(user), { headers: NO_STORE });
       case "salary-history":
@@ -72,6 +97,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
         return Response.json(await generatePayslips(user, body), { headers: NO_STORE });
       case "reverse":
         return Response.json(await reverseRun(user, body), { headers: NO_STORE });
+      case "email-test":
+        return Response.json(await sendTestEmail(user), { headers: NO_STORE });
+      case "email-live":
+        return Response.json(await setLive(user, body), { headers: NO_STORE });
+      case "email-send":
+        return Response.json(await sendPayslipEmails(user, body), { headers: NO_STORE });
+      case "email-continue":
+        return Response.json(await continueSending(user, body), { headers: NO_STORE });
+      case "email-resend":
+        return Response.json(await resendPayslipEmails(user, body), { headers: NO_STORE });
       case "salary-preview":
         return Response.json(await previewSalarySheet(user, body), { headers: NO_STORE });
       case "salary-apply":

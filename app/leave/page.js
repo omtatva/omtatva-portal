@@ -8,16 +8,16 @@ import {
   onSnapshot,
   query,
   where,
-  doc,
 } from "firebase/firestore";
 import { logActivity } from "@/lib/activityLog";
+import { useMyLeave } from "@/lib/payroll/useMyLeave";
+import { findOverlap, workingDaysInRange } from "@/lib/payroll/leaveView";
 
 export default function LeavePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [leaveType, setLeaveType] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [totalDays, setTotalDays] = useState(0);
   const [reason, setReason] = useState("");
   const [myLeaves, setMyLeaves] = useState([]);
 
@@ -56,18 +56,25 @@ export default function LeavePage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (fromDate && toDate) {
-      const start = new Date(fromDate);
-      const end = new Date(toDate);
+  // Balance, policy, weekly offs and company holidays come from the server —
+  // the same numbers payroll uses for salary.
+  const leaveSignature = myLeaves.map((l) => `${l.id}:${l.status}:${l.leaveType}`).join("|");
+  const { data: lv, error: lvError } = useMyLeave(leaveSignature);
 
-      const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  const isOffDay = (d) => {
+    if (!lv) return false;
+    const [y, m, day] = d.split("-").map(Number);
+    return lv.offWeekdays.includes(new Date(Date.UTC(y, m - 1, day)).getUTCDay()) || lv.holidays.includes(d);
+  };
+  const countedDays = fromDate && toDate && lv ? workingDaysInRange(fromDate, toDate, isOffDay) : [];
 
-      setTotalDays(diff > 0 ? diff : 0);
-    } else {
-      setTotalDays(0);
-    }
-  }, [fromDate, toDate]);
+  const totalDays = countedDays.length;
+
+  const isUnpaidType = !!lv && lv.policy.unpaidLeaveTypes.map((t) => t.toLowerCase()).includes((leaveType || "").toLowerCase());
+  // Estimate only: the real split is fixed when the request is approved.
+  const freeBalance = lv ? Math.max(lv.summary.available - lv.pendingWorkingDays, 0) : 0;
+  const estPaid = isUnpaidType ? 0 : Math.min(totalDays, Math.floor(freeBalance));
+  const estUnpaid = totalDays - estPaid;
 
   const submitLeave = async () => {
     const user = auth.currentUser;
@@ -82,8 +89,19 @@ export default function LeavePage() {
       return;
     }
 
+    if (fromDate > toDate) {
+      alert("The To date cannot be before the From date");
+      return;
+    }
+
     if (totalDays <= 0) {
-      alert("Please select a valid date range");
+      alert("That range has no working days (only weekly offs / company holidays) — nothing to apply for.");
+      return;
+    }
+
+    const clash = findOverlap(fromDate, toDate, myLeaves);
+    if (clash) {
+      alert(`You already have a ${clash.status.toLowerCase()} leave request covering ${clash.fromDate} → ${clash.toDate}. The same day cannot be applied for twice.`);
       return;
     }
 
@@ -95,7 +113,8 @@ export default function LeavePage() {
         leaveType,
         fromDate,
         toDate,
-        totalDays,
+        totalDays, // working days only (weekly offs and company holidays are not leave)
+        calendarDays: Math.round((new Date(toDate) - new Date(fromDate)) / 86400000) + 1,
         reason,
         status: "Pending",
         appliedOn: Timestamp.now(),
@@ -116,7 +135,6 @@ export default function LeavePage() {
       setFromDate("");
       setToDate("");
       setReason("");
-      setTotalDays(0);
     } catch (error) {
       console.error(error);
       alert("Failed to submit");
@@ -192,50 +210,16 @@ export default function LeavePage() {
     });
   };
 
-  // Quotas come from Settings -> Leave Policy (settings/leavePolicy in
-  // Firestore) instead of being hardcoded here, so HR can change policy
-  // in one place and it applies live, without a code change.
-  const [leavePolicy, setLeavePolicy] = useState({
-    casualLeave: 12,
-    sickLeave: 10,
-    paidLeave: 18,
-  });
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(
-      doc(db, "settings", "leavePolicy"),
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setLeavePolicy({
-            casualLeave: data.casualLeave ?? 12,
-            sickLeave: data.sickLeave ?? 10,
-            paidLeave: data.paidLeave ?? 18,
-          });
-        }
-      },
-      (error) => console.error("LEAVE POLICY SNAPSHOT ERROR:", error)
-    );
-    return () => unsubscribe();
-  }, []);
-
-  const casualLeave = leavePolicy.casualLeave;
-  const sickLeave = leavePolicy.sickLeave;
-  const paidLeave = leavePolicy.paidLeave;
-
-  const approvedCasual = myLeaves.filter(
-    (l) => l.leaveType === "Casual Leave" && l.status === "Approved"
-  ).length;
-
-  const approvedSick = myLeaves.filter(
-    (l) => l.leaveType === "Sick Leave" && l.status === "Approved"
-  ).length;
-
-  const approvedPaid = myLeaves.filter(
-    (l) => l.leaveType === "Paid Leave" && l.status === "Approved"
-  ).length;
-
   const pendingLeave = myLeaves.filter((l) => l.status === "Pending").length;
+
+  const impactOf = (leave) => lv?.requests.find((r) => r.id === leave.id)?.impact || null;
+  const daysOf = (leave) => impactOf(leave)?.workingDays ?? leave.totalDays;
+  const salaryNote = (leave) => {
+    const i = impactOf(leave);
+    if (!i || leave.status === "Rejected") return "—";
+    const text = i.unpaidDays === 0 ? "Paid leave — no salary deduction" : i.paidDays === 0 ? `${i.unpaidDays} day(s) unpaid (loss of pay)` : `${i.paidDays} paid, ${i.unpaidDays} unpaid (loss of pay)`;
+    return leave.status === "Pending" ? `If approved: ${text}` : text;
+  };
 
   const statusBg = (status) =>
     status === "Approved" ? "#dcfce7" : status === "Rejected" ? "#fee2e2" : "#fef3c7";
@@ -331,12 +315,16 @@ export default function LeavePage() {
           marginBottom: "25px",
         }}
       >
-        <LeaveCard title="Casual Leave" value={casualLeave - approvedCasual} color="#2563eb" />
-        <LeaveCard title="Sick Leave" value={sickLeave - approvedSick} color="#16a34a" />
-        <LeaveCard title="Paid Leave" value={paidLeave - approvedPaid} color="#9333ea" />
-        <LeaveCard title="Pending Requests" value={pendingLeave} color="#f59e0b" />
+        <LeaveCard title="Leave Balance (days)" value={lv ? lv.summary.available : "…"} color="#16a34a" />
+        <LeaveCard title={lv ? `Accrued this year (${lv.policy.accrualPerMonth}/month, max ${lv.policy.annualEntitlement})` : "Accrued this year"} value={lv ? lv.summary.accruedToDate : "…"} color="#2563eb" />
+        <LeaveCard title="Used this year" value={lv ? lv.summary.usedYearToDate : "…"} color="#9333ea" />
+        {lv && lv.summary.opening > 0 && <LeaveCard title="Carried forward" value={lv.summary.opening} color="#0ea5e9" />}
+        <LeaveCard title="Pending (working days)" value={lv ? lv.pendingWorkingDays : pendingLeave} color="#f59e0b" />
       </div>
 
+      <p style={{ margin: "-10px 4px 20px", color: "var(--text-muted)", fontSize: 13.5 }}>
+        {lvError ? `Could not load your balance: ${lvError}` : lv ? `Balance = days earned so far this year minus approved leave. Weekly offs and company holidays are never counted as leave. Leave beyond your balance, and "${lv.policy.unpaidLeaveTypes[0] || "LOP"}", is unpaid and reduces your salary for those days.${lv.policyConfirmed ? "" : " (Leave rules are still awaiting HR confirmation.)"}` : "Loading your balance…"}
+      </p>
       {/* Apply Leave Form */}
       <div
         className="leave-form-card"
@@ -363,11 +351,9 @@ export default function LeavePage() {
             <label style={{ color: "var(--text-color)" }}>Leave Type</label>
             <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inputStyle}>
               <option value="">Select Leave</option>
-              <option>Casual Leave</option>
-              <option>Sick Leave</option>
-              <option>Paid Leave</option>
-              <option>Emergency Leave</option>
-              <option>LOP</option>
+              {(lv ? [...lv.policy.paidLeaveTypes, ...lv.policy.unpaidLeaveTypes.slice(0, 1)] : ["Casual Leave", "Sick Leave", "Paid Leave", "Emergency Leave", "LOP"]).map((t) => (
+                <option key={t}>{t}</option>
+              ))}
             </select>
           </div>
 
@@ -382,11 +368,20 @@ export default function LeavePage() {
           </div>
 
           <div>
-            <label style={{ color: "var(--text-color)" }}>Total Days</label>
+            <label style={{ color: "var(--text-color)" }}>Working days counted</label>
             <input value={totalDays} disabled style={inputStyle} />
           </div>
         </div>
 
+        {totalDays > 0 && leaveType && (
+          <p style={{ marginTop: 14, fontSize: 14, color: estUnpaid > 0 ? "#b45309" : "#15803d", fontWeight: 600 }}>
+            {estUnpaid === 0
+              ? `${totalDays} day(s) will use your leave balance — no salary deduction.`
+              : estPaid === 0
+                ? `${totalDays} day(s) will be unpaid (loss of pay) and reduce your salary.`
+                : `About ${estPaid} day(s) from your balance and ${estUnpaid} unpaid (loss of pay). The final split is decided when the request is approved.`}
+          </p>
+        )}
         <div style={{ marginTop: "18px" }}>
           <label style={{ color: "var(--text-color)" }}>Reason</label>
           <textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle, resize: "none" }} />
@@ -439,9 +434,10 @@ export default function LeavePage() {
                   </span>
                 </div>
                 <p style={{ margin: "2px 0", fontSize: 13.5, color: "var(--text-muted)" }}>
-                  {leave.fromDate} → {leave.toDate} ({leave.totalDays} day{leave.totalDays !== 1 ? "s" : ""})
+                  {leave.fromDate} → {leave.toDate} ({daysOf(leave)} working day{daysOf(leave) !== 1 ? "s" : ""})
                 </p>
                 <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>{leave.reason}</p>
+                <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--text-muted)" }}>Salary: {salaryNote(leave)}</p>
               </div>
             ))
           )}
@@ -455,9 +451,10 @@ export default function LeavePage() {
                 <th style={th}>Type</th>
                 <th style={th}>From</th>
                 <th style={th}>To</th>
-                <th style={th}>Days</th>
+                <th style={th}>Working days</th>
                 <th style={th}>Reason</th>
                 <th style={th}>Status</th>
+                <th style={th}>Effect on salary</th>
               </tr>
             </thead>
 
@@ -467,7 +464,7 @@ export default function LeavePage() {
                   <td style={td}>{leave.leaveType}</td>
                   <td style={td}>{leave.fromDate}</td>
                   <td style={td}>{leave.toDate}</td>
-                  <td style={td}>{leave.totalDays}</td>
+                  <td style={td}>{daysOf(leave)}</td>
                   <td style={td}>{leave.reason}</td>
                   <td style={td}>
                     <span
@@ -480,6 +477,7 @@ export default function LeavePage() {
                       {leave.status}
                     </span>
                   </td>
+                  <td style={td}>{salaryNote(leave)}</td>
                 </tr>
               ))}
             </tbody>

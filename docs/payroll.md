@@ -47,6 +47,32 @@ and (if the policy says so) "punched in, never punched out".
   A month with a number of company holidays different from the policy (default 2) shows a warning.
 * Carry-forward (with cap) and encashment (reported only, never paid automatically) are configurable.
 
+## Leave screens ↔ payroll
+
+The **leave records** (`leaveRequests`) are the single source. The employee Leave page, the dashboard leave widget and
+the admin Leave page read the balance from `/api/payroll/my-leave` and `/api/payroll/leave-overview`, which use the same
+ledger as payroll — so the balance shown is the balance used for salary.
+
+* Employee: balance cards (earned / used / carried forward / pending), working days counted (weekly offs and company
+  holidays excluded), overlap with an existing request is blocked, and each request shows its effect on salary.
+* Admin: each request shows the employee's balance and "if approved: N paid / M unpaid (LOP)". While approving, the
+  approver can change the leave type (e.g. Casual → LOP); that type is saved on the record and is what payroll uses.
+* Payroll employee detail lists the leave days taken, straight from those records.
+* Rules: a person can create only their own `Pending` request and read only their own; only admin tier can
+  approve/edit/delete. (Previously any employee could approve their own leave or change dates.)
+* The per-type quotas in Settings → Leave Policy no longer drive anything (a notice there points to Payroll → Policy).
+
+## Finalized payroll: review, exports, e-mail
+
+* **Review screen**: per employee and company-wide — gross, basic, allowances, attendance (absence) deductions, unpaid-leave
+  deductions, other deductions (PF/ESI/PT/TDS/pro-rata), net. Approving saves the immutable snapshot (`payrollEntries`) and a
+  fingerprint; corrections need a Super Admin reversal → new revision (audited, backed up).
+* **Retained PDFs**: generated payslips are stored (`payslipFiles`) with a SHA-256 and re-verified on every read.
+* **Exports** (payroll view access; finalized months only; audited): summary XLSX / CSV and a ZIP of all issued payslips, built from the
+  approved snapshot. Totals are checked against the approved summary before a file is returned; spreadsheet formulas in names are neutralised.
+* **E-mail** (`docs/payroll-email-setup.md`): per-employee e-mail via Postmark, off by default; needs provider setup, a test e-mail
+  and a Super Admin go-live switch. Duplicate-send protection, retries, bounce/delivery webhooks, controlled resend, audit.
+
 ## Data (all written by the server only)
 
 `settings/payrollPolicy` · `payrollRuns/{YYYY-MM}` (status, revision, summary, policy snapshot, history) ·

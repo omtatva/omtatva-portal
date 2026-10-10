@@ -102,7 +102,7 @@ test("salary sheet apply: preview hash → typed confirm → reason → backup �
 test("payslip download: owner or authorized HR only; wrong/other ids look like 'not found'; integrity is verified", () => {
   const b = body(actions, "payslipPdf");
   assert.ok(b.includes("canOpenPayslip(") && b.includes('"not-found"'));
-  assert.ok(b.includes("hashOf(result) !== p.entryHash") && b.includes("sha256(bytes) !== p.pdfSha256"));
+  assert.ok(b.includes("hashOf(result) !== p.entryHash") && b.includes("retainedPdf("), "the retained PDF is checksum-verified (retainedPdf)");
   assert.ok(/\^\\d\{4\}-\\d\{2\}_/.test(b), "ids are validated");
   const mine = body(actions, "myPayslips");
   assert.ok(mine.includes('where("uid", "==", actor.uid)'), "uid comes from the verified token");
@@ -110,7 +110,7 @@ test("payslip download: owner or authorized HR only; wrong/other ids look like '
 });
 test("the payroll computation reads real data only: demo records skipped, months/IDs matched exactly, joiners/leavers handled", () => {
   assert.ok(data.includes("isDemo === true"));
-  assert.ok(data.includes('where("date", ">=", `${period}-01`)'));
+  assert.ok(data.includes('where("date", ">=", leaveYearStart(period') && data.includes('where("date", "<=", `${period}-31`)'), "attendance is loaded from the leave-year start through the month");
   assert.ok(data.includes("x.userId || x.uid"), "attendance is matched by userId (the audit's problem #1)");
   assert.ok(data.includes('collection("leaveRequests").where("status", "==", "Approved")'), "approved leave comes from leaveRequests (problem #2)");
   assert.ok(data.includes("duplicate-employee-id") && data.includes("duplicate-structure"));

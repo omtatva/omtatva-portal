@@ -46,3 +46,29 @@ env:
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
   # - variable: MY_SECRET
   #   secret: mySecretRef
+
+  # ---- Payslip e-mail (docs/payroll-email-setup.md) --------------------------
+  # Create each secret FIRST, or the rollout fails:
+  #   firebase apphosting:secrets:set POSTMARK_SERVER_TOKEN
+  #   firebase apphosting:secrets:set POSTMARK_WEBHOOK_USER
+  #   firebase apphosting:secrets:set POSTMARK_WEBHOOK_PASS
+  # then uncomment the block below. Leave PAYSLIP_EMAIL_MODE at "off" until the
+  # domain is verified; then "test"; then "live".
+  # - variable: PAYSLIP_EMAIL_MODE
+  #   value: "off"
+  #   availability: [RUNTIME]
+  # - variable: EMAIL_FROM
+  #   value: "Omtatva Payroll <payroll@omtatvadigitals.com>"
+  #   availability: [RUNTIME]
+  # - variable: EMAIL_DKIM_SELECTOR
+  #   value: "<selector from your provider>"
+  #   availability: [RUNTIME]
+  # - variable: POSTMARK_SERVER_TOKEN
+  #   secret: POSTMARK_SERVER_TOKEN
+  #   availability: [RUNTIME]
+  # - variable: POSTMARK_WEBHOOK_USER
+  #   secret: POSTMARK_WEBHOOK_USER
+  #   availability: [RUNTIME]
+  # - variable: POSTMARK_WEBHOOK_PASS
+  #   secret: POSTMARK_WEBHOOK_PASS
+  #   availability: [RUNTIME]

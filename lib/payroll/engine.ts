@@ -71,12 +71,21 @@ export type EmployeeResult = {
   dayClasses: Record<string, DayClass>;
   payableDays: number;
   leave: LeaveSummary | null;
+  leaveDays: { date: string; leaveType: string; kind: string; requestId: string }[]; // this month's leave, from the leave records
   earnings: Line[];
   grossEarnings: number;
   base: number;
   perDayRate: number;
   lopDays: number;
   lopDeduction: number;
+  // lopDeduction split by cause (always adds up to lopDeduction exactly)
+  attendanceLopDays: number; // absent + HR-decided-unpaid days
+  attendanceDeduction: number;
+  leaveLopDays: number; // unpaid leave from the Leave records
+  leaveDeduction: number;
+  basicSalary: number;
+  allowances: number; // every earning except Basic
+  otherDeductions: number; // fixed deductions (PF, ESI, PT, TDS, other) + pro-rata
   notEmployedDays: number;
   notEmployedDeduction: number;
   deductions: Line[];
@@ -147,7 +156,8 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     uid: emp.uid, employeeId: emp.employeeId, name: emp.name,
     department: emp.department || "", designation: emp.designation || "",
     status: "ready", daysInMonth: dim, divisor: dim, counts, dayClasses, payableDays: 0,
-    leave: null, earnings: [], grossEarnings: 0, base: 0, perDayRate: 0, lopDays: 0, lopDeduction: 0,
+    leave: null, leaveDays: [], earnings: [], grossEarnings: 0, base: 0, perDayRate: 0, lopDays: 0, lopDeduction: 0,
+    attendanceLopDays: 0, attendanceDeduction: 0, leaveLopDays: 0, leaveDeduction: 0, basicSalary: 0, allowances: 0, otherDeductions: 0,
     notEmployedDays: 0, notEmployedDeduction: 0, deductions: [], fixedDeductions: 0, totalDeductions: 0,
     netPay: 0, flags,
   };
@@ -176,6 +186,11 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
   }
   const attendedDates = new Set<string>();
   for (const [d, list] of byDate) if (list.some((a) => isAttendedStatus(a.status))) attendedDates.add(d);
+  // The leave balance is built from the whole leave year, so a leave day on a
+  // day worked in an EARLIER month is dropped there too (the same rule the
+  // employee's Leave page uses).
+  const attendedAll = new Set<string>(attendedDates);
+  for (const a of emp.attendance) if (a.isDemo !== true && isAttendedStatus(a.status)) attendedAll.add(a.date);
 
   // ---- leave ledger (balance, paid / unpaid days) --------------------------
   const ledger = buildLeaveLedger({
@@ -183,10 +198,11 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     requests: emp.leaveRequests,
     joiningDate: joined,
     isOffDay: (d) => isWeeklyOff(d) || holidaySet.has(d),
-    attendedDates,
+    attendedDates: attendedAll,
     period,
   });
   base.leave = ledger.summary;
+  base.leaveDays = [...ledger.days.values()].filter((x) => x.date.startsWith(period)).map((x) => ({ date: x.date, leaveType: x.leaveType, kind: x.kind, requestId: x.requestId }));
   for (const f of ledger.flags) flags.push({ severity: "warn", code: "leave", message: f });
 
   // ---- classify each calendar day exactly once -----------------------------
@@ -271,6 +287,12 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
   const netC = grossC - totalDedC;
   if (netC < 0) flags.push({ severity: "block", code: "negative-net", message: "Net pay is negative — check the salary structure and deductions." });
 
+  // split the (possibly capped) loss of pay by cause: attendance first, the remainder is leave
+  const attendanceLopDays = counts.absent + counts["decided-unpaid"];
+  const leaveLopDays = counts["unpaid-leave"];
+  const attendanceDeduction = Math.min(roundMoney(perDay * attendanceLopDays, policy.rounding), lop);
+  const leaveDeduction = fromCents(cents(lop) - cents(attendanceDeduction));
+
   const hasBlock = flags.some((f) => f.severity === "block");
   return {
     ...base,
@@ -281,6 +303,9 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     base: lopBase,
     perDayRate: Math.round(perDay * 10000) / 10000,
     lopDays, lopDeduction: lop,
+    attendanceLopDays, attendanceDeduction, leaveLopDays, leaveDeduction,
+    basicSalary: fromCents(cents(basic)), allowances: fromCents(grossC - cents(basic)),
+    otherDeductions: fromCents(fixedC + cents(proration)),
     notEmployedDays: notEmp, notEmployedDeduction: proration,
     deductions, fixedDeductions: fromCents(fixedC),
     totalDeductions: fromCents(totalDedC),
@@ -294,6 +319,11 @@ export type PayrollSummary = {
   needsReview: number;
   excluded: number;
   gross: number;
+  basic: number;
+  allowances: number;
+  attendanceDeduction: number;
+  leaveDeduction: number;
+  otherDeductions: number;
   lopDeduction: number;
   proration: number;
   fixedDeductions: number;
@@ -303,12 +333,17 @@ export type PayrollSummary = {
 };
 
 export function summarize(results: EmployeeResult[]): PayrollSummary {
-  let gross = 0, lop = 0, pro = 0, fixed = 0, ded = 0, net = 0;
+  let gross = 0, lop = 0, pro = 0, fixed = 0, ded = 0, net = 0, basic = 0, allow = 0, attD = 0, leaveD = 0, other = 0;
   const flagCounts: Record<Severity, number> = { block: 0, warn: 0, info: 0 };
   for (const r of results) {
     for (const f of r.flags) flagCounts[f.severity] += 1;
     if (r.status === "excluded") continue;
     gross += cents(r.grossEarnings);
+    basic += cents(r.basicSalary);
+    allow += cents(r.allowances);
+    attD += cents(r.attendanceDeduction);
+    leaveD += cents(r.leaveDeduction);
+    other += cents(r.otherDeductions);
     lop += cents(r.lopDeduction);
     pro += cents(r.notEmployedDeduction);
     fixed += cents(r.fixedDeductions);
@@ -320,7 +355,8 @@ export function summarize(results: EmployeeResult[]): PayrollSummary {
     ready: results.filter((r) => r.status === "ready").length,
     needsReview: results.filter((r) => r.status === "review").length,
     excluded: results.filter((r) => r.status === "excluded").length,
-    gross: fromCents(gross), lopDeduction: fromCents(lop), proration: fromCents(pro),
+    gross: fromCents(gross), basic: fromCents(basic), allowances: fromCents(allow),
+    attendanceDeduction: fromCents(attD), leaveDeduction: fromCents(leaveD), otherDeductions: fromCents(other), lopDeduction: fromCents(lop), proration: fromCents(pro),
     fixedDeductions: fromCents(fixed), totalDeductions: fromCents(ded), netPay: fromCents(net),
     flagCounts,
   };

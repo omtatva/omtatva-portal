@@ -234,12 +234,25 @@ export default function AttendanceReportsPage() {
     [audit, auditType]
   );
 
-  // Findings that can be bulk-corrected (not duplicates / bad ids / orphans).
-  const selectableRows = useMemo(() => auditRows.filter((f) => toBulkItem(f) !== null), [auditRows]);
-  const selectedFindings = useMemo(
-    () => (audit ? audit.findings.filter((f) => selected.has(f.id) && toBulkItem(f) !== null) : []),
-    [audit, selected]
-  );
+  // Every row on every tab can be ticked. Only some kinds can be bulk-corrected
+  // (not duplicates / bad dates / unknown-employee records — those need a manual
+  // decision); the bulk actions apply to those, and the rest can be downloaded.
+  const selectableRows = auditRows;
+  const selectedAll = useMemo(() => (audit ? audit.findings.filter((f) => selected.has(f.id)) : []), [audit, selected]);
+  const selectedFindings = useMemo(() => selectedAll.filter((f) => toBulkItem(f) !== null), [selectedAll]);
+  const notBulkEditable = selectedAll.length - selectedFindings.length;
+
+  const downloadSelected = () => {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [["Severity", "Employee", "Date", "Problem", "Detail", "Suggested review", "Record"].join(",")];
+    for (const f of selectedAll) lines.push([f.severity, f.employeeName, f.date, FINDING_META[f.type].label, f.message, f.suggestion, f.recordId || ""].map(esc).join(","));
+    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff) + lines.join(String.fromCharCode(10))], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-selected-${selectedAll.length}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const allTicked = selectableRows.length > 0 && selectableRows.every((f) => selected.has(f.id));
 
   const toggleOne = (id: string) =>
@@ -575,7 +588,12 @@ export default function AttendanceReportsPage() {
 
               {canEdit && selected.size > 0 && (
                 <div className="ar-bulkbar" role="region" aria-label="Bulk actions">
-                  <b>{selectedFindings.length} selected</b>
+                  <b>{selectedAll.length} selected</b>
+                  {notBulkEditable > 0 && (
+                    <span className="ar-sub" title="Duplicates, bad dates and unknown-employee records need a manual decision, so the buttons below skip them.">
+                      ({notBulkEditable} can&apos;t be bulk-edited)
+                    </span>
+                  )}
                   <button className="ar-btn ar-primary ar-small" onClick={openSuggested} disabled={!selectedFindings.some((f) => f.proposedStatus)}>
                     Apply suggested fix ({selectedFindings.filter((f) => f.proposedStatus).length})
                   </button>
@@ -585,12 +603,13 @@ export default function AttendanceReportsPage() {
                       <option key={st} value={st}>{st}</option>
                     ))}
                   </select>
-                  <button className="ar-btn ar-ghost ar-small" onClick={openSetStatus}>Set status…</button>
+                  <button className="ar-btn ar-ghost ar-small" onClick={openSetStatus} disabled={selectedFindings.length === 0}>Set status…</button>
                   {missingPunchOutCount > 0 && (
                     <button className="ar-btn ar-primary ar-small" onClick={openPunchOut}>
                       Set punch-out… ({missingPunchOutCount})
                     </button>
                   )}
+                  <button className="ar-btn ar-ghost ar-small" onClick={downloadSelected}>⬇ Selected (CSV)</button>
                   <button className="ar-link ar-sub" onClick={() => setSelected(new Set())}>Clear selection</button>
                 </div>
               )}
@@ -614,7 +633,7 @@ export default function AttendanceReportsPage() {
                       {auditRows.slice(0, auditShown).map((f) => (
                         <tr key={f.id} style={selected.has(f.id) ? { background: "rgba(61,111,168,.08)" } : undefined}>
                           <td>
-                            {canEdit && toBulkItem(f) !== null && (
+                            {canEdit && (
                               <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggleOne(f.id)} aria-label={`Select ${f.employeeName} ${f.date}`} />
                             )}
                           </td>

@@ -5,7 +5,7 @@
 
 import { ADMIN_TIER_ROLES, normalizeRole, type RoleValue } from "../roles";
 
-export type PayrollModule = "payroll" | "salaryStructure";
+export type PayrollModule = "payroll" | "salaryStructure" | "leave";
 export type Level = "view" | "edit";
 export type Matrix = Record<string, Partial<Record<string, Level>>> | null | undefined;
 

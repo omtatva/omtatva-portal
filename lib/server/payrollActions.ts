@@ -32,7 +32,7 @@ const conflict = (e: unknown): never => {
 };
 
 // ------------------------------------------------------------------- audit
-async function audit(actor: Actor, type: string, period: string | null, details: Record<string, unknown>, summary: string) {
+export async function audit(actor: Actor, type: string, period: string | null, details: Record<string, unknown>, summary: string) {
   const now = Timestamp.now();
   await db().collection("payrollAudit").add({
     type, period, by: actor.email, byUid: actor.uid, role: actor.role, at: now, details: JSON.parse(JSON.stringify(details)),
@@ -62,7 +62,7 @@ async function writeBackup(actor: Actor, kind: string, label: string, items: { p
   return ref.id;
 }
 
-async function getRunState(period: string): Promise<{ state: RunState | null; data: DocumentData | null }> {
+export async function getRunState(period: string): Promise<{ state: RunState | null; data: DocumentData | null }> {
   const snap = await db().doc(`payrollRuns/${period}`).get();
   if (!snap.exists) return { state: null, data: null };
   const d = snap.data()!;
@@ -288,6 +288,8 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
       if (hashOf(result) !== item.entryHash) throw new Error("entry snapshot does not match its hash");
       const meta = metaFor(run!, result, item.id, users.get(item.uid)?.joiningDate || null);
       const pdf = renderPayslip(result, meta);
+      // The generated PDF is retained (server-only collection), so what was issued is exactly what can be re-sent or re-downloaded.
+      await db().doc(`payslipFiles/${item.id}`).set({ pdf: Buffer.from(pdf), sha256: sha256(pdf), bytes: pdf.length, createdAt: Timestamp.now() });
       await db().doc(`payslips/${item.id}`).create({
         // the exact header/basis text is frozen with the payslip, so it can be re-rendered identically after a later re-approval
         meta,
@@ -353,9 +355,19 @@ export async function payslipPdf(user: VerifiedUser, id: unknown): Promise<{ byt
   if (!entry.exists || !p.meta) throw new ApiError(404, "not-found", "Payslip not found.");
   const result = entry.data()!.result as EmployeeResult;
   if (hashOf(result) !== p.entryHash) throw new ApiError(409, "integrity", "This payslip failed its integrity check. Contact HR.");
-  const bytes = renderPayslip(result, p.meta as PayslipMeta);
-  if (p.pdfSha256 && sha256(bytes) !== p.pdfSha256) throw new ApiError(409, "integrity", "This payslip failed its integrity check. Contact HR.");
+  const bytes = await retainedPdf(id, p, result);
   return { bytes, filename: `Payslip_${result.employeeId}_${p.period}.pdf` };
+}
+
+// The retained PDF issued for a payslip (verified against the checksum saved at
+// generation). Falls back to re-rendering from the immutable snapshot — which
+// is byte-identical — if the stored copy is missing.
+export async function retainedPdf(id: string, payslip: DocumentData, result: EmployeeResult): Promise<Uint8Array> {
+  const file = await db().doc(`payslipFiles/${id}`).get();
+  const stored = file.exists ? file.data()!.pdf : null;
+  const bytes: Uint8Array = stored ? new Uint8Array(stored as Buffer) : renderPayslip(result, payslip.meta as PayslipMeta);
+  if (payslip.pdfSha256 && sha256(bytes) !== payslip.pdfSha256) throw new ApiError(409, "integrity", "This payslip failed its integrity check. Contact HR.");
+  return bytes;
 }
 
 // ---------------------------------------------------------------- reversal

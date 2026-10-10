@@ -142,7 +142,7 @@ test("route: bulk-correct is only reachable after the Super Admin check", () => 
   assert.ok(post.indexOf("requireSuperAdmin(user)") < post.indexOf('case "bulk-correct"'));
 });
 test("ui: checkboxes and the bulk bar exist only for editors; the dialog asks for reason, verification and typed confirmation", () => {
-  assert.ok(page.includes("canEdit && selected.size > 0") && page.includes("canEdit && toBulkItem(f) !== null"));
+  assert.ok(page.includes("canEdit && selected.size > 0") && page.includes("const selectableRows = auditRows;") && page.includes("notBulkEditable"));
   assert.ok(page.includes("Apply suggested fix") && page.includes("Set status…"));
   assert.ok(page.includes("Select all"));
   for (const must of ["confirmPhrase(total)", "batchTotal: total", "needsVerified", "bulkChangeGate(", "MIN_REASON_LENGTH"]) assert.ok(dialog.includes(must), must);

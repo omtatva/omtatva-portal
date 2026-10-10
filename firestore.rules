@@ -216,6 +216,11 @@ service cloud.firestore {
     match /payslips/{id}                { allow read, write: if false; }
     match /salaryChangeHistory/{id}     { allow read, write: if false; }
     match /salaryImports/{id}           { allow read, write: if false; }
+    match /payslipFiles/{id}            { allow read, write: if false; }   // the retained PDFs
+    match /payslipEmails/{id}           { allow read, write: if false; }   // e-mail delivery tracking
+    match /payslipEmailBatches/{id}     { allow read, write: if false; }
+    match /payslipEmailConfig/{id}      { allow read, write: if false; }
+    match /emailSuppressions/{id}       { allow read, write: if false; }
     match /assets/{id}          { allow read, write: if isAdminTier(); }
 
     // Activity feed: anyone signed in can add an entry about their action;
@@ -240,7 +245,17 @@ service cloud.firestore {
     // Not yet reviewed (STAGE 2): company members only — same behaviour as
     // today, minus the outside-world access.
     // ---------------------------------------------------------------
-    match /leaveRequests/{id}      { allow read, write: if isMember(); }
+    // Leave records decide salary (paid / unpaid days), so a person may only
+    // READ their own and CREATE their own as Pending. Approving, rejecting,
+    // re-classifying or deleting is admin-tier only — nobody can approve their
+    // own leave or change its dates after the fact.
+    match /leaveRequests/{id} {
+      allow read: if isAdminTier() || (isMember() && resource.data.uid == request.auth.uid);
+      allow create: if isMember()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'Pending';
+      allow update, delete: if isAdminTier();
+    }
     match /wfhRequests/{id}        { allow read, write: if isMember(); }
     match /leaves/{id}             { allow read, write: if isMember(); }
     match /timesheets/{id}         { allow read, write: if isMember(); }

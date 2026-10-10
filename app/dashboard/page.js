@@ -18,6 +18,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import AvatarIllustration, { HeroAvatar } from "../../components/AvatarIllustration";
 import OrgHierarchySection from "../../components/OrgHierarchySection";
 import { isAttendedStatus } from "../../lib/attendanceRules";
+import { useMyLeave } from "../../lib/payroll/useMyLeave";
 import {
   ResponsiveContainer,
   Tooltip,
@@ -52,7 +53,8 @@ const CONFETTI_COLORS = ["#3d6fa8", "#66a8e0", "#f59e0b", "#16a34a", "#dc2626", 
 export default function DashboardPage() {
   const [myTimesheets, setMyTimesheets] = useState([]);
   const [myAttendance, setMyAttendance] = useState([]);
-  const [myLeaves, setMyLeaves] = useState([]);
+  // Leave balance comes from the server: the same leave records and rules payroll uses.
+  const { data: leaveInfo } = useMyLeave();
   const [userName, setUserName] = useState("");
   const [userData, setUserData] = useState(null);
   const [upcomingHolidays, setUpcomingHolidays] = useState([]);
@@ -250,17 +252,6 @@ export default function DashboardPage() {
       }));
       setMyTimesheets(timesheetData);
 
-      // Assumes a "leaves" collection with fields: userId, status, days (or startDate/endDate)
-      const leaveQuery = query(
-        collection(db, "leaves"),
-        where("userId", "==", user.uid)
-      );
-      const leaveSnapshot = await getDocs(leaveQuery);
-      const leaveData = leaveSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setMyLeaves(leaveData);
     } catch (error) {
       console.error(error);
     }
@@ -390,18 +381,10 @@ export default function DashboardPage() {
       : "#64748b";
 
   // ---------- LEAVE BALANCE ----------
-  const leaveAllocation =
-    userData?.leaveAllocation || DEFAULT_LEAVE_ALLOCATION;
-
-  const approvedLeaveDays = myLeaves
-    .filter((l) => (l.status || "").toLowerCase() === "approved")
-    .reduce((sum, l) => sum + Number(l.days || 1), 0);
-
-  const pendingLeaveDays = myLeaves
-    .filter((l) => (l.status || "").toLowerCase() === "pending")
-    .reduce((sum, l) => sum + Number(l.days || 1), 0);
-
-  const leaveRemaining = Math.max(leaveAllocation - approvedLeaveDays, 0);
+  const leaveAllocation = leaveInfo?.policy.annualEntitlement ?? DEFAULT_LEAVE_ALLOCATION;
+  const approvedLeaveDays = leaveInfo?.summary.usedYearToDate ?? 0;
+  const pendingLeaveDays = leaveInfo?.pendingWorkingDays ?? 0;
+  const leaveRemaining = Math.max(leaveInfo?.summary.available ?? 0, 0);
 
   const leavePieData = [
     { name: "Used", value: approvedLeaveDays },
@@ -1175,7 +1158,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <b style={{ color: COLORS.text }}>{leaveAllocation}</b>
-              <p style={{ color: COLORS.secondary, margin: 0 }}>Allocated</p>
+              <p style={{ color: COLORS.secondary, margin: 0 }}>Per year</p>
             </div>
           </div>
         </div>
