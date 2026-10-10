@@ -2,33 +2,22 @@
 
 import { useEffect, useState } from "react";
 
-import BulkUpload from "@/components/salary/BulkUpload";
 import SalaryForm from "@/components/salary/SalaryForm";
 import SalaryDashboard from "@/components/salary/salaryDashboard";
 import EmployeeSearch from "@/components/salary/EmployeeSearch";
 import SalaryTable from "@/components/salary/SalaryTable";
 
-import PayrollProcess from "@/components/salary/PayrollProcess";
-import PayrollTable from "@/components/salary/PayrollTable";
-import PayrollDashboard from "@/components/salary/PayrollDashboard";
-import PayrollExport from "@/components/salary/PayrollExport";
 
 
 import {
 collection,
-getDocs,
-addDoc,
-updateDoc,
-deleteDoc,
-doc,
-query,
-where,
-Timestamp
+getDocs
 } from "firebase/firestore";
 
 
 import { db } from "@/lib/firebase";
 import { usePermission } from "@/lib/usePermission";
+import { postJson } from "@/lib/reportsClient";
 
 
 
@@ -41,7 +30,6 @@ const [employees,setEmployees]=useState([]);
 
 const [salaryList,setSalaryList]=useState([]);
 
-const [payrollList,setPayrollList]=useState([]);
 
 const [loading,setLoading]=useState(true);
 
@@ -151,7 +139,6 @@ loadEmployees();
 
 loadSalary();
 
-loadPayroll();
 
 
 },[]);
@@ -239,41 +226,6 @@ setLoading(false);
 
 
 
-const loadPayroll=async()=>{
-
-
-const snapshot=
-
-await getDocs(
-
-collection(db,"payroll")
-
-);
-
-
-
-const list=snapshot.docs.map(doc=>({
-
-id:doc.id,
-
-...doc.data()
-
-}));
-
-
-
-setPayrollList(list);
-
-
-};
-
-
-
-
-
-
-
-
 const selectEmployee=(emp)=>{
 
 
@@ -333,182 +285,58 @@ e.target.value
 
 
 
+// Saved through the server (/api/payroll/salary-save): it checks your access,
+// keeps a backup of the old values and records who changed what and why.
 const saveSalary=async()=>{
-
 
 if(!canEdit){
 alert("View only — you don't have edit access for Salary Structure");
 return;
 }
 
+if(!form.employeeId){
+alert("Select an employee first");
+return;
+}
+
+if(!editId && salaryList.some(x=>x.employeeId===form.employeeId)){
+alert("Salary already exists for this employee — use Edit on the existing record");
+return;
+}
+
+const reason=window.prompt("Reason for this salary change (required, at least 5 characters):");
+
+if(!reason || reason.trim().length<5){
+alert("A reason is required to save a salary change.");
+return;
+}
 
 try{
 
+const values={};
 
-
-if(editId){
-
-
-
-await updateDoc(
-
-doc(
-
-db,
-
-"salaryStructure",
-
-editId
-
-),
-
-{
-
-
-...form,
-
-grossSalary,
-
-netSalary,
-
-updatedAt:
-
-Timestamp.now()
-
-
+for(const key of ["basicSalary","hra","specialAllowance","medical","conveyance","foodAllowance","internetAllowance","pf","esi","professionalTax","tds"]){
+values[key]= form[key]===""||form[key]===undefined||form[key]===null ? 0 : form[key];
 }
 
-);
+await postJson("/api/payroll/salary-save",{
+employeeId:form.employeeId,
+values,
+reason
+});
 
-
-
-alert(
-"Salary Updated"
-);
-
-
-
-}
-
-else{
-
-
-
-const q=query(
-
-collection(db,"salaryStructure"),
-
-where(
-
-"employeeId",
-
-"==",
-
-form.employeeId
-
-)
-
-);
-
-
-
-const existing=
-
-await getDocs(q);
-
-
-
-if(!existing.empty){
-
-
-alert(
-
-"Salary already exists"
-
-);
-
-
-return;
-
-}
-
-
-
-await addDoc(
-
-collection(db,"salaryStructure"),
-
-{
-
-
-...form,
-
-grossSalary,
-
-netSalary,
-
-status:"Active",
-
-createdAt:
-
-Timestamp.now(),
-
-updatedAt:
-
-Timestamp.now()
-
-
-}
-
-);
-
-
-
-alert(
-
-"Salary Saved"
-
-);
-
-
-}
-
-
+alert(editId?"Salary Updated":"Salary Saved");
 
 resetForm();
-
 loadSalary();
 
-
-
 }
-
-
 catch(error){
-
-
 console.log(error);
-
-alert(
-
-"Salary Save Failed"
-
-);
-
-
+alert(error?.message || "Salary Save Failed");
 }
-
-
 
 };
-
-
-
-
-
-
-
-
 
 const editSalary=(salary)=>{
 
@@ -602,47 +430,30 @@ salary.tds
 
 const deleteSalary=async(id)=>{
 
-
 if(!canEdit){
 alert("View only — you don't have edit access for Salary Structure");
 return;
 }
 
+if(!confirm("Delete this salary structure? A backup is kept.")) return;
 
-await deleteDoc(
+const reason=window.prompt("Reason for deleting (required, at least 5 characters):");
 
-doc(
+if(!reason || reason.trim().length<5){
+alert("A reason is required.");
+return;
+}
 
-db,
-
-"salaryStructure",
-
-id
-
-)
-
-);
-
-
-alert(
-
-"Salary Deleted"
-
-);
-
-
+try{
+await postJson("/api/payroll/salary-delete",{structureId:id,reason});
+alert("Salary Deleted");
 loadSalary();
-
+}
+catch(error){
+alert(error?.message || "Delete failed");
+}
 
 };
-
-
-
-
-
-
-
-
 
 const resetForm=()=>{
 
@@ -818,87 +629,11 @@ deleteSalary={deleteSalary}
 
 
 
-<BulkUpload
-
-loadSalary={loadSalary}
-canEdit={canEdit}
-
-/>
-
-
-
-
-
-
-
-
-<hr className="
-my-10
-"/>
-
-
-
-
-
-<h2 className="
-text-3xl
-font-bold
-">
-
-Payroll Management
-
-</h2>
-
-
-
-
-
-
-
-<PayrollDashboard
-
-payrollList={payrollList}
-
-/>
-
-
-
-
-
-
-<PayrollProcess
-
-salaryList={salaryList}
-
-loadSalary={loadPayroll}
-canEdit={canEdit}
-
-/>
-
-
-
-
-
-
-<PayrollTable
-
-payrollList={payrollList}
-
-loadPayroll={loadPayroll}
-canEdit={canEdit}
-
-/>
-
-
-
-
-
-
-<PayrollExport
-
-payrollList={payrollList}
-
-/>
+<div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mt-8">
+<h2 className="text-xl font-bold mb-1">Bulk upload &amp; payroll have moved</h2>
+<p className="text-gray-700 mb-3">Upload salary sheets (.xlsx / .csv with a preview), calculate payroll, approve it and generate payslips from the Payroll page.</p>
+<a href="/admin/payroll" className="inline-block px-5 py-2.5 rounded-lg bg-blue-700 text-white font-semibold">Open Payroll</a>
+</div>
 
 
 

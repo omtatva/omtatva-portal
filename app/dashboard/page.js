@@ -17,6 +17,7 @@ import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import AvatarIllustration, { HeroAvatar } from "../../components/AvatarIllustration";
 import OrgHierarchySection from "../../components/OrgHierarchySection";
+import { isAttendedStatus } from "../../lib/attendanceRules";
 import {
   ResponsiveContainer,
   Tooltip,
@@ -356,10 +357,14 @@ export default function DashboardPage() {
     0
   );
 
-  const avgHours =
-    myAttendance.length > 0 ? (totalHours / myAttendance.length).toFixed(1) : 0;
+  // Days actually attended: not Absent, and not Leave / Holiday / Weekly Off
+  // (those are records too, but they are not days worked).
+  const attendedDays = myAttendance.filter((a) => isAttendedStatus(a.status)).length;
 
-  const totalAttendance = myAttendance.length;
+  const avgHours =
+    attendedDays > 0 ? (totalHours / attendedDays).toFixed(1) : 0;
+
+  const totalAttendance = attendedDays;
   const totalTimesheets = myTimesheets.length;
 
   // Use `||` (not `??`) so an accidental empty string from an in-progress
@@ -1041,15 +1046,13 @@ export default function DashboardPage() {
 
         <div
           style={{ ...cardStyle, cursor: "pointer" }}
-          onClick={() => (window.location.href = "/documents")}
+          onClick={() => (window.location.href = "/payslips")}
         >
           <div style={{ fontSize: 42 }}>💰</div>
-          <h1 style={{ color: latestPayslipUrl ? COLORS.success : COLORS.secondary, fontSize: 22 }}>
-            {latestPayslipUrl ? "Available" : "Not Uploaded"}
-          </h1>
-          <h3>Latest Payslip</h3>
+          <h1 style={{ color: COLORS.success, fontSize: 22 }}>My Payslips</h1>
+          <h3>Payslips</h3>
           <p style={{ color: COLORS.secondary }}>
-            {latestPayslipUrl ? "View in My Documents" : "Check back after payroll"}
+            {latestPayslipUrl ? "Issued payslips · older ones in My Documents" : "Open after payroll is issued"}
           </p>
         </div>
       </div>

@@ -29,9 +29,8 @@ db
 } from "../../../lib/firebase";
 
 import { logActivity } from "../../../lib/activityLog";
-import { computeDisplayStatus } from "../../../lib/attendanceRules";
+import { computeDisplayStatus, statusCategory } from "../../../lib/attendanceRules";
 import { usePermission } from "../../../lib/usePermission";
-import HistoricalAttendancePanel from "../../../components/HistoricalAttendancePanel";
 
 
 
@@ -641,16 +640,6 @@ font-semibold
 
 </section>
 
-
-{/* Super Admin only (renders nothing for anyone else): historical
-    attendance for Jul-Sep 2026 — real records, missing dates, and (in a
-    verified demo/test project only) guarded synthetic initialisation. */}
-<HistoricalAttendancePanel />
-
-
-
-
-
 {/* PENDING CORRECTION REQUESTS ALERT */}
 
 {
@@ -705,7 +694,7 @@ Review Requests
 grid
 grid-cols-1
 sm:grid-cols-2
-xl:grid-cols-5
+xl:grid-cols-6
 gap-5
 mb-7
 ">
@@ -784,6 +773,16 @@ x=>x.displayStatus==="Absent"
 }
 
 />
+<StatCard
+icon="🏖"
+title="Leave / Off"
+value={
+attendance.filter(
+x=>["leave","holiday","weekly-off"].includes(statusCategory(x.displayStatus))
+).length
+}
+/>
+
 
 
 </div>
@@ -813,6 +812,9 @@ className="border border-[#d7e8fb] rounded-xl px-4 py-3"
 <option value="Late">Late</option>
 <option value="Incomplete">Incomplete</option>
 <option value="Absent">Absent</option>
+<option value="Leave">Leave</option>
+<option value="Holiday">Holiday</option>
+<option value="Weekly Off">Weekly Off</option>
 </select>
 
 <select
@@ -1256,6 +1258,12 @@ ${item.displayStatus==="Present"
 ?"bg-red-100 text-red-700"
 :item.displayStatus==="Incomplete"
 ?"bg-orange-100 text-orange-700"
+:statusCategory(item.displayStatus)==="leave"
+?"bg-blue-100 text-blue-700"
+:statusCategory(item.displayStatus)==="holiday"
+?"bg-purple-100 text-purple-700"
+:statusCategory(item.displayStatus)==="weekly-off"
+?"bg-gray-200 text-gray-600"
 :"bg-yellow-100 text-yellow-700"}
 `}
 >

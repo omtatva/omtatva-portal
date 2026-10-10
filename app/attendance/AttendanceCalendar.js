@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { statusCategory } from "@/lib/attendanceRules";
 
 export default function AttendanceCalendar({ history, holidayDates = new Set() }) {
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -74,16 +75,31 @@ export default function AttendanceCalendar({ history, holidayDates = new Set() }
       return "bg-[#eaf3ff] text-[#3d6fa8]";
     }
 
-    if (data.displayStatus === "Absent") {
+    const kind = statusCategory(data.displayStatus);
+
+    if (kind === "absent") {
       return "bg-red-100 text-red-700";
     }
 
-    if (data.displayStatus === "Late") {
+    if (kind === "late") {
       return "bg-yellow-100 text-yellow-700";
     }
 
-    if (data.displayStatus === "Incomplete") {
+    if (kind === "incomplete") {
       return "bg-orange-100 text-orange-700";
+    }
+
+    // Set by an administrator's correction — not a worked day.
+    if (kind === "leave") {
+      return "bg-blue-100 text-blue-700";
+    }
+
+    if (kind === "holiday") {
+      return "bg-purple-100 text-purple-700";
+    }
+
+    if (kind === "weekly-off") {
+      return "bg-gray-200 text-gray-600";
     }
 
     // Present (or any other known-good status)
@@ -202,6 +218,12 @@ export default function AttendanceCalendar({ history, holidayDates = new Set() }
         </span>
         <span className="flex items-center gap-1.5 sm:gap-2">
           <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-purple-200 inline-block" /> Holiday
+        </span>
+        <span className="flex items-center gap-1.5 sm:gap-2">
+          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-blue-200 inline-block" /> Leave
+        </span>
+        <span className="flex items-center gap-1.5 sm:gap-2">
+          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gray-300 inline-block" /> Weekly off
         </span>
       </div>
     </div>

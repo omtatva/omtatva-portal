@@ -161,7 +161,16 @@ DEMO_FIREBASE_PROJECT_ID=<test-project> GOOGLE_APPLICATION_CREDENTIALS=<key.json
 ```
 The preview prints record counts and each employee's expected Aug/Sep percentage first.
 
-## 10. Historical Attendance panel (main Attendance dashboard) — Jul · Aug · Sep 2026
+## 10. Historical Attendance — Jul · Aug · Sep 2026
+
+> **Update:** the "Historical Attendance" panel has been removed from Admin → Attendance (the UI component is deleted).
+> Real records are corrected in **Attendance Reports → Audit** (tick records → Apply suggested fix / Set status… /
+> Set punch-out…). Those corrections write to the same `attendance` documents, so they show on the admin Attendance
+> page, the employee's own Attendance, the calendar and the dashboard. Leave / Holiday / Weekly Off are shown and counted
+> as their own kind of day (`statusCategory` in `lib/attendanceRules.ts`), never as Present. The server-side
+> initialization (demo project only) described below is unchanged but has no UI.
+
+(Original description of the removed panel follows.)
 
 Super Admin only. Admin → Attendance → "Historical Attendance" panel.
 

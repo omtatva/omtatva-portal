@@ -114,3 +114,35 @@ export function computeDisplayStatus(
   //
   // return punch > cutoff ? "Late" : "Present";
 }
+
+
+// ---------------------------------------------------------------------------
+// What KIND of day is this? Used by every attendance screen so a record an
+// administrator corrected to Leave / Holiday / Weekly Off is shown (and
+// counted) as that — never as a "Present" day.
+// ---------------------------------------------------------------------------
+export type StatusCategory =
+  | "present"
+  | "late"
+  | "absent"
+  | "incomplete"
+  | "leave"
+  | "holiday"
+  | "weekly-off";
+
+export function statusCategory(status: string | null | undefined): StatusCategory {
+  const s = (status || "").trim().toLowerCase().replace(/[-_]/g, " ");
+  if (s === "absent") return "absent";
+  if (s === "late") return "late";
+  if (s === "incomplete") return "incomplete";
+  if (s === "holiday") return "holiday";
+  if (s === "weekly off" || s === "weeklyoff") return "weekly-off";
+  if (s.includes("leave")) return "leave";
+  return "present";
+}
+
+// A day the person actually attended (or started to).
+export function isAttendedStatus(status: string | null | undefined): boolean {
+  const c = statusCategory(status);
+  return c === "present" || c === "late" || c === "incomplete";
+}

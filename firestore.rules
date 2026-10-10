@@ -125,6 +125,7 @@ service cloud.firestore {
                  || (isMember() && docId != 'demoEnvironment');
       allow list: if isSuperAdmin();
       allow write: if docId == 'demoEnvironment' ? false
+                    : docId == 'payrollPolicy'   ? false      // server only (Super Admin via /api/payroll)
                     : docId == 'permissions'     ? isSuperAdmin()
                     : isAdminTier();
     }
@@ -199,8 +200,22 @@ service cloud.firestore {
     // ---------------------------------------------------------------
     // Admin-only data
     // ---------------------------------------------------------------
-    match /payroll/{id}         { allow read, write: if isAdminTier(); }
-    match /salaryStructure/{id} { allow read, write: if isAdminTier(); }
+    // Payroll and salary data. Browsers may READ (admin tier) but never write:
+    // every change goes through /api/payroll/*, which checks the caller's role
+    // and the Module Permissions matrix on the server, keeps a backup and an
+    // audit trail. Employees have no access here at all — they read their own
+    // payslip only through the server (/api/payroll/payslip-pdf).
+    match /payroll/{id}         { allow read: if isAdminTier(); allow write: if false; }   // legacy records, read-only
+    match /salaryStructure/{id} { allow read: if isAdminTier(); allow write: if false; }
+    match /payrollRuns/{id}             { allow read, write: if false; }
+    match /payrollEntries/{id}          { allow read, write: if false; }
+    match /payrollDrafts/{id}           { allow read, write: if false; }
+    match /payrollAudit/{id}            { allow read, write: if false; }
+    match /payrollBackups/{id}          { allow read, write: if false; }
+    match /payrollPolicyVersions/{id}   { allow read, write: if false; }
+    match /payslips/{id}                { allow read, write: if false; }
+    match /salaryChangeHistory/{id}     { allow read, write: if false; }
+    match /salaryImports/{id}           { allow read, write: if false; }
     match /assets/{id}          { allow read, write: if isAdminTier(); }
 
     // Activity feed: anyone signed in can add an entry about their action;

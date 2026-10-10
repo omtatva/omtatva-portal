@@ -8,6 +8,7 @@ import { hydrateDataset, type DatasetEmployee, type HydratedDataset, type Report
 import { buildEmployeeReport } from "../lib/attendanceReport";
 import { monthBounds } from "../lib/attendanceMonths";
 import { weekdayOf, type PolicyRules } from "../lib/attendancePolicy";
+import { statusCategory, isAttendedStatus } from "../lib/attendanceRules";
 
 let passed = 0;
 const queue: Promise<void>[] = [];
@@ -273,7 +274,6 @@ test("environment classification: production / demo / unverified", () => {
 // =====================================================================
 const server = fs.readFileSync(path.join(__dirname, "../lib/server/historicalServer.ts"), "utf8");
 const route = fs.readFileSync(path.join(__dirname, "../app/api/attendance/reports/[action]/route.ts"), "utf8");
-const panel = fs.readFileSync(path.join(__dirname, "../components/HistoricalAttendancePanel.tsx"), "utf8");
 const adminPage = fs.readFileSync(path.join(__dirname, "../app/admin/attendance/page.js"), "utf8").split("// \"use client\";")[0];
 
 test("server: refuses anything but a verified demo project BEFORE any write, then confirmation, then backup", () => {
@@ -299,12 +299,31 @@ test("route: preview and initialize sit behind the Super Admin check; preview is
   assert.ok(route.indexOf("requireSuperAdmin(user)") < route.indexOf('case "historical-preview"'));
   assert.ok(route.indexOf("requireSuperAdmin(user)", route.indexOf("export async function POST")) < route.indexOf('case "historical-initialize"'));
 });
-test("ui: panel renders only for Super Admin, sits on the main Attendance dashboard, and has no create path outside a demo project", () => {
-  assert.ok(panel.includes("isSuperAdminAccess(role)") && panel.includes("if (!authReady || !roleReady || !isSuperAdmin) return null;"));
-  assert.ok(adminPage.includes("<HistoricalAttendancePanel />"));
-  assert.ok(panel.includes("const ready = demo && gate.allowed && typed === required && ack"));
-  assert.ok(panel.includes("Initialize Historical Attendance"));
-  for (const col of ["Present", "Absent", "Leave", "Weekly offs / holidays", "Eligible days", "Attendance %"]) assert.ok(panel.includes(col), col);
+test("ui: the Historical Attendance panel is gone from the main Attendance page (corrections happen in Reports → Audit)", () => {
+  assert.ok(!adminPage.includes("HistoricalAttendancePanel"));
+  assert.ok(!fs.existsSync(path.join(__dirname, "../components/HistoricalAttendancePanel.tsx")));
+});
+test("statusCategory: Leave / Holiday / Weekly Off are their own kinds of day, never Present", () => {
+  assert.equal(statusCategory("Leave"), "leave");
+  assert.equal(statusCategory("Half Day Leave"), "leave");
+  assert.equal(statusCategory("Holiday"), "holiday");
+  assert.equal(statusCategory("Weekly Off"), "weekly-off");
+  assert.equal(statusCategory("weekly-off"), "weekly-off");
+  assert.equal(statusCategory("Absent"), "absent");
+  assert.equal(statusCategory("Incomplete"), "incomplete");
+  assert.equal(statusCategory("Late"), "late");
+  assert.equal(statusCategory("Present"), "present");
+  assert.equal(statusCategory(undefined), "present");
+  for (const s of ["Present", "Late", "Incomplete"]) assert.equal(isAttendedStatus(s), true, s);
+  for (const s of ["Absent", "Leave", "Holiday", "Weekly Off"]) assert.equal(isAttendedStatus(s), false, s);
+});
+test("ui: admin Attendance, employee Attendance, calendar and dashboard all use the shared classification", () => {
+  const rd = (f: string) => fs.readFileSync(path.join(__dirname, f), "utf8");
+  for (const f of ["../app/admin/attendance/page.js", "../app/attendance/page.js", "../app/attendance/AttendanceCalendar.js"]) {
+    assert.ok(rd(f).includes("statusCategory"), f);
+  }
+  assert.ok(rd("../app/dashboard/page.js").includes("isAttendedStatus(a.status)"));
+  assert.ok(rd("../app/admin/attendance/page.js").includes('<option value="Leave">Leave</option>'));
 });
 test("rules: attendanceInitializations is server-only", () => {
   const rules = fs.readFileSync(path.join(__dirname, "../firestore.rules"), "utf8");

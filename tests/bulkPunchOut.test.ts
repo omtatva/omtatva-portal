@@ -6,6 +6,7 @@ import { computePunchOut, validateBulkPunchOut, validateParams, type BulkPunchOu
 import { confirmPhrase } from "../lib/bulkCorrection";
 import { diffChanges } from "../lib/attendanceCorrection";
 import { resolveShift, type PolicyRules } from "../lib/attendancePolicy";
+import { computeDisplayStatus } from "../lib/attendanceRules";
 
 let passed = 0;
 const test = (name: string, fn: () => void) => {
@@ -150,6 +151,19 @@ test("ui: 'Set punch-out…' appears only when ticked findings include missing p
   assert.ok(page.includes("missingPunchOutCount > 0") && page.includes("Set punch-out…"));
   assert.ok(page.includes('f.type === "missing-punch-out"'));
   for (const must of ["New punch-out", "computePunchOut(", "typed === required", "verified &&", "bulkChangeGate(", "shift end time"]) assert.ok(dialog.includes(must), must);
+});
+
+test("why 'Incomplete' stays: changing the STATUS never clears it — only adding a punch-out does", () => {
+  const rec = { status: "Present", PunchIn: ist("2026-08-03", "09:00"), PunchOut: null, date: "2026-08-03" };
+  assert.equal(computeDisplayStatus(rec, null, null, "2026-10-09"), "Incomplete");
+  assert.equal(computeDisplayStatus({ ...rec, status: "Present" }, null, null, "2026-10-09"), "Incomplete", "status set to Present: still Incomplete");
+  assert.equal(computeDisplayStatus({ ...rec, PunchOut: ist("2026-08-03", "18:00") }, null, null, "2026-10-09"), "Present", "with a punch-out it is Present");
+});
+test("the correction screens warn when a status change alone will not clear Incomplete", () => {
+  assert.ok(read("../components/AttendanceReportViews.tsx").includes("will keep showing <b>Incomplete</b>"));
+  const bd = read("../components/BulkCorrectionDialog.tsx");
+  assert.ok(bd.includes("stillIncomplete") && bd.includes("Set punch-out…"));
+  assert.ok(page.includes("countStillIncomplete(") && page.includes("stillIncomplete={bulk.stillIncomplete}"));
 });
 
 console.log(`\n${passed} passed (bulk punch-out)${process.exitCode ? " - with FAILURES" : ""}`);

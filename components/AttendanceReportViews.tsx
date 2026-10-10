@@ -280,6 +280,13 @@ export function CorrectionModal({
           </label>
         </div>
 
+        {rec && rec.punchIn && !rec.punchOut && !punchOut && (
+          <div className="ar-hint" role="note">
+            ℹ This day has a punch-in but <b>no punch-out</b>, so it will keep showing <b>Incomplete</b> even after you change the status.
+            Enter the punch-out time above to clear it.
+          </div>
+        )}
+
         <label className="ar-block">
           Reason (required, at least 10 characters)
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="What evidence confirms this? e.g. 'Door-access log shows entry 09:05; manager confirmed by email.'" />
@@ -398,6 +405,7 @@ export function ReportStyles() {
       .ar-month-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: none; padding: 0; cursor: pointer; color: var(--text-color); text-align: left; font-size: 15px; }
       .ar-bulkbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; margin: 10px 0; border-radius: 14px; background: var(--hover-bg); border: 1px solid ${BRAND}; }
       .ar-bulkbar select { height: 32px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); padding: 0 8px; }
+      .ar-hint { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(234,88,12,.12); color: #c2410c; font-size: 13px; }
       .ar-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 2000; }
       .ar-modal { width: 100%; max-width: 620px; max-height: 92vh; overflow-y: auto; background: var(--card-bg); color: var(--text-color); border-radius: 20px; padding: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
       .ar-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }

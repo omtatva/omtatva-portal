@@ -27,7 +27,8 @@ import {
 } from "../lib/demoAttendance";
 import { canEditAttendance, isCompletedMonthDate } from "../lib/attendanceCorrection";
 import { ADMIN_TIER_ROLES, ROLES, isAdminTierRole, normalizeRole, roleLabel } from "../lib/roles";
-import { calculatePayroll } from "../lib/payrollCalculation.js";
+import { computeEmployee } from "../lib/payroll/engine";
+import { resolvePolicy } from "../lib/payroll/policy";
 import { ApiError, verifyRequest } from "../lib/server/firebaseAdmin";
 import { GET as reportsGET, POST as reportsPOST } from "../app/api/attendance/reports/[action]/route";
 import type { PolicyRules } from "../lib/attendancePolicy";
@@ -518,13 +519,17 @@ test("demo: every document is flagged isDemo / verified:false / DEMO-GENERATED",
   }
 });
 test("demo: payroll ignores demo records completely", () => {
-  const real = [{ status: "Present" }, { status: "Present" }, { status: "Absent" }, { status: "Leave" }];
-  const demo = Array.from({ length: 10 }, () => ({ status: "Absent", isDemo: true }));
-  const a = calculatePayroll({ basicSalary: 30000, grossSalary: 40000, attendance: real });
-  const b = calculatePayroll({ basicSalary: 30000, grossSalary: 40000, attendance: [...real, ...demo] });
-  assert.equal(b.absentDays, 1);
+  const pol = resolvePolicy({ confirmed: true });
+  const days = (n: number) => Array.from({ length: n }, (_, i) => `2026-08-${String(i + 3).padStart(2, "0")}`);
+  const real = [{ date: days(4)[0], status: "Present" }, { date: days(4)[1], status: "Absent" }];
+  const demo = days(10).map((date) => ({ date, status: "Absent", isDemo: true }));
+  const emp = (attendance: { date: string; status: string; isDemo?: boolean }[]) =>
+    computeEmployee("2026-08", pol, [], { uid: "u", employeeId: "E1", name: "A", weeklyOffDays: [0], salary: { basicSalary: 30000 }, attendance, leaveRequests: [], overrides: {} });
+  const a = emp(real);
+  const b = emp([...real, ...demo]);
+  assert.equal(b.counts.absent, 1);
   assert.deepEqual(b, a);
-  assert.equal(calculatePayroll({ basicSalary: 30000, grossSalary: 40000, attendance: demo }).absentDays, 0);
+  assert.equal(emp(demo).counts.absent, 0);
 });
 test("demo: production reports never include demo records, even if a marker is present", () => {
   assert.equal(shouldIncludeDemo("omtatva-portal", { isDemoEnvironment: true, projectId: "omtatva-portal" }), false);
@@ -747,7 +752,8 @@ test("rules: every collection the app uses has a rule (unlisted collections are 
 });
 test("rules: admin status requires a verified email, comes from adminAccess, and sensitive data is locked", () => {
   assert.ok(rulesSrc.includes("email_verified == true"));
-  assert.ok(/match \/payroll\/\{id\}\s*\{ allow read, write: if isAdminTier\(\)/.test(rulesSrc));
+  assert.ok(/match \/payroll\/\{id\}\s*\{ allow read: if isAdminTier\(\); allow write: if false;/.test(rulesSrc), "payroll: read-only for admins, server writes");
+  assert.ok(/match \/salaryStructure\/\{id\}\s*\{ allow read: if isAdminTier\(\); allow write: if false;/.test(rulesSrc));
   assert.ok(/match \/attendanceBackups\/\{id\}\s*\{ allow read, write: if false/.test(rulesSrc));
   assert.ok(/match \/attendanceCorrections\/\{id\}\s*\{ allow read, write: if false/.test(rulesSrc));
   assert.ok(rulesSrc.includes("allow update, delete: if isSuperAdmin();"), "only a Super Admin edits access");

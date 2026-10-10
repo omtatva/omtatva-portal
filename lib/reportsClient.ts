@@ -53,6 +53,11 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Authenticated binary download (e.g. a payslip PDF), returned as a Blob.
+export async function getBlob(path: string): Promise<Blob> {
+  return (await authedFetch(path, { cache: "no-store" })).blob();
+}
+
 export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

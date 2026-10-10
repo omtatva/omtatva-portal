@@ -91,7 +91,7 @@ export default function AttendanceReportsPage() {
   // Bulk correction: ticked audit findings -> one confirmation -> each record
   // is still corrected and audited individually by the server.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulk, setBulk] = useState<{ groups: BulkGroup[]; dateRange: { from: string; to: string } } | null>(null);
+  const [bulk, setBulk] = useState<{ groups: BulkGroup[]; dateRange: { from: string; to: string }; stillIncomplete: number } | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>("Leave");
   const [punchOutBulk, setPunchOutBulk] = useState<{ rows: PunchOutRow[]; dateRange: { from: string; to: string } } | null>(null);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -263,11 +263,18 @@ export default function AttendanceReportsPage() {
     return { from: dates[0], to: dates[dates.length - 1] };
   };
 
+  // how many of the ticked records have a punch-in but no punch-out
+  const countStillIncomplete = (list: Finding[]) =>
+    list.filter((f) => {
+      const rec = data?.records.find((r) => r.id === f.recordId);
+      return !!rec && !!rec.punchIn && !rec.punchOut;
+    }).length;
+
   const openSuggested = () => {
     const groups = groupBySuggestion(selectedFindings).map((g) => ({ status: g.status, items: g.items }));
     if (groups.length === 0) return;
     const suggested = selectedFindings.filter((f) => f.proposedStatus);
-    setBulk({ groups, dateRange: rangeOf(suggested) });
+    setBulk({ groups, dateRange: rangeOf(suggested), stillIncomplete: countStillIncomplete(suggested) });
   };
 
   // Records with a punch-in but no punch-out among the ticked findings.
@@ -298,7 +305,7 @@ export default function AttendanceReportsPage() {
   const openSetStatus = () => {
     const items = selectedFindings.map((f) => toBulkItem(f)!).filter(Boolean);
     if (items.length === 0) return;
-    setBulk({ groups: [{ status: bulkStatus, items }], dateRange: rangeOf(selectedFindings) });
+    setBulk({ groups: [{ status: bulkStatus, items }], dateRange: rangeOf(selectedFindings), stillIncomplete: countStillIncomplete(selectedFindings) });
   };
 
   const onBulkFinished = async (r: BulkResult) => {
@@ -663,6 +670,7 @@ export default function AttendanceReportsPage() {
         <BulkCorrectionDialog
           groups={bulk.groups}
           dateRange={bulk.dateRange}
+          stillIncomplete={bulk.stillIncomplete}
           onClose={() => setBulk(null)}
           onFinished={onBulkFinished}
         />

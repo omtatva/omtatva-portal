@@ -25,11 +25,14 @@ type StoredBackup = BackupMetaRecord & { id: string; createdAtIso: string };
 export default function BulkCorrectionDialog({
   groups,
   dateRange,
+  stillIncomplete = 0,
   onClose,
   onFinished,
 }: {
   groups: BulkGroup[];
   dateRange: { from: string; to: string };
+  // how many of these records have a punch-in but no punch-out
+  stillIncomplete?: number;
   onClose: () => void;
   onFinished: (result: BulkResult) => void | Promise<void>;
 }) {
@@ -122,6 +125,13 @@ export default function BulkCorrectionDialog({
             ))}
           </tbody>
         </table>
+
+        {stillIncomplete > 0 && (
+          <div className="ar-hint" role="note" style={{ marginBottom: 10 }}>
+            ℹ <b>{stillIncomplete}</b> of these records have a punch-in but <b>no punch-out</b>. Changing their status will <b>not</b> remove
+            “Incomplete” — close this and use <b>Set punch-out…</b> for those instead.
+          </div>
+        )}
 
         <div className={`ar-gate ${gate.allowed ? "ok" : "no"}`} role="status">
           <b>Backup:</b> {gate.allowed ? "a fresh, verified backup covers these dates ✓" : gate.reason}

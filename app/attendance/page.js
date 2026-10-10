@@ -32,7 +32,7 @@ import {
 } from "firebase/firestore";
 
 import AttendanceCalendar from "./AttendanceCalendar";
-import { computeDisplayStatus, getShiftTimes } from "@/lib/attendanceRules";
+import { computeDisplayStatus, getShiftTimes, statusCategory } from "@/lib/attendanceRules";
 import {
   DEFAULT_TIMEZONE,
   addDays,
@@ -66,6 +66,8 @@ export default function AttendancePage() {
     absent: 0,
     late: 0,
     incomplete: 0,
+    leave: 0,
+    off: 0,
     hours: 0,
   });
   const [holidayDates, setHolidayDates] = useState(new Set());
@@ -401,13 +403,20 @@ export default function AttendancePage() {
     let late = 0;
     let absent = 0;
     let incomplete = 0;
+    let leave = 0;
+    let off = 0;
 
     list.forEach((item) => {
       hours += Number(item.totalHours || 0);
 
-      if (item.displayStatus === "Late") late++;
-      else if (item.displayStatus === "Absent") absent++;
-      else if (item.displayStatus === "Incomplete") incomplete++;
+      // Leave / Holiday / Weekly Off (set by an administrator's correction)
+      // are their own kinds of day — they are NOT counted as Present.
+      const kind = statusCategory(item.displayStatus);
+      if (kind === "late") late++;
+      else if (kind === "absent") absent++;
+      else if (kind === "incomplete") incomplete++;
+      else if (kind === "leave") leave++;
+      else if (kind === "holiday" || kind === "weekly-off") off++;
       else present++;
     });
 
@@ -416,6 +425,8 @@ export default function AttendancePage() {
       absent,
       late,
       incomplete,
+      leave,
+      off,
       hours: Number(hours.toFixed(1)),
     });
   }
@@ -628,12 +639,17 @@ export default function AttendancePage() {
     { name: "Late", value: stats.late },
     { name: "Incomplete", value: stats.incomplete },
     { name: "Absent", value: stats.absent },
+    { name: "Leave / Off", value: stats.leave + stats.off },
   ];
 
   const statusBadgeClass = (displayStatus) => {
-    if (displayStatus === "Absent") return "bg-red-100 text-red-700";
-    if (displayStatus === "Late") return "bg-yellow-100 text-yellow-700";
-    if (displayStatus === "Incomplete") return "bg-orange-100 text-orange-700";
+    const kind = statusCategory(displayStatus);
+    if (kind === "absent") return "bg-red-100 text-red-700";
+    if (kind === "late") return "bg-yellow-100 text-yellow-700";
+    if (kind === "incomplete") return "bg-orange-100 text-orange-700";
+    if (kind === "leave") return "bg-blue-100 text-blue-700";
+    if (kind === "holiday") return "bg-purple-100 text-purple-700";
+    if (kind === "weekly-off") return "bg-gray-200 text-gray-600";
     return "bg-green-100 text-green-700";
   };
 
@@ -766,11 +782,12 @@ export default function AttendancePage() {
         </section>
 
         {/* SUMMARY CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 mb-5">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 sm:gap-3 mb-5">
           <StatCard icon="🟢" title="Present Days" value={stats.present} />
           <StatCard icon="🔴" title="Absent Days" value={stats.absent} />
           <StatCard icon="🟡" title="Late Days" value={stats.late} />
           <StatCard icon="⚠️" title="Incomplete Days" value={stats.incomplete} />
+          <StatCard icon="🏖" title="Leave / Off Days" value={stats.leave + stats.off} />
           <StatCard icon="⏱" title="Working Hours" value={`${stats.hours} hrs`} />
         </div>
 
@@ -900,6 +917,7 @@ export default function AttendancePage() {
                   <Cell fill="#f2c94c" />
                   <Cell fill="#f2994a" />
                   <Cell fill="#e05353" />
+                  <Cell fill="#7aa7d9" />
                 </Pie>
                 <Tooltip />
               </PieChart>
