@@ -34,8 +34,20 @@ function adminApp(): App {
   });
 }
 
+let settingsApplied = false;
+
 export function adminDb() {
-  return getFirestore(adminApp());
+  const db = getFirestore(adminApp());
+  if (!settingsApplied) {
+    settingsApplied = true;
+    try {
+      // A stray `undefined` in a document must never turn into a 500 for the user.
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      /* already configured / already in use in this process */
+    }
+  }
+  return db;
 }
 
 export function adminAuth() {

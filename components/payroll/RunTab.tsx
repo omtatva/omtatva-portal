@@ -160,7 +160,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {[
               ["Employees (ready / total)", `${data.summary.ready} / ${data.summary.employees}`],
               ["Gross salary", rs(data.summary.gross)],
@@ -169,6 +169,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               ["Attendance (absence) deductions", rs(data.summary.attendanceDeduction)],
               ["Leave (unpaid) deductions", rs(data.summary.leaveDeduction)],
               ["Other deductions (PF, ESI, PT, TDS, pro-rata)", rs(data.summary.otherDeductions)],
+              [`of which TDS${data.policy.tds.mode === "percent" ? ` (${data.policy.tds.percent}%)` : ""}`, rs(data.summary.tds)],
               ["Net payable", rs(data.summary.netPay)],
             ].map(([k, v]) => (
               <div key={k} className={`bg-white rounded-xl shadow p-4 ${k === "Net payable" ? "ring-2 ring-green-600" : ""}`}><div className="text-xs text-gray-500">{k}</div><div className="text-lg font-bold">{v}</div></div>

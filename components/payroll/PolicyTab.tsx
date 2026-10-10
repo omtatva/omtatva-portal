@@ -16,13 +16,14 @@ export default function PolicyTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [policy, setPolicy] = useState<PayrollPolicy | null>(null);
   const [explain, setExplain] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState<string[]>([]); // component keys as last saved on the server
   const [saved, setSaved] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [newComp, setNewComp] = useState<{ key: string; label: string; type: "earning" | "deduction" }>({ key: "", label: "", type: "earning" });
 
   useEffect(() => {
     getJson<{ policy: PayrollPolicy; explanation: string[] }>("/api/payroll/policy")
-      .then((r) => { setPolicy(r.policy); setExplain(r.explanation); })
+      .then((r) => { setPolicy(r.policy); setExplain(r.explanation); setLoaded(r.policy.components.map((c) => c.key)); })
       .catch((e) => setError(msg(e)));
   }, []);
 
@@ -33,9 +34,19 @@ export default function PolicyTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
   const save = async () => {
     setError(""); setSaved("");
+    const removedKeys = loaded.filter((k) => !policy.components.some((c) => c.key === k));
+    const send = (acknowledgeRemoved: string[]) =>
+      postJson<{ policy: PayrollPolicy; explanation: string[] }>("/api/payroll/policy-save", { policy, confirm, acknowledgeRemoved });
     try {
-      const r = await postJson<{ policy: PayrollPolicy; explanation: string[] }>("/api/payroll/policy-save", { policy, confirm });
-      setPolicy(r.policy); setExplain(r.explanation);
+      let r;
+      try {
+        r = await send([]);
+      } catch (e) {
+        // a removed component still has amounts on employees: ask, then send again with the acknowledgement
+        if (e instanceof ApiClientError && e.code === "component-in-use" && window.confirm(`${e.message}\n\nRemove it anyway?`)) r = await send(removedKeys);
+        else throw e;
+      }
+      setPolicy(r.policy); setExplain(r.explanation); setLoaded(r.policy.components.map((c) => c.key));
       setSaved(r.policy.confirmed ? "Policy saved and confirmed. Payroll can now be approved." : "Saved as a draft (not confirmed — payroll cannot be approved yet).");
     } catch (e) { setError(msg(e)); }
   };
@@ -94,16 +105,86 @@ export default function PolicyTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <Field label="Substitute holidays"><label><input type="checkbox" disabled={!edit} checked={policy.holidays.substituteHolidays} onChange={(e) => set({ holidays: { ...policy.holidays, substituteHolidays: e.target.checked } })} /> flag holidays on a weekly off</label></Field>
       </div>
 
+      <div className="bg-white rounded-xl shadow p-4 grid md:grid-cols-3 gap-4">
+        <h3 className="md:col-span-3 font-semibold">TDS (tax deducted at source)</h3>
+        <Field label="How TDS is deducted">
+          <select className={inp} disabled={!edit} value={policy.tds.mode} onChange={(e) => set({ tds: { ...policy.tds, mode: e.target.value as PayrollPolicy["tds"]["mode"] } })}>
+            <option value="fixed">Fixed amount per employee (from the salary structure)</option>
+            <option value="percent">Percentage — same % for every employee</option>
+          </select>
+        </Field>
+        <Field label="TDS percentage (%)" hint="e.g. 10 for contractual / professional-fee payees">
+          <input type="number" min={0} max={50} step="0.01" disabled={!edit || policy.tds.mode !== "percent"} value={policy.tds.percent}
+            onChange={(e) => set({ tds: { ...policy.tds, percent: Number(e.target.value) } })} className={inp} />
+        </Field>
+        <Field label="Applied on" hint="Earned = gross less loss of pay and pro-rata (what is actually payable)">
+          <select className={inp} disabled={!edit || policy.tds.mode !== "percent"} value={policy.tds.base} onChange={(e) => set({ tds: { ...policy.tds, base: e.target.value as PayrollPolicy["tds"]["base"] } })}>
+            <option value="earned">Earned salary (after loss of pay)</option>
+            <option value="gross">Full monthly gross</option>
+          </select>
+        </Field>
+        <p className="md:col-span-3 text-xs text-gray-600">
+          {policy.tds.mode === "percent"
+            ? `Every employee's TDS = ${policy.tds.percent}% of ${policy.tds.base === "gross" ? "gross salary" : "earned salary"}, calculated each month. Any fixed TDS amount saved on a salary structure is ignored while this is on. `
+            : "TDS is the fixed monthly amount saved on each salary structure. "}
+          This is a flat-rate deduction, not an individual income-tax slab calculation — please confirm the rate and the basis with your tax advisor. Months already approved are never changed.
+        </p>
+      </div>
+
       <div className="bg-white rounded-xl shadow p-4 space-y-2">
         <h3 className="font-semibold">Salary components</h3>
-        <div className="flex flex-wrap gap-2">
-          {policy.components.map((c) => (
-            <span key={c.key} className={`px-2.5 py-1 rounded-full text-xs ${c.type === "earning" ? "bg-green-100 text-green-800" : "bg-rose-100 text-rose-800"}`}>
-              {c.label} <i className="opacity-60">({c.type})</i>
-              {edit && !DEFAULT_COMPONENTS.some((d) => d.key === c.key) && <button className="ml-1 text-red-600" onClick={() => set({ components: policy.components.filter((x) => x.key !== c.key) })} aria-label={`Remove ${c.label}`}>×</button>}
-            </span>
-          ))}
+        <p className="text-xs text-gray-500">
+          Rename a component by editing its label. Remove one you do not use with the trash button — it then stops being paid or deducted from the next
+          payroll run (months already approved are never changed). Basic Salary is always required. Changes apply when you press Save policy.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left bg-slate-50"><tr><th className="p-2">Label</th><th className="p-2">Type</th><th className="p-2">Key</th><th className="p-2 w-24"></th></tr></thead>
+            <tbody>
+              {policy.components.map((c, i) => {
+                const standard = DEFAULT_COMPONENTS.some((d) => d.key === c.key);
+                return (
+                  <tr key={c.key} className="border-t">
+                    <td className="p-2">
+                      <input value={c.label} disabled={!edit} maxLength={60} aria-label={`Label for ${c.key}`}
+                        onChange={(e) => set({ components: policy.components.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })}
+                        className="border rounded px-2 py-1 w-full disabled:bg-gray-100" />
+                    </td>
+                    <td className="p-2">
+                      {edit && !standard ? (
+                        <select value={c.type} onChange={(e) => set({ components: policy.components.map((x, j) => (j === i ? { ...x, type: e.target.value as SalaryComponent["type"] } : x)) })} className="border rounded px-2 py-1">
+                          <option value="earning">Earning</option><option value="deduction">Deduction</option>
+                        </select>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${c.type === "earning" ? "bg-green-100 text-green-800" : "bg-rose-100 text-rose-800"}`}>{c.type}</span>
+                      )}
+                    </td>
+                    <td className="p-2 font-mono text-xs text-gray-500">{c.key}</td>
+                    <td className="p-2 text-right">
+                      {edit && (
+                        <button
+                          disabled={c.key === "basicSalary"}
+                          title={c.key === "basicSalary" ? "Basic Salary is required" : `Remove ${c.label}`}
+                          aria-label={`Remove ${c.label}`}
+                          onClick={() => set({ components: policy.components.filter((x) => x.key !== c.key) })}
+                          className="px-2 py-1 rounded text-red-700 border border-red-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >🗑 Remove</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+        {edit && DEFAULT_COMPONENTS.some((d) => !policy.components.some((c) => c.key === d.key)) && (
+          <div className="text-sm">
+            Removed standard components — add back:{" "}
+            {DEFAULT_COMPONENTS.filter((d) => !policy.components.some((c) => c.key === d.key)).map((d) => (
+              <button key={d.key} className="mr-2 px-2 py-0.5 rounded-full border text-xs" onClick={() => set({ components: [...policy.components, d] })}>+ {d.label}</button>
+            ))}
+          </div>
+        )}
         {edit && (
           <div className="flex flex-wrap gap-2 items-end">
             <input placeholder="key (e.g. shiftAllowance)" value={newComp.key} onChange={(e) => setNewComp({ ...newComp, key: e.target.value })} className="border rounded px-2 py-1.5" />

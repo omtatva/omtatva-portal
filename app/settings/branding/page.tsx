@@ -14,6 +14,7 @@ const SETTINGS_REF = () => doc(db, "settings", "branding");
 
 export default function BrandingPage() {
   const [companyName, setCompanyName] = useState("");
+  const [companyAddress, setCompanyAddress] = useState("");
   const [logo, setLogo] = useState("");
   const [loginImage, setLoginImage] = useState("");
   const [background, setBackground] = useState("");
@@ -32,6 +33,7 @@ export default function BrandingPage() {
         if (snap.exists()) {
           const data = snap.data();
           setCompanyName(data.companyName || "");
+          setCompanyAddress(data.companyAddress || "");
           setLogo(data.logo || "");
           setLoginImage(data.loginImage || "");
           setBackground(data.backgroundImage || "");
@@ -63,8 +65,8 @@ export default function BrandingPage() {
   };
 
   const saveCompanyName = () => {
-    persist({ companyName });
-    alert("Company name saved");
+    persist({ companyName, companyAddress });
+    alert("Company details saved");
   };
 
   // Uploads a file to Firebase Storage under settings/branding/<field>,
@@ -163,8 +165,16 @@ export default function BrandingPage() {
             onChange={(e) => setCompanyName(e.target.value)}
             style={input}
           />
+          <label style={{ ...labelStyle, marginTop: 14 }}>Company Address (printed on payslips)</label>
+          <input
+            value={companyAddress}
+            onChange={(e) => setCompanyAddress(e.target.value)}
+            placeholder="Street, city, PIN"
+            maxLength={200}
+            style={input}
+          />
           <button onClick={saveCompanyName} style={saveBtn}>
-            Save Name
+            Save Details
           </button>
 
           <label style={{ ...labelStyle, marginTop: 22 }}>Company Logo</label>

@@ -21,8 +21,11 @@ LOP days           = absent days + unpaid-leave days + HR-decided-unpaid days
 LOP deduction      = min(Base, round(rate × LOP days))      (rupee or paisa rounding)
 Not-employed days  = days before joining / after last working day
 Pro-rata           = round(Gross × not-employed days ÷ days in month)
-Fixed deductions   = Σ deduction components (PF, ESI, PT, TDS, other)
-NET PAY            = Gross − LOP deduction − Pro-rata − Fixed deductions
+Fixed deductions   = Σ deduction components (PF, ESI, PT, other)
+TDS                = fixed amount saved on the structure   (policy: "fixed")
+                     OR  percent × earned salary (or gross)  (policy: "percent", e.g. 10% for everyone)
+                     earned salary = Gross − LOP deduction − Pro-rata
+NET PAY            = Gross − LOP deduction − Pro-rata − Fixed deductions − TDS
 ```
 
 Defaults (until a Super Admin changes them): calendar-day divisor, LOP on Basic, whole-rupee rounding.

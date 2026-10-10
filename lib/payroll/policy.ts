@@ -2,6 +2,8 @@
 // configuration (stored in settings/payrollPolicy, written only by the
 // server), never as a number buried in a calculation.
 
+import { DEFAULT_TDS, MAX_TDS_PERCENT, describeTds, type TdsPolicy } from "./tds";
+
 export type ComponentType = "earning" | "deduction";
 
 export type SalaryComponent = {
@@ -59,6 +61,7 @@ export type PayrollPolicy = {
   rounding: "rupee" | "paisa";
   incompleteDay: "paid-flag" | "review"; // punched in, never punched out
   components: SalaryComponent[];
+  tds: TdsPolicy;
   leave: LeavePolicy;
   holidays: {
     expectedPerMonth: number; // company-declared holidays per month (warn when different)
@@ -94,6 +97,7 @@ export const DEFAULT_POLICY: PayrollPolicy = {
   rounding: "rupee",
   incompleteDay: "paid-flag",
   components: DEFAULT_COMPONENTS,
+  tds: DEFAULT_TDS,
   leave: DEFAULT_LEAVE_POLICY,
   holidays: { expectedPerMonth: 2, nonCompanyCategories: ["Optional"], substituteHolidays: true },
 };
@@ -120,7 +124,8 @@ export function normalizeComponents(raw: unknown): SalaryComponent[] {
     const label = String(c?.label || key).trim().slice(0, 60) || key;
     const legacy = DEFAULT_COMPONENTS.find((d) => d.key === key);
     seen.add(key);
-    out.push({ key, label, type: legacy ? legacy.type : type, legacy: legacy?.legacy });
+    // Never put `legacy: undefined` on the object: Firestore rejects undefined values.
+    out.push({ key, label, type: legacy ? legacy.type : type, ...(legacy?.legacy ? { legacy: true } : {}) });
   }
   // basicSalary is the anchor of every structure; it can never be removed.
   if (!seen.has("basicSalary")) out.unshift(DEFAULT_COMPONENTS[0]);
@@ -133,6 +138,7 @@ export function resolvePolicy(raw: unknown): PayrollPolicy {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const l = (r.leave && typeof r.leave === "object" ? r.leave : {}) as Record<string, unknown>;
   const h = (r.holidays && typeof r.holidays === "object" ? r.holidays : {}) as Record<string, unknown>;
+  const t = (r.tds && typeof r.tds === "object" ? r.tds : {}) as Record<string, unknown>;
   const D = DEFAULT_LEAVE_POLICY;
   return {
     confirmed: r.confirmed === true,
@@ -142,6 +148,11 @@ export function resolvePolicy(raw: unknown): PayrollPolicy {
     rounding: oneOf(r.rounding, ["rupee", "paisa"] as const, DEFAULT_POLICY.rounding),
     incompleteDay: oneOf(r.incompleteDay, ["paid-flag", "review"] as const, DEFAULT_POLICY.incompleteDay),
     components: normalizeComponents(r.components),
+    tds: {
+      mode: oneOf(t.mode, ["fixed", "percent"] as const, DEFAULT_TDS.mode),
+      percent: Math.round(num(t.percent, DEFAULT_TDS.percent, 0, MAX_TDS_PERCENT) * 100) / 100,
+      base: oneOf(t.base, ["earned", "gross"] as const, DEFAULT_TDS.base),
+    },
     leave: {
       annualEntitlement: num(l.annualEntitlement, D.annualEntitlement, 0, 366),
       accrualPerMonth: num(l.accrualPerMonth, D.accrualPerMonth, 0, 31),
@@ -177,6 +188,7 @@ export function describePolicy(p: PayrollPolicy): string[] {
         ? `Per-day rate = monthly amount ÷ ${p.fixedDivisor} (fixed)`
         : "Per-day rate = monthly amount ÷ working days (calendar days − weekly offs − company holidays)",
     p.lopBase === "basic" ? "Loss of pay is deducted from Basic Salary" : "Loss of pay is deducted from Gross Salary",
+    describeTds(p.tds),
     "Weekly offs and company holidays are paid and are not deducted from leave",
     "Missing attendance is flagged for review — never assumed Present or Absent",
   ];

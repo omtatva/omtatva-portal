@@ -96,6 +96,13 @@ export async function companyName(): Promise<string> {
   return n.trim().slice(0, 80) || "Omtatva Digitals";
 }
 
+// Optional: printed under the company name on payslips (settings/branding.companyAddress).
+export async function companyAddress(): Promise<string | null> {
+  const snap = await adminDb().doc("settings/branding").get();
+  const a = snap.exists ? String(snap.data()?.companyAddress || "") : "";
+  return a.replace(/\s+/g, " ").trim().slice(0, 200) || null;
+}
+
 // ----------------------------------------------------------- salary records
 export type StructureDoc = { id: string; employeeId: string; values: Record<string, number>; raw: DocumentData };
 

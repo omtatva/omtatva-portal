@@ -167,4 +167,13 @@ test("employee dashboard links to the server-checked payslips page", () => {
   assert.ok(read("app/payslips/page.tsx").includes("/api/payroll/my-payslips"));
 });
 
+test("removing a salary component that employees still have amounts for needs an explicit acknowledgement, and is audited", () => {
+  const b = body(actions, "savePolicy");
+  assert.ok(b.includes("component-in-use") && b.includes("acknowledgeRemoved") && b.includes("loadStructures(previous)"));
+  before(b, "component-in-use", 'set({ ...policy, updatedAt: now', "checked before the policy is written");
+  assert.ok(b.includes("removedComponents"));
+  const ui = read("components/payroll/PolicyTab.tsx");
+  assert.ok(ui.includes("Remove") && ui.includes('disabled={c.key === "basicSalary"}') && ui.includes("add back") && ui.includes("window.confirm"));
+});
+
 console.log(`\n${passed} passed (payroll contracts)${process.exitCode ? " - with FAILURES" : ""}`);

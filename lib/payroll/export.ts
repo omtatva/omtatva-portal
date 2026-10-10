@@ -114,6 +114,7 @@ export function toXlsx(table: PayrollTable, meta: ExportMeta, summary: PayrollSu
     ["Absence deductions", summary.attendanceDeduction],
     ["Unpaid leave deductions", summary.leaveDeduction],
     ["Other deductions (PF, ESI, PT, TDS, pro-rata)", summary.otherDeductions],
+    ["  of which TDS", summary.tds],
     ["Total deductions", summary.totalDeductions],
     ["Net payable", summary.netPay],
     ["Snapshot fingerprint (SHA-256)", meta.digest],

@@ -9,7 +9,8 @@
 //   LOP deduction      = min(Base, rate × LOP days)               (rounded per policy)
 //   Not-employed days  = days before joining / after the last working day
 //   Proration          = Gross × not-employed days ÷ calendar days (rounded per policy)
-//   Fixed deductions   = Σ deduction components (PF, ESI, PT, TDS, other)
+//   Fixed deductions   = Σ deduction components (PF, ESI, PT, other) [+ TDS]
+//   TDS                = fixed amount from the structure, OR (policy) percent × earned/gross salary
 //   NET PAY            = Gross − LOP deduction − Proration − Fixed deductions
 //
 // Every calendar day gets EXACTLY ONE class, in this order of precedence:
@@ -20,6 +21,7 @@ import { isAttendedStatus, statusCategory } from "../attendanceRules";
 import { daysInMonth, isValidDate, monthDates, weekday } from "./calendar";
 import { buildLeaveLedger, type LeaveRequest, type LeaveSummary } from "./leave";
 import type { PayrollPolicy } from "./policy";
+import { calculateTds } from "./tds";
 
 export type DayClass =
   | "not-employed"
@@ -86,6 +88,9 @@ export type EmployeeResult = {
   basicSalary: number;
   allowances: number; // every earning except Basic
   otherDeductions: number; // fixed deductions (PF, ESI, PT, TDS, other) + pro-rata
+  tdsAmount: number; // TDS included above (fixed amount or percentage, per the policy)
+  tdsBase: number; // amount the percentage was applied to (0 in fixed mode)
+  tdsPercent: number | null;
   notEmployedDays: number;
   notEmployedDeduction: number;
   deductions: Line[];
@@ -157,7 +162,7 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     department: emp.department || "", designation: emp.designation || "",
     status: "ready", daysInMonth: dim, divisor: dim, counts, dayClasses, payableDays: 0,
     leave: null, leaveDays: [], earnings: [], grossEarnings: 0, base: 0, perDayRate: 0, lopDays: 0, lopDeduction: 0,
-    attendanceLopDays: 0, attendanceDeduction: 0, leaveLopDays: 0, leaveDeduction: 0, basicSalary: 0, allowances: 0, otherDeductions: 0,
+    attendanceLopDays: 0, attendanceDeduction: 0, leaveLopDays: 0, leaveDeduction: 0, basicSalary: 0, allowances: 0, otherDeductions: 0, tdsAmount: 0, tdsBase: 0, tdsPercent: null,
     notEmployedDays: 0, notEmployedDeduction: 0, deductions: [], fixedDeductions: 0, totalDeductions: 0,
     netPay: 0, flags,
   };
@@ -257,6 +262,11 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
   for (const c of policy.components) {
     const amount = emp.salary[c.key];
     if (!amount) continue;
+    // In percentage mode TDS is calculated below; a fixed amount saved on the structure is not added on top.
+    if (c.key === "tds" && policy.tds.mode === "percent") {
+      flags.push({ severity: "info", code: "tds-fixed-ignored", message: `The fixed TDS of ${amount} on the salary structure is ignored: TDS is calculated at ${policy.tds.percent}% by the payroll policy.` });
+      continue;
+    }
     const line = { key: c.key, label: c.label, amount: fromCents(cents(amount)) };
     if (c.type === "earning") { earnings.push(line); grossC += cents(amount); }
     else { deductions.push(line); fixedC += cents(amount); }
@@ -283,6 +293,13 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
   const notEmp = counts["not-employed"];
   const proration = roundMoney((gross * notEmp) / dim, policy.rounding);
 
+  // TDS by percentage (policy): on what is actually payable, after loss of pay and pro-rata
+  const tds = calculateTds(policy.tds, { gross, lopDeduction: lop, proration }, policy.rounding);
+  if (policy.tds.mode === "percent" && tds.amount > 0) {
+    deductions.push({ key: "tds", label: `TDS @ ${policy.tds.percent}%`, amount: tds.amount });
+    fixedC += cents(tds.amount);
+  }
+
   const totalDedC = cents(lop) + cents(proration) + fixedC;
   const netC = grossC - totalDedC;
   if (netC < 0) flags.push({ severity: "block", code: "negative-net", message: "Net pay is negative — check the salary structure and deductions." });
@@ -306,6 +323,9 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     attendanceLopDays, attendanceDeduction, leaveLopDays, leaveDeduction,
     basicSalary: fromCents(cents(basic)), allowances: fromCents(grossC - cents(basic)),
     otherDeductions: fromCents(fixedC + cents(proration)),
+    tdsAmount: policy.tds.mode === "percent" ? tds.amount : policy.components.some((c) => c.key === "tds") ? fromCents(cents(emp.salary.tds || 0)) : 0,
+    tdsBase: tds.base,
+    tdsPercent: policy.tds.mode === "percent" ? policy.tds.percent : null,
     notEmployedDays: notEmp, notEmployedDeduction: proration,
     deductions, fixedDeductions: fromCents(fixedC),
     totalDeductions: fromCents(totalDedC),
@@ -324,6 +344,7 @@ export type PayrollSummary = {
   attendanceDeduction: number;
   leaveDeduction: number;
   otherDeductions: number;
+  tds: number; // TDS included in other deductions
   lopDeduction: number;
   proration: number;
   fixedDeductions: number;
@@ -333,7 +354,7 @@ export type PayrollSummary = {
 };
 
 export function summarize(results: EmployeeResult[]): PayrollSummary {
-  let gross = 0, lop = 0, pro = 0, fixed = 0, ded = 0, net = 0, basic = 0, allow = 0, attD = 0, leaveD = 0, other = 0;
+  let gross = 0, lop = 0, pro = 0, fixed = 0, ded = 0, net = 0, basic = 0, allow = 0, attD = 0, leaveD = 0, other = 0, tdsT = 0;
   const flagCounts: Record<Severity, number> = { block: 0, warn: 0, info: 0 };
   for (const r of results) {
     for (const f of r.flags) flagCounts[f.severity] += 1;
@@ -344,6 +365,7 @@ export function summarize(results: EmployeeResult[]): PayrollSummary {
     attD += cents(r.attendanceDeduction);
     leaveD += cents(r.leaveDeduction);
     other += cents(r.otherDeductions);
+    tdsT += cents(r.tdsAmount);
     lop += cents(r.lopDeduction);
     pro += cents(r.notEmployedDeduction);
     fixed += cents(r.fixedDeductions);
@@ -356,7 +378,7 @@ export function summarize(results: EmployeeResult[]): PayrollSummary {
     needsReview: results.filter((r) => r.status === "review").length,
     excluded: results.filter((r) => r.status === "excluded").length,
     gross: fromCents(gross), basic: fromCents(basic), allowances: fromCents(allow),
-    attendanceDeduction: fromCents(attD), leaveDeduction: fromCents(leaveD), otherDeductions: fromCents(other), lopDeduction: fromCents(lop), proration: fromCents(pro),
+    attendanceDeduction: fromCents(attD), leaveDeduction: fromCents(leaveD), otherDeductions: fromCents(other), tds: fromCents(tdsT), lopDeduction: fromCents(lop), proration: fromCents(pro),
     fixedDeductions: fromCents(fixed), totalDeductions: fromCents(ded), netPay: fromCents(net),
     flagCounts,
   };

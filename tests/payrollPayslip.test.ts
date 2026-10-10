@@ -4,7 +4,8 @@ import crypto from "node:crypto";
 import { computeEmployee, type EmployeeInput } from "../lib/payroll/engine";
 import { resolvePolicy } from "../lib/payroll/policy";
 import { monthDates, weekday } from "../lib/payroll/calendar";
-import { formatRs, renderPayslip, rupeesInWords } from "../lib/payroll/payslipPdf";
+import { formatRs, maskAccount, renderPayslip, rupeesInWords } from "../lib/payroll/payslipPdf";
+import { buildYtd, fiscalYearLabel, fiscalYearStart } from "../lib/payroll/ytd";
 import { assertCan, assertSuperAdmin, can, canOpenPayslip, payrollLevel, PayrollForbidden } from "../lib/payroll/access";
 
 let passed = 0;
@@ -41,10 +42,42 @@ test("PDF: a valid PDF is produced and contains the employee, components, attend
   assert.equal(text.slice(0, 5), "%PDF-");
   assert.ok(text.trimEnd().endsWith("%%EOF"));
   assert.ok(bytes.length > 2000);
-  for (const needle of ["Asha Rao", "E001", "Payslip for August 2026", "Basic Salary", "HRA", "Special Allowance", "Provident Fund (PF)", "Absence (3 days @ Rs.", "Payable days", "28", "Rs. 45,297.00", "45,297.00", "50,000.00", "4,703.00", "Forty Five Thousand Two Hundred Ninety Seven Rupees Only"]) {
+  for (const needle of ["PAYSLIP", "August 2026", "Employee No.", "E001", "Asha Rao", "Designer", "Basic Salary", "HRA", "Special Allowance", "Provident Fund (PF)", "Loss of pay - absence (3 d)", "Pay Days", "28 of 31", "Gross Earnings", "Total Deductions", "NET PAY", "Rs. 45,297.00", "50,000.00", "4,703.00", "Forty Five Thousand Two Hundred Ninety Seven Rupees Only", "Attendance summary", "Leave summary"]) {
     assert.ok(text.includes(needle), `missing in PDF: ${needle}`);
   }
   assert.ok(!text.includes("₹"), "no rupee glyph (Helvetica cannot draw it)");
+  assert.equal((text.match(/\/Type \/Page[^s]/g) || []).length, 1, "fits one page");
+});
+test("PDF (large-company layout): bank / statutory block, company address and YEAR-TO-DATE columns", () => {
+  const july = computeEmployee("2026-07", policy, [], { ...input, attendance: monthDates("2026-07").filter((d) => weekday(d) !== 0).map((date) => ({ date, status: "Present" })) });
+  const ytd = buildYtd([
+    { period: "2026-07", revision: 1, result: july },
+    { period: "2026-08", revision: 1, result },
+    { period: "2026-08", revision: 0, result: { ...result, netPay: 1 } }, // older revision of the same month: ignored
+    { period: "2026-03", revision: 1, result: july }, // previous fiscal year: ignored
+  ], "u1", "2026-08");
+  assert.equal(ytd.fiscalYear, "2026-27");
+  assert.equal(ytd.months, 2);
+  assert.equal(ytd.net, Math.round((july.netPay + result.netPay) * 100) / 100);
+  const full = { ...meta, companyAddress: "Sector 62, Noida, UP 201301", employee: { location: "Noida", bankName: "HDFC Bank", bankAccountMasked: "XXXXXX4321", ifsc: "HDFC0001234", uan: "100200300400" }, ytd };
+  const text = pdfText(renderPayslip(result, full));
+  for (const needle of ["Sector 62, Noida, UP 201301", "Location", "Noida", "HDFC Bank", "XXXXXX4321", "HDFC0001234", "UAN", "100200300400", "YTD 2026-27", "Year-to-date net pay (2026-27, 2 months)"]) {
+    assert.ok(text.includes(needle), `missing: ${needle}`);
+  }
+  assert.ok(text.includes(formatRs(ytd.gross)) && text.includes(formatRs(ytd.net)));
+  assert.equal(maskAccount("1234567890124321"), "XXXXXXXXXXXX4321");
+  assert.equal(maskAccount("12 34"), "1234");
+  assert.equal(maskAccount("123"), null);
+  assert.ok(!text.includes("1234567890124321"));
+  assert.equal((text.match(/\/Type \/Page[^s]/g) || []).length, 1, "still one page");
+});
+test("fiscal year: April to March; YTD never mixes years or counts a month twice", () => {
+  assert.equal(fiscalYearStart("2026-08"), "2026-04");
+  assert.equal(fiscalYearStart("2027-02"), "2026-04");
+  assert.equal(fiscalYearStart("2026-03"), "2025-04");
+  assert.equal(fiscalYearLabel("2027-01"), "2026-27");
+  const none = buildYtd([], "u1", "2026-08");
+  assert.deepEqual([none.months, none.net, none.gross], [0, 0, 0]);
 });
 test("PDF is deterministic: the same snapshot gives identical bytes (safe to regenerate / verify by hash)", () => {
   const a = crypto.createHash("sha256").update(renderPayslip(result, meta)).digest("hex");
@@ -56,7 +89,7 @@ test("PDF is deterministic: the same snapshot gives identical bytes (safe to reg
 test("PDF: renders a joiner with pro-rata, and an employee with no deductions", () => {
   const joiner = computeEmployee("2026-08", policy, hol, { ...input, joiningDate: "2026-08-20", attendance: dates.filter((d) => d >= "2026-08-20").map((date) => ({ date, status: "Present" })) });
   const text = pdfText(renderPayslip(joiner, meta));
-  assert.ok(text.includes("Pro-rata (19 days not employed)"));
+  assert.ok(text.includes("Pro-rata (19 d not employed)"));
   const plain = computeEmployee("2026-08", policy, hol, { ...input, salary: { basicSalary: 20000 }, attendance: dates.map((date) => ({ date, status: "Present" })) });
   assert.ok(Buffer.from(renderPayslip(plain, meta)).toString("latin1").includes("20,000.00"));
 });

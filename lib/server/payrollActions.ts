@@ -6,7 +6,8 @@
 import { FieldValue, Timestamp, type DocumentData } from "firebase-admin/firestore";
 import { describePolicy, resolvePolicy, type PayrollPolicy } from "../payroll/policy";
 import { canOpenPayslip, can } from "../payroll/access";
-import { renderPayslip, type PayslipMeta } from "../payroll/payslipPdf";
+import { maskAccount, renderPayslip, type PayslipMeta } from "../payroll/payslipPdf";
+import { buildYtd, fiscalYearStart, type YtdInput } from "../payroll/ytd";
 import {
   RunConflict, canEditDecisions, entryId, hashOf, planApprove, planGenerate, planPayslips, planReverse, sha256,
   type RunState,
@@ -15,7 +16,7 @@ import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, previewSheet, type SheetPreview, typ
 import type { EmployeeResult } from "../payroll/engine";
 import { ApiError, adminDb } from "./firebaseAdmin";
 import {
-  actorWith, companyName, computeRun, iso, loadDecisions, loadPolicy, loadRules, loadStructures, loadUsers,
+  actorWith, companyAddress, companyName, computeRun, iso, loadDecisions, loadPolicy, loadRules, loadStructures, loadUsers,
   memberFor, superAdminActor, validatePeriod, valuesFromDoc, type Actor,
 } from "./payrollData";
 import type { VerifiedUser } from "./firebaseAdmin";
@@ -80,12 +81,38 @@ export async function getPolicy(user: VerifiedUser) {
 
 export async function savePolicy(user: VerifiedUser, body: Record<string, unknown>) {
   const actor = await superAdminActor(user);
-  const policy = resolvePolicy({ ...(body.policy as object), confirmed: body.confirm === true });
+  // JSON round-trip: the stored document must be plain data (no undefined values — Firestore rejects them)
+  const policy: PayrollPolicy = JSON.parse(JSON.stringify(resolvePolicy({ ...(body.policy as object), confirmed: body.confirm === true })));
   const now = Timestamp.now();
+
+  // Removing a salary component stops it being paid / deducted from now on. If
+  // employees still have an amount saved for it, that is a real change to their
+  // pay — so it must be acknowledged explicitly (the amounts themselves are kept
+  // on the record and come back if the component is re-added).
+  const previous = await loadPolicy();
+  const removed = previous.components.filter((c) => !policy.components.some((n) => n.key === c.key));
+  if (removed.length) {
+    const structures = await loadStructures(previous);
+    const acknowledged = Array.isArray(body.acknowledgeRemoved) ? (body.acknowledgeRemoved as unknown[]).map(String) : [];
+    const inUse = removed
+      .map((c) => ({
+        c,
+        count: structures.filter((s) => Number(c.legacy ? s.raw[c.key] : s.raw.extraComponents?.[c.key]) > 0).length,
+      }))
+      .filter((x) => x.count > 0 && !acknowledged.includes(x.c.key));
+    if (inUse.length) {
+      throw new ApiError(
+        409, "component-in-use",
+        `${inUse.map((x) => `${x.c.label} (${x.c.type}) still has an amount for ${x.count} employee(s)`).join("; ")}. ` +
+          `Removing it changes their salary from the next payroll run (months already approved are not affected). Confirm to remove it anyway.`
+      );
+    }
+  }
+
   const before = await db().doc("settings/payrollPolicy").get();
   await db().doc("settings/payrollPolicy").set({ ...policy, updatedAt: now, updatedBy: actor.email });
   await db().collection("payrollPolicyVersions").add({ policy, previous: before.exists ? before.data() : null, by: actor.email, at: now });
-  await audit(actor, "policy-saved", null, { confirmed: policy.confirmed }, `Payroll policy saved (confirmed: ${policy.confirmed}).`);
+  await audit(actor, "policy-saved", null, { confirmed: policy.confirmed, removedComponents: removed.map((c) => c.key) }, `Payroll policy saved (confirmed: ${policy.confirmed})${removed.length ? `; removed components: ${removed.map((c) => c.label).join(", ")}` : ""}.`);
   return { policy, explanation: describePolicy(policy) };
 }
 
@@ -253,13 +280,18 @@ async function entriesFor(period: string, revision: number) {
   return snap.docs.filter((d) => Number(d.data().revision) === revision && d.data().voided !== true);
 }
 
-function metaFor(run: DocumentData, result: EmployeeResult, id: string, joiningDate: string | null): PayslipMeta {
+function metaFor(run: DocumentData, result: EmployeeResult, id: string, joiningDate: string | null, extras: Partial<PayslipMeta> = {}): PayslipMeta {
   return {
     companyName: String(run.companyName || "Omtatva Digitals"), period: run.period, revision: Number(run.revision),
     payslipId: id, approvedAtIso: (iso(run.approvedAt) as string) || new Date(0).toISOString(),
-    joiningDate, policyLines: Array.isArray(run.policyLines) ? run.policyLines : [],
+    joiningDate, policyLines: Array.isArray(run.policyLines) ? run.policyLines : [], ...extras,
   };
 }
+
+const text = (v: unknown, max = 60): string | null => {
+  const s = String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  return s || null;
+};
 
 export async function generatePayslips(user: VerifiedUser, body: Record<string, unknown>) {
   const actor = await actorWith(user, "payroll", "edit");
@@ -276,6 +308,15 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
   const existing = new Map(existingSnap.docs.filter((d) => Number(d.data().revision) === plan.revision).map((d) => [d.id, { status: String(d.data().status), entryHash: String(d.data().entryHash) }]));
   const users = new Map((await loadUsers()).map((u) => [u.uid, u]));
 
+  // What a large-company payslip also shows: bank / statutory details from the employee's profile
+  // (printed only when present) and year-to-date totals from the approved payroll snapshots.
+  const addr = await companyAddress();
+  const profileRefs = entryDocs.map((d) => db().doc(`employeeProfiles/${String(d.data().uid)}`));
+  const profileSnaps = profileRefs.length ? await db().getAll(...profileRefs) : [];
+  const profiles = new Map(profileSnaps.filter((s) => s.exists).map((s) => [s.id, s.data()!]));
+  const ytdSnap = await db().collection("payrollEntries").where("period", ">=", fiscalYearStart(period)).where("period", "<=", period).get();
+  const ytdEntries: YtdInput[] = ytdSnap.docs.map((d) => ({ period: String(d.data().period), revision: Number(d.data().revision), voided: d.data().voided === true, result: d.data().result }));
+
   const todo = planPayslips(period, plan.revision, entryDocs.map((d) => ({ uid: String(d.data().uid), entryHash: String(d.data().entryHash) })), existing);
   const byUid = new Map(entryDocs.map((d) => [String(d.data().uid), d]));
 
@@ -286,7 +327,17 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
       const entry = byUid.get(item.uid)!;
       const result = entry.data().result as EmployeeResult;
       if (hashOf(result) !== item.entryHash) throw new Error("entry snapshot does not match its hash");
-      const meta = metaFor(run!, result, item.id, users.get(item.uid)?.joiningDate || null);
+      const p = profiles.get(item.uid) || {};
+      const meta: PayslipMeta = JSON.parse(JSON.stringify(
+        metaFor(run!, result, item.id, users.get(item.uid)?.joiningDate || null, {
+          companyAddress: addr,
+          employee: {
+            location: text(p.officeLocation), bankName: text(p.bankName), bankAccountMasked: maskAccount(p.accountNumber), ifsc: text(p.ifsc, 20),
+            pfNumber: text(p.pfNumber, 30), esiNumber: text(p.esicNumber, 30), uan: text(p.uanNumber, 30), pan: text(p.panNumber, 12),
+          },
+          ytd: buildYtd(ytdEntries, item.uid, period),
+        })
+      ));
       const pdf = renderPayslip(result, meta);
       // The generated PDF is retained (server-only collection), so what was issued is exactly what can be re-sent or re-downloaded.
       await db().doc(`payslipFiles/${item.id}`).set({ pdf: Buffer.from(pdf), sha256: sha256(pdf), bytes: pdf.length, createdAt: Timestamp.now() });

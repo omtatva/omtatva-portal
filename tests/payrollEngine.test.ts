@@ -4,6 +4,8 @@
 // working days. Example salary: Basic 30,000 + HRA 10,000 + Special 10,000 =
 // Gross 50,000; PF 1,800.
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { addDay, daysInMonth, monthDates, weekday } from "../lib/payroll/calendar";
 import { computeEmployee, companyFlags, summarize, approvalBlockers, type AttendanceRec, type EmployeeInput, type HolidayRec } from "../lib/payroll/engine";
 import { resolvePolicy, DEFAULT_POLICY, type PayrollPolicy } from "../lib/payroll/policy";
@@ -341,6 +343,40 @@ test("policy: invalid saved values fall back to safe defaults", () => {
   assert.equal(p.leave.annualEntitlement, 24);
   assert.equal(p.confirmed, false);
   assert.equal(p.components[0].key, "basicSalary");
+});
+
+test("components: a standard component can be removed or renamed; Basic can never be removed; types of standard ones are fixed", () => {
+  const without = resolvePolicy({
+    components: DEFAULT_POLICY.components.filter((c) => c.key !== "tds" && c.key !== "esi" && c.key !== "bonus").map((c) => (c.key === "hra" ? { ...c, label: "House Rent Allowance" } : c)),
+  });
+  const keys = without.components.map((c) => c.key);
+  assert.ok(!keys.includes("tds") && !keys.includes("esi") && !keys.includes("bonus"));
+  assert.equal(without.components.find((c) => c.key === "hra")!.label, "House Rent Allowance");
+  const noBasic = resolvePolicy({ components: [{ key: "hra", label: "HRA", type: "earning" }] });
+  assert.equal(noBasic.components[0].key, "basicSalary");
+  const retyped = resolvePolicy({ components: [{ key: "pf", label: "PF", type: "earning" }, { key: "basicSalary", label: "Basic", type: "earning" }] });
+  assert.equal(retyped.components.find((c) => c.key === "pf")!.type, "deduction");
+  // a removed component is no longer paid or deducted
+  const emp = { uid: "u", employeeId: "E", name: "A", weeklyOffDays: [0], salary: { basicSalary: 30000, hra: 10000, tds: 3000 }, attendance: monthDates("2026-08").filter((d) => weekday(d) !== 0).map((date) => ({ date, status: "Present" })), leaveRequests: [] };
+  const withTds = computeEmployee("2026-08", policy(), [], emp);
+  const noTds = computeEmployee("2026-08", { ...policy(), components: without.components }, [], emp);
+  assert.equal(withTds.netPay, 37000);
+  assert.equal(noTds.netPay, 40000);
+});
+
+test("regression: the policy the Save-policy screen sends contains no undefined values (Firestore rejects them → 'Something went wrong')", () => {
+  const holes: string[] = [];
+  const walk = (v: unknown, p: string) => {
+    if (v === undefined) holes.push(p);
+    else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${p}[${i}]`));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, `${p}.${k}`);
+  };
+  const posted = JSON.parse(JSON.stringify(DEFAULT_POLICY)); // what the screen loaded and posts back
+  walk(resolvePolicy({ ...posted, components: DEFAULT_POLICY.components, confirmed: true }), "policy");
+  walk(resolvePolicy({ ...posted, components: [...posted.components, { key: "shiftAllowance", label: "Shift", type: "earning" }] }), "policy2");
+  assert.deepEqual(holes, []);
+  const src = fs.readFileSync(path.join(__dirname, "../lib/server/payrollActions.ts"), "utf8");
+  assert.ok(src.includes("JSON.parse(JSON.stringify(resolvePolicy("), "savePolicy writes plain data");
 });
 
 console.log(`\n${passed} passed (payroll engine)${process.exitCode ? " - with FAILURES" : ""}`);

@@ -1,10 +1,16 @@
-// Individual payslip PDF. Rendered from the immutable payroll snapshot saved at
-// approval, so the same payslip is byte-for-byte reproducible later.
-// Uses the built-in Helvetica font, which has no ₹ glyph — amounts print as "Rs.".
+// Individual payslip PDF, laid out like a large-company payslip:
+//   header (company, "PAYSLIP", month) → employee / bank / statutory block →
+//   Earnings | Deductions side by side with CURRENT MONTH and YEAR-TO-DATE
+//   columns → net pay (figures and words) → attendance & leave summary → notes.
+//
+// Rendered from the immutable payroll snapshot saved at approval, so the same
+// payslip is byte-for-byte reproducible later. Uses the built-in Helvetica font,
+// which has no ₹ glyph — amounts print as "Rs.".
 
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { EmployeeResult } from "./engine";
+import type { Ytd } from "./ytd";
 
 export type PayslipMeta = {
   companyName: string;
@@ -14,6 +20,19 @@ export type PayslipMeta = {
   approvedAtIso: string; // fixed timestamp => deterministic output
   joiningDate?: string | null;
   policyLines: string[];
+  // --- optional: shown when known (older payslips simply omit them)
+  companyAddress?: string | null;
+  employee?: {
+    location?: string | null;
+    bankName?: string | null;
+    bankAccountMasked?: string | null; // e.g. XXXXXX1234
+    ifsc?: string | null;
+    pfNumber?: string | null;
+    esiNumber?: string | null;
+    uan?: string | null;
+    pan?: string | null;
+  };
+  ytd?: Ytd | null;
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -37,6 +56,7 @@ const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"
 const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 const below100 = (n: number) => (n < 20 ? ONES[n] : `${TENS[Math.floor(n / 10)]}${n % 10 ? " " + ONES[n % 10] : ""}`);
 const below1000 = (n: number) => (n >= 100 ? `${ONES[Math.floor(n / 100)]} Hundred${n % 100 ? " " + below100(n % 100) : ""}` : below100(n));
+const neg = (n: number) => (n < 0 ? "Minus " : "");
 
 export function rupeesInWords(amount: number): string {
   const total = Math.round(Math.abs(amount) * 100);
@@ -56,135 +76,210 @@ export function rupeesInWords(amount: number): string {
   if (paise) words += ` and ${below100(paise)} Paise`;
   return `${neg(amount)}${words} Only`;
 }
-const neg = (n: number) => (n < 0 ? "Minus " : "");
+
+// Bank account numbers are only ever printed masked: XXXXXX1234.
+export function maskAccount(v: unknown): string | null {
+  const digits = String(v ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? "X".repeat(Math.max(digits.length - 4, 0)) + digits.slice(-4) : null;
+}
+
+const NAVY: [number, number, number] = [31, 56, 100];
+const SOFT: [number, number, number] = [236, 241, 250];
+const lastY = (doc: jsPDF) => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
 export function renderPayslip(r: EmployeeResult, meta: PayslipMeta): Uint8Array {
   const doc = new jsPDF({ unit: "mm", format: "a4", compress: false });
-  const created = new Date(meta.approvedAtIso);
-  doc.setCreationDate(created);
+  doc.setCreationDate(new Date(meta.approvedAtIso));
   doc.setFileId(meta.payslipId.replace(/[^0-9a-fA-F]/g, "").padEnd(32, "0").slice(0, 32));
   doc.setProperties({ title: `Payslip ${periodLabel(meta.period)} - ${r.employeeId}`, subject: "Payslip", author: meta.companyName, creator: meta.companyName });
 
   const W = 210;
-  const L = 14; // left and right margin
+  const L = 14;
   const R = W - 14;
+  const ytd = meta.ytd || null;
+  const emp = meta.employee || {};
 
-  // header band
-  doc.setFillColor(37, 71, 140);
-  doc.rect(0, 0, W, 30, "F");
-  doc.setTextColor(255, 255, 255);
+  // ---------------------------------------------------------------- header
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(meta.companyName.toUpperCase(), W / 2, 13, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Payslip for ${periodLabel(meta.period)}`, W / 2, 22, { align: "center" });
+  doc.setFontSize(17);
+  doc.setTextColor(...NAVY);
+  doc.text(meta.companyName.toUpperCase(), L, 17);
+  doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
+  doc.text("PAYSLIP", R, 14, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.text(periodLabel(meta.period), R, 20, { align: "right" });
+  if (meta.companyAddress) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text(meta.companyAddress, L, 23, { maxWidth: 120 });
+    doc.setTextColor(0, 0, 0);
+  }
+  doc.setDrawColor(...NAVY);
+  doc.setLineWidth(0.8);
+  doc.line(L, 28, R, 28);
 
-  // employee block
+  // ------------------------------------------- employee / bank / statutory
+  const pairs: [string, string][] = [
+    ["Employee No.", r.employeeId],
+    ["Employee Name", r.name],
+    ["Designation", r.designation || "-"],
+    ["Department", r.department || "-"],
+    ["Date of Joining", meta.joiningDate || "-"],
+    ["Location", emp.location || "-"],
+    ["Pay Period", periodLabel(meta.period)],
+    ["Pay Days", `${r.payableDays} of ${r.daysInMonth}`],
+    ["LOP Days", String(r.lopDays)],
+    ["Leave Balance", r.leave ? `${r.leave.available} day(s)` : "-"],
+  ];
+  const optional: [string, string | null | undefined][] = [
+    ["Bank", emp.bankName],
+    ["Bank A/C No.", emp.bankAccountMasked],
+    ["IFSC", emp.ifsc],
+    ["PAN", emp.pan],
+    ["PF No.", emp.pfNumber],
+    ["UAN", emp.uan],
+    ["ESI No.", emp.esiNumber],
+  ];
+  for (const [k, v] of optional) if (v) pairs.push([k, v]);
+  if (pairs.length % 2) pairs.push(["", ""]);
+  const info: string[][] = [];
+  for (let i = 0; i < pairs.length; i += 2) info.push([pairs[i][0], pairs[i][1], pairs[i + 1][0], pairs[i + 1][1]]);
   autoTable(doc, {
-    startY: 36,
-    theme: "plain",
-    styles: { fontSize: 9.5, cellPadding: 1.4 },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 32 }, 1: { cellWidth: 59 }, 2: { fontStyle: "bold", cellWidth: 32 }, 3: { cellWidth: 59 } },
-    body: [
-      ["Employee", r.name, "Employee ID", r.employeeId],
-      ["Department", r.department || "-", "Designation", r.designation || "-"],
-      ["Date of joining", meta.joiningDate || "-", "Pay period", periodLabel(meta.period)],
-    ],
-    margin: { left: L, right: 14 },
-  });
-
-  // attendance summary
-  const c = r.counts;
-  const worked = c.present + c.incomplete;
-  const paidLeave = c["paid-leave"] + c["decided-paid"];
-  const unpaid = r.lopDays;
-  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
-  autoTable(doc, {
-    startY: y,
+    startY: 32,
     theme: "grid",
-    head: [["Attendance summary", "Days"]],
-    headStyles: { fillColor: [37, 71, 140], textColor: 255, fontSize: 9.5 },
-    styles: { fontSize: 9.5, cellPadding: 1.6 },
-    columnStyles: { 1: { halign: "right", cellWidth: 24 } },
-    body: [
-      ["Calendar days in month", String(r.daysInMonth)],
-      ["Days worked", String(worked)],
-      ["Weekly offs", String(c["weekly-off"])],
-      ["Company holidays", String(c.holiday)],
-      ["Paid leave", String(paidLeave)],
-      ["Unpaid days (absent / unpaid leave) - loss of pay", String(unpaid)],
-      ...(r.notEmployedDays ? [["Days not employed in this month", String(r.notEmployedDays)]] : []),
-      ["Payable days", String(r.payableDays)],
-    ],
-    margin: { left: L, right: 14 },
-    didParseCell: (d) => {
-      if (d.section === "body" && d.row.index === (d.table.body.length - 1)) d.cell.styles.fontStyle = "bold";
+    styles: { fontSize: 8.5, cellPadding: 1.5, lineColor: [200, 205, 215], lineWidth: 0.2 },
+    columnStyles: {
+      0: { fontStyle: "bold", cellWidth: 30, fillColor: SOFT },
+      1: { cellWidth: 61 },
+      2: { fontStyle: "bold", cellWidth: 30, fillColor: SOFT },
+      3: { cellWidth: 61 },
     },
+    body: info,
+    margin: { left: L, right: 14 },
   });
 
-  // earnings | deductions
-  const earn = r.earnings.map((e) => [e.label, formatRs(e.amount)]);
+  // --------------------------------- earnings | deductions (month + YTD)
+  const earn: string[][] = r.earnings.map((e) => [e.label, formatRs(e.amount), ytd ? formatRs(ytd.earnings[e.key] ?? 0) : "-"]);
   const ded: string[][] = [];
-  if (r.attendanceDeduction > 0) ded.push([`Absence (${r.attendanceLopDays} day${r.attendanceLopDays === 1 ? "" : "s"} @ Rs. ${formatRs(r.perDayRate)})`, formatRs(r.attendanceDeduction)]);
-  if (r.leaveDeduction > 0) ded.push([`Unpaid leave (${r.leaveLopDays} day${r.leaveLopDays === 1 ? "" : "s"} @ Rs. ${formatRs(r.perDayRate)})`, formatRs(r.leaveDeduction)]);
-  if (r.notEmployedDeduction > 0) ded.push([`Pro-rata (${r.notEmployedDays} day${r.notEmployedDays === 1 ? "" : "s"} not employed)`, formatRs(r.notEmployedDeduction)]);
-  for (const d of r.deductions) ded.push([d.label, formatRs(d.amount)]);
-  const rows = Math.max(earn.length, ded.length, 1);
+  if (r.attendanceDeduction > 0 || (ytd?.absence ?? 0) > 0) ded.push([`Loss of pay - absence (${r.attendanceLopDays} d)`, formatRs(r.attendanceDeduction), ytd ? formatRs(ytd.absence) : "-"]);
+  if (r.leaveDeduction > 0 || (ytd?.leave ?? 0) > 0) ded.push([`Loss of pay - unpaid leave (${r.leaveLopDays} d)`, formatRs(r.leaveDeduction), ytd ? formatRs(ytd.leave) : "-"]);
+  if (r.notEmployedDeduction > 0 || (ytd?.prorata ?? 0) > 0) ded.push([`Pro-rata (${r.notEmployedDays} d not employed)`, formatRs(r.notEmployedDeduction), ytd ? formatRs(ytd.prorata) : "-"]);
+  for (const d of r.deductions) ded.push([d.label, formatRs(d.amount), ytd ? formatRs(ytd.deductions[d.key] ?? 0) : "-"]);
+
+  const n = Math.max(earn.length, ded.length, 1);
   const body: string[][] = [];
-  for (let i = 0; i < rows; i++) body.push([earn[i]?.[0] || "", earn[i]?.[1] || "", ded[i]?.[0] || "", ded[i]?.[1] || ""]);
-  body.push(["Gross earnings", formatRs(r.grossEarnings), "Total deductions", formatRs(r.totalDeductions)]);
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+  for (let i = 0; i < n; i++) {
+    body.push([earn[i]?.[0] || "", earn[i]?.[1] || "", earn[i]?.[2] || "", ded[i]?.[0] || "", ded[i]?.[1] || "", ded[i]?.[2] || ""]);
+  }
+  body.push(["Gross Earnings", formatRs(r.grossEarnings), ytd ? formatRs(ytd.gross) : "-", "Total Deductions", formatRs(r.totalDeductions), ytd ? formatRs(ytd.totalDeductions) : "-"]);
   autoTable(doc, {
-    startY: y,
+    startY: lastY(doc) + 5,
     theme: "grid",
-    head: [["Earnings", "Rs.", "Deductions", "Rs."]],
-    headStyles: { fillColor: [37, 71, 140], textColor: 255, fontSize: 9.5 },
-    styles: { fontSize: 9.5, cellPadding: 1.8 },
-    columnStyles: { 0: { cellWidth: 58 }, 1: { halign: "right", cellWidth: 33 }, 2: { cellWidth: 58 }, 3: { halign: "right", cellWidth: 33 } },
+    head: [["Earnings", "Current (Rs.)", ytd ? `YTD ${ytd.fiscalYear} (Rs.)` : "YTD (Rs.)", "Deductions", "Current (Rs.)", ytd ? `YTD ${ytd.fiscalYear} (Rs.)` : "YTD (Rs.)"]],
+    headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8.5, halign: "center" },
+    styles: { fontSize: 8.5, cellPadding: 1.6, lineColor: [200, 205, 215], lineWidth: 0.2 },
+    columnStyles: {
+      0: { cellWidth: 43 }, 1: { halign: "right", cellWidth: 24 }, 2: { halign: "right", cellWidth: 24 },
+      3: { cellWidth: 43 }, 4: { halign: "right", cellWidth: 24 }, 5: { halign: "right", cellWidth: 24 },
+    },
     body,
     margin: { left: L, right: 14 },
     didParseCell: (d) => {
       if (d.section === "body" && d.row.index === body.length - 1) {
         d.cell.styles.fontStyle = "bold";
-        d.cell.styles.fillColor = [236, 241, 250];
+        d.cell.styles.fillColor = SOFT;
       }
     },
   });
 
-  // net pay
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-  doc.setFillColor(236, 241, 250);
-  doc.roundedRect(L, y, R - L, 20, 2, 2, "F");
+  // ---------------------------------------------------------------- net pay
+  let y = lastY(doc) + 5;
+  doc.setFillColor(...SOFT);
+  doc.setDrawColor(...NAVY);
+  doc.setLineWidth(0.3);
+  const netBottom = y + 19;
+  doc.roundedRect(L, y, R - L, 19, 1.5, 1.5, "FD");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("NET PAY", L + 4, y + 8);
-  doc.setFontSize(15);
+  doc.setFontSize(10.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text("NET PAY  (Gross Earnings - Total Deductions)", L + 4, y + 7);
+  doc.setFontSize(14);
   doc.text(`Rs. ${formatRs(r.netPay)}`, R - 4, y + 8, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(rupeesInWords(r.netPay), L + 4, y + 15, { maxWidth: R - L - 8 });
-
-  // leave balance
-  y += 26;
-  if (r.leave) {
-    doc.setFontSize(9);
-    doc.text(
-      `Leave balance (year ${r.leave.leaveYear}): opening ${r.leave.opening}, accrued ${r.leave.accruedToDate}, used ${r.leave.usedYearToDate}, available ${r.leave.available}.`,
-      L, y, { maxWidth: R - L },
-    );
-    y += 6;
+  doc.setFontSize(8.5);
+  doc.text(rupeesInWords(r.netPay), L + 4, y + 14.5, { maxWidth: R - L - 8 });
+  if (ytd) {
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Year-to-date net pay (${ytd.fiscalYear}, ${ytd.months} month${ytd.months === 1 ? "" : "s"}): Rs. ${formatRs(ytd.net)}`, R - 4, y + 14.5, { align: "right" });
+    doc.setTextColor(0, 0, 0);
   }
 
-  // basis + footer
-  doc.setFontSize(8);
+  // ------------------------------------------- attendance + leave summary
+  const c = r.counts;
+  const att: string[][] = [
+    ["Days in month", String(r.daysInMonth)],
+    ["Days worked", String(c.present + c.incomplete)],
+    ["Weekly offs", String(c["weekly-off"])],
+    ["Company holidays", String(c.holiday)],
+    ["Paid leave", String(c["paid-leave"] + c["decided-paid"])],
+    ["Loss of pay days", String(r.lopDays)],
+    ...(r.notEmployedDays ? [["Not employed", String(r.notEmployedDays)]] : []),
+    ["Payable days", String(r.payableDays)],
+  ];
+  const lv = r.leave;
+  const leaveRows: string[][] = lv
+    ? [
+        ["Opening balance", String(lv.opening)],
+        ["Accrued (year to date)", String(lv.accruedToDate)],
+        ["Availed (year to date)", String(lv.usedYearToDate)],
+        ["Availed this month", String(lv.usedThisMonth)],
+        ["Closing balance", String(lv.available)],
+      ]
+    : [];
+  y = netBottom + 5; // below the net-pay box (autoTable's own last position is the table above it)
+  autoTable(doc, {
+    startY: y,
+    theme: "grid",
+    head: [["Attendance summary", "Days"]],
+    headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8.5 },
+    styles: { fontSize: 8.5, cellPadding: 1.3, lineColor: [200, 205, 215], lineWidth: 0.2 },
+    columnStyles: { 0: { cellWidth: 58 }, 1: { halign: "right", cellWidth: 25 } },
+    body: att,
+    margin: { left: L, right: W - L - 83 },
+    didParseCell: (d) => {
+      if (d.section === "body" && d.row.index === att.length - 1) d.cell.styles.fontStyle = "bold";
+    },
+  });
+  const attEnd = lastY(doc);
+  if (leaveRows.length) {
+    autoTable(doc, {
+      startY: y,
+      theme: "grid",
+      head: [[`Leave summary (${lv!.leaveYear})`, "Days"]],
+      headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8.5 },
+      styles: { fontSize: 8.5, cellPadding: 1.3, lineColor: [200, 205, 215], lineWidth: 0.2 },
+      columnStyles: { 0: { cellWidth: 58 }, 1: { halign: "right", cellWidth: 25 } },
+      body: leaveRows,
+      margin: { left: L + 99, right: 14 },
+      didParseCell: (d) => {
+        if (d.section === "body" && d.row.index === leaveRows.length - 1) d.cell.styles.fontStyle = "bold";
+      },
+    });
+  }
+  y = Math.max(attEnd, leaveRows.length ? lastY(doc) : 0) + 6;
+
+  // ------------------------------------------------------------------ notes
+  doc.setFontSize(7.5);
   doc.setTextColor(90, 90, 90);
   const basis = ["Basis of calculation:", ...meta.policyLines.map((p) => `- ${p}`)];
   doc.text(basis, L, y, { maxWidth: R - L });
-  y += basis.length * 3.6 + 4;
-  doc.text(`Payslip ${meta.payslipId} · revision ${meta.revision} · issued ${meta.approvedAtIso.slice(0, 10)}`, L, y);
-  doc.text("This is a computer-generated payslip and does not require a signature.", W / 2, 285, { align: "center" });
+  y += basis.length * 3.2 + 3;
+  doc.text(`Payslip ${meta.payslipId} - revision ${meta.revision} - issued ${meta.approvedAtIso.slice(0, 10)}`, L, y);
+  doc.setDrawColor(200, 205, 215);
+  doc.setLineWidth(0.2);
+  doc.line(L, 280, R, 280);
+  doc.text("This is a computer-generated payslip and does not require a signature. Please keep it confidential.", W / 2, 285, { align: "center" });
 
   return new Uint8Array(doc.output("arraybuffer"));
 }
