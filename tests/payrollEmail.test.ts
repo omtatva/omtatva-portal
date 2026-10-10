@@ -129,7 +129,7 @@ test("privacy: each message goes to ONE recipient with ONLY that person's attach
   await runBatch({ store, provider, build }, ["1", "2"]);
   for (const c of provider.calls) {
     assert.ok(!c.to.includes(",") && !c.to.includes(";"));
-    assert.ok(c.attachment.name.includes(c.deliveryId === "1" ? "E1" : "E2"));
+    assert.ok(c.attachment!.name.includes(c.deliveryId === "1" ? "E1" : "E2"));
     assert.ok(!("cc" in c) && !("bcc" in c));
   }
   assert.notEqual(provider.calls[0].to, provider.calls[1].to);
@@ -307,6 +307,17 @@ test("e-mail content: personalised, mentions the period and the PDF, contains NO
   assert.ok(!m.html.includes("<script>"));
   assert.ok(!/\d{1,3}(,\d{2,3})*\.\d{2}|Rs\.|₹/.test(m.text + m.html), "no amounts in the body");
   assert.ok(renderEmail({ employeeName: "A", periodLabel: "X", companyName: "C", portalUrl: "u", test: true }).subject.startsWith("[TEST]"));
+});
+
+test("notification-only e-mail: says the payslip is available, links to the portal, contains no attachment and no salary figures", async () => {
+  const m = renderEmail({ employeeName: "Asha Rao", periodLabel: "August 2026", companyName: "Omtatva Digitals", portalUrl: "https://portal.example", test: false, attached: false });
+  assert.ok(m.text.includes("is now available in your portal dashboard") && m.text.includes("https://portal.example/payslips"));
+  assert.ok(!m.text.includes("attached") && !m.html.includes("attached"));
+  assert.ok(!/\d{1,3}(,\d{2,3})*\.\d{2}|Rs\.|₹/.test(m.text + m.html), "no amounts");
+  let seen: Record<string, unknown> | null = null;
+  const fakeFetch = (async (_u: string, init: RequestInit) => { seen = JSON.parse(init.body as string); return new Response(JSON.stringify({ ErrorCode: 0, MessageID: "pm-2" }), { status: 200 }); }) as unknown as typeof fetch;
+  await new PostmarkProvider("tok", fakeFetch).send({ from: "P <p@omtatvadigitals.com>", to: "a@omtatvadigitals.com", ...m, deliveryId: "d1" });
+  assert.deepEqual((seen as unknown as { Attachments: unknown[] }).Attachments, []);
 });
 
 // --------------------------------------------------------------------- DNS

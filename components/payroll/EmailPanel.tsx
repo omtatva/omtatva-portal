@@ -42,6 +42,7 @@ export default function EmailPanel({ period, isSuperAdmin, canEdit }: { period: 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [why, setWhy] = useState("");
   const [understand, setUnderstand] = useState(false);
+  const [content, setContent] = useState<"link" | "attachment">("link");
   const [liveTyped, setLiveTyped] = useState("");
   const [ackDomain, setAckDomain] = useState(false);
   const [ackRecipients, setAckRecipients] = useState(false);
@@ -69,7 +70,7 @@ export default function EmailPanel({ period, isSuperAdmin, canEdit }: { period: 
   if (!status) return <p className="text-sm text-gray-500">{error || "Loading e-mail status…"}</p>;
   const { deliveries, counts } = status;
   const send = () => act("send", async () => {
-    let r = await postJson<{ queued: number; sent: number; failed: number; remaining: number; stopped: string | null }>("/api/payroll/email-send", { period, confirm: typed });
+    let r = await postJson<{ queued: number; sent: number; failed: number; remaining: number; stopped: string | null }>("/api/payroll/email-send", { period, confirm: typed, content });
     let sent = r.sent, failed = r.failed;
     // each call has a time budget; keep going until nothing is left queued
     while (r.remaining > 0 && !r.stopped) {
@@ -130,7 +131,13 @@ export default function EmailPanel({ period, isSuperAdmin, canEdit }: { period: 
       {/* ---- preview + send ---- */}
       {canEdit && preview && (
         <div className="rounded-lg border p-3 text-sm space-y-2">
-          <div><b>{preview.recipients.length}</b> employee(s) will each get their own e-mail with only their own payslip PDF, for <b>{preview.periodLabel}</b>.</div>
+          <div><b>{preview.recipients.length}</b> employee(s) will each get their own e-mail {content === "link" ? "telling them their payslip is available" : "with only their own payslip PDF attached"}, for <b>{preview.periodLabel}</b>.</div>
+          <label className="block">E-mail contains:{" "}
+            <select value={content} onChange={(e) => setContent(e.target.value as "link" | "attachment")} className="border rounded px-2 py-1">
+              <option value="link">A notification only — no salary data (recommended)</option>
+              <option value="attachment">The payslip PDF attached</option>
+            </select>
+          </label>
           {preview.blockers.length > 0 && <ul className="list-disc ml-5 text-red-700">{preview.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul>}
           {preview.skipped.length > 0 && <details><summary className="cursor-pointer text-amber-800">{preview.skipped.length} will NOT be sent</summary><ul className="list-disc ml-5">{preview.skipped.map((s) => <li key={s.employeeId}>{s.name} ({s.employeeId}): {s.reason}</li>)}</ul></details>}
           {preview.recipients.length > 0 && <details><summary className="cursor-pointer">Recipients</summary><ul className="list-disc ml-5">{preview.recipients.map((r) => <li key={r.employeeId}>{r.name} ({r.employeeId}) → {r.email}</li>)}</ul></details>}

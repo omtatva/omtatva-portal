@@ -30,6 +30,8 @@ export type Delivery = {
   leaseUntilMs: number | null;
   batchId: string | null;
   mode: "test" | "live";
+  // "link" = notification only ("your payslip is available in the portal"); "attachment" = the PDF is attached
+  content?: "link" | "attachment";
 };
 
 // --------------------------------------------------------------- addresses
@@ -119,26 +121,30 @@ export function applyEvent(current: Pick<Delivery, "status">, ev: ProviderEvent)
 // ------------------------------------------------------------------- content
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function renderEmail(input: { employeeName: string; periodLabel: string; companyName: string; portalUrl: string; test: boolean }) {
+export function renderEmail(input: { employeeName: string; periodLabel: string; companyName: string; portalUrl: string; test: boolean; attached?: boolean }) {
+  const attached = input.attached !== false;
   const first = input.employeeName.trim().split(/\s+/)[0] || "there";
   const subject = `${input.test ? "[TEST] " : ""}Your payslip for ${input.periodLabel} — ${input.companyName}`;
   const text = [
     `Hello ${first},`,
     "",
-    `Your payslip for ${input.periodLabel} is attached to this email as a PDF.`,
+    attached ? `Your payslip for ${input.periodLabel} is attached to this email as a PDF.` : `Your payslip for ${input.periodLabel} is now available in your portal dashboard.`,
     "",
-    `You can also open it any time after signing in at ${input.portalUrl}/payslips`,
+    attached ? `You can also open it any time after signing in at ${input.portalUrl}/payslips` : `Sign in to view and download it: ${input.portalUrl}/payslips`,
     "",
-    "This message was sent only to you. Please do not forward it — it contains your salary details.",
+    attached ? "This message was sent only to you. Please do not forward it — it contains your salary details." : "This message was sent only to you. For your security it contains no salary details — sign in to see them.",
     "If anything looks wrong, reply to HR rather than to this automated message.",
     "",
     input.companyName,
   ].join("\n");
   const html =
     `<p>Hello ${esc(first)},</p>` +
-    `<p>Your payslip for <b>${esc(input.periodLabel)}</b> is attached to this email as a PDF.</p>` +
-    `<p>You can also open it any time after signing in at <a href="${esc(input.portalUrl)}/payslips">${esc(input.portalUrl)}/payslips</a>.</p>` +
-    `<p style="color:#555;font-size:13px">This message was sent only to you. Please do not forward it — it contains your salary details.<br>` +
+    (attached
+      ? `<p>Your payslip for <b>${esc(input.periodLabel)}</b> is attached to this email as a PDF.</p>` +
+        `<p>You can also open it any time after signing in at <a href="${esc(input.portalUrl)}/payslips">${esc(input.portalUrl)}/payslips</a>.</p>`
+      : `<p>Your payslip for <b>${esc(input.periodLabel)}</b> is now available in your portal dashboard.</p>` +
+        `<p><a href="${esc(input.portalUrl)}/payslips">Sign in to view and download it</a>.</p>`) +
+    `<p style="color:#555;font-size:13px">${attached ? "This message was sent only to you. Please do not forward it — it contains your salary details." : "This message was sent only to you and contains no salary details — sign in to see them."}<br>` +
     `If anything looks wrong, reply to HR rather than to this automated message.</p>` +
     `<p>${esc(input.companyName)}</p>`;
   return { subject, text, html };

@@ -1,5 +1,6 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
 import { leaveOverview, myLeave } from "@/lib/server/leaveServer";
+import { publishPayslips, publishPreview } from "@/lib/server/payslipPublish";
 import { exportPayroll, exportPayslipsZip } from "@/lib/server/payrollExports";
 import { continueSending, emailDns, emailPreview, emailStatus, resendPayslipEmails, sendPayslipEmails, sendTestEmail, setLive } from "@/lib/server/payslipEmail";
 import {
@@ -40,6 +41,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ action: 
           headers: { "Content-Type": out.contentType, "Content-Disposition": `attachment; filename="${out.filename}"`, "X-Content-Type-Options": "nosniff", ...NO_STORE },
         });
       }
+      case "publish-preview":
+        return Response.json(await publishPreview(user, url.searchParams.get("period")), { headers: NO_STORE });
       case "email-status":
         return Response.json(await emailStatus(user, url.searchParams.get("period")), { headers: NO_STORE });
       case "email-preview":
@@ -97,6 +100,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
         return Response.json(await generatePayslips(user, body), { headers: NO_STORE });
       case "reverse":
         return Response.json(await reverseRun(user, body), { headers: NO_STORE });
+      case "publish-payslips":
+        return Response.json(await publishPayslips(user, body), { headers: NO_STORE });
       case "email-test":
         return Response.json(await sendTestEmail(user), { headers: NO_STORE });
       case "email-live":

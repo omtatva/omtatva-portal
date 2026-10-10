@@ -8,6 +8,8 @@ export type RunInfo = {
   revision: number;
   approvedAt: string | null;
   approvedBy: string | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
   summary: PayrollSummary | null;
   payslipCount: number;
   history: { revision: number; approvedAt: string | null; reversedAt: string; reversedBy: string; reason: string; netPay: number | null }[];
@@ -30,7 +32,7 @@ export type PreviewResponse = {
 
 export type PayslipRow = {
   id: string; period: string; revision: number; employeeId: string; employeeName: string;
-  netPay: number; gross: number; status: string; issuedAt: string | null;
+  netPay: number; gross: number; status: string; issuedAt: string | null; published?: boolean; publishedAt?: string | null;
 };
 
 export type SalaryPreviewResponse = { preview: SheetPreview; previewHash: string; components: SalaryComponent[] };

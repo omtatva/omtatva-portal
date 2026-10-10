@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ApiClientError, getBlob, getJson, postJson, triggerDownload } from "@/lib/reportsClient";
 import EmailPanel from "@/components/payroll/EmailPanel";
+import PublishPanel from "@/components/payroll/PublishPanel";
 import type { PayslipRow, PreviewResponse } from "@/lib/payroll/apiTypes";
 import type { DayClass, EmployeeResult, Flag } from "@/lib/payroll/engine";
 
@@ -131,7 +132,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <button onClick={reload} disabled={loading} className="px-4 py-2 rounded-lg bg-slate-700 text-white text-sm">{loading ? "Calculating…" : "Recalculate preview"}</button>
         {data?.run && (
           <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${approved ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
-            {data.run.status === "payslips_generated" ? `Approved · payslips issued (rev ${data.run.revision})`
+            {data.run.status === "payslips_generated" ? (data.run.publishedAt ? `Published to employees (rev ${data.run.revision})` : `Approved · payslips generated, not yet sent (rev ${data.run.revision})`)
               : data.run.status === "approved" ? `Approved (rev ${data.run.revision}) · payslips not generated`
               : data.run.status === "reversed" ? `Reversed — recalculate and approve again`
               : "Approval in progress"}
@@ -282,6 +283,7 @@ export default function RunTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   ))}
                 </tbody></table></div>
               )}
+              {data.run!.status === "payslips_generated" && <PublishPanel period={period} canEdit={canEdit} onChanged={load} />}
               {data.run!.status === "payslips_generated" && <EmailPanel period={period} isSuperAdmin={isSuperAdmin} canEdit={canEdit} />}
               {isSuperAdmin && (
                 <details className="border-t pt-3">

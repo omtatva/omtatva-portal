@@ -19,6 +19,7 @@ import AvatarIllustration, { HeroAvatar } from "../../components/AvatarIllustrat
 import OrgHierarchySection from "../../components/OrgHierarchySection";
 import { isAttendedStatus } from "../../lib/attendanceRules";
 import { useMyLeave } from "../../lib/payroll/useMyLeave";
+import PayslipWidget from "../../components/PayslipWidget";
 import {
   ResponsiveContainer,
   Tooltip,
@@ -401,9 +402,6 @@ export default function DashboardPage() {
   const todayRecord = myAttendance.find((a) => normalizeDate(a.date) === todayKey);
   const checkInTime = formatTime(todayRecord?.PunchIn);
   const checkOutTime = formatTime(todayRecord?.PunchOut);
-
-  // ---------- PAYSLIP (already available under My Documents) ----------
-  const latestPayslipUrl = userData?.documents?.salarySlip || null;
 
   const currentUid = auth.currentUser?.uid;
 
@@ -1027,17 +1025,7 @@ export default function DashboardPage() {
           <p style={{ color: COLORS.secondary }}>Per Attendance</p>
         </div>
 
-        <div
-          style={{ ...cardStyle, cursor: "pointer" }}
-          onClick={() => (window.location.href = "/payslips")}
-        >
-          <div style={{ fontSize: 42 }}>💰</div>
-          <h1 style={{ color: COLORS.success, fontSize: 22 }}>My Payslips</h1>
-          <h3>Payslips</h3>
-          <p style={{ color: COLORS.secondary }}>
-            {latestPayslipUrl ? "Issued payslips · older ones in My Documents" : "Open after payroll is issued"}
-          </p>
-        </div>
+        <PayslipWidget />
       </div>
 
       {/* ================= ORGANIZATION HIERARCHY ================= */}

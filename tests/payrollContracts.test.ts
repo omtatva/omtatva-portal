@@ -163,7 +163,7 @@ test("the buggy legacy payroll code is gone and the salary screen points to the 
   assert.ok(!sal.includes("PayrollProcess") && !sal.includes("BulkUpload"));
 });
 test("employee dashboard links to the server-checked payslips page", () => {
-  assert.ok(read("app/dashboard/page.js").includes('window.location.href = "/payslips"'));
+  assert.ok(read("app/dashboard/page.js").includes("<PayslipWidget />"));
   assert.ok(read("app/payslips/page.tsx").includes("/api/payroll/my-payslips"));
 });
 

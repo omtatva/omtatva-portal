@@ -12,7 +12,7 @@ export type EmailMessage = {
   subject: string;
   text: string;
   html: string;
-  attachment: { name: string; contentType: string; data: Uint8Array };
+  attachment?: { name: string; contentType: string; data: Uint8Array }; // absent for a notification-only e-mail
   deliveryId: string; // echoed back in provider metadata
 };
 
@@ -70,7 +70,9 @@ export class PostmarkProvider implements EmailProvider {
           TrackOpens: false,
           TrackLinks: "None",
           Metadata: { deliveryId: msg.deliveryId },
-          Attachments: [{ Name: msg.attachment.name, Content: Buffer.from(msg.attachment.data).toString("base64"), ContentType: msg.attachment.contentType }],
+          Attachments: msg.attachment
+            ? [{ Name: msg.attachment.name, Content: Buffer.from(msg.attachment.data).toString("base64"), ContentType: msg.attachment.contentType }]
+            : [],
         }),
       });
     } catch (e) {

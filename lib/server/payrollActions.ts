@@ -15,6 +15,7 @@ import {
 import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, previewSheet, type SheetPreview, type SheetRow } from "../payroll/salarySheet";
 import type { EmployeeResult } from "../payroll/engine";
 import { ApiError, adminDb } from "./firebaseAdmin";
+import { rebuildPayslipIndex } from "./payslipIndex";
 import {
   actorWith, companyAddress, companyName, computeRun, iso, loadDecisions, loadPolicy, loadRules, loadStructures, loadUsers,
   memberFor, superAdminActor, validatePeriod, valuesFromDoc, type Actor,
@@ -131,6 +132,7 @@ export async function previewRun(user: VerifiedUser, periodIn: unknown) {
     run: run.data
       ? {
           status: run.data.status, revision: run.data.revision, approvedAt: iso(run.data.approvedAt), approvedBy: run.data.approvedBy || null,
+          publishedAt: iso(run.data.publishedAt), publishedBy: run.data.publishedBy || null,
           summary: run.data.summary || null, payslipCount: run.data.payslipCount || 0, history: run.data.history || [],
           // The live numbers moved since approval (e.g. an attendance correction): the approved payroll is NOT
           // changed automatically — this only tells HR that a reversal would produce different figures.
@@ -378,6 +380,7 @@ export async function listPeriodPayslips(user: VerifiedUser, periodIn: unknown) 
 const pub = (x: DocumentData) => ({
   period: String(x.period), revision: Number(x.revision), employeeId: String(x.employeeId), employeeName: String(x.employeeName),
   netPay: Number(x.netPay), gross: Number(x.gross), status: String(x.status), issuedAt: iso(x.issuedAt),
+  published: x.published === true, publishedAt: iso(x.publishedAt),
 });
 
 // The caller's OWN payslips — the uid always comes from the verified token.
@@ -386,7 +389,7 @@ export async function myPayslips(user: VerifiedUser) {
   const snap = await db().collection("payslips").where("uid", "==", actor.uid).get();
   return {
     payslips: snap.docs
-      .filter((d) => d.data().status === "issued")
+      .filter((d) => d.data().status === "issued" && d.data().published === true)
       .map((d) => ({ id: d.id, ...pub(d.data()) }))
       .sort((a, b) => b.period.localeCompare(a.period)),
   };
@@ -399,7 +402,7 @@ export async function payslipPdf(user: VerifiedUser, id: unknown): Promise<{ byt
   // Not found and not-yours look the same on purpose.
   if (!snap.exists) throw new ApiError(404, "not-found", "Payslip not found.");
   const p = snap.data()!;
-  if (!canOpenPayslip({ callerUid: actor.uid, ownerUid: String(p.uid), role: actor.role, matrix: actor.matrix, voided: p.status !== "issued" })) {
+  if (!canOpenPayslip({ callerUid: actor.uid, ownerUid: String(p.uid), role: actor.role, matrix: actor.matrix, voided: p.status !== "issued" || p.published !== true })) {
     throw new ApiError(404, "not-found", "Payslip not found.");
   }
   const entry = await db().doc(`payrollEntries/${p.entryId}`).get();
@@ -457,7 +460,13 @@ export async function reverseRun(user: VerifiedUser, body: Record<string, unknow
     revision: plan.revision, approvedAt: iso(run!.approvedAt), approvedBy: run!.approvedBy || null,
     reversedAt: now.toDate().toISOString(), reversedBy: actor.email, reason: why, backupId, netPay: run!.summary?.netPay ?? null,
   }];
-  await db().doc(`payrollRuns/${period}`).set({ status: "reversed", reversedAt: now, reversedBy: actor.email, reversalReason: why, history }, { merge: true });
+  await db().doc(`payrollRuns/${period}`).set({
+    status: "reversed", reversedAt: now, reversedBy: actor.email, reversalReason: why, history,
+    publishedAt: FieldValue.delete(), publishedBy: FieldValue.delete(), publishedCount: 0, // the old payslips are withdrawn from employees
+  }, { merge: true });
+  for (const uid of new Set(slips.map((d) => String(d.data().uid)))) {
+    try { await rebuildPayslipIndex(uid); } catch (e) { console.error("index rebuild after reversal failed", uid, (e as Error).message); }
+  }
   // allow review decisions to be edited again for the recalculation
   await audit(actor, "reversed", period, { revision: plan.revision, reason: why, backupId, entries: entryDocs.length, payslipsVoided: slips.length }, `Payroll ${period} (revision ${plan.revision}) reversed: ${why}`);
   return { period, revision: plan.revision, backupId, payslipsVoided: slips.length };

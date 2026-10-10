@@ -76,6 +76,23 @@ ledger as payroll — so the balance shown is the balance used for salary.
 * **E-mail** (`docs/payroll-email-setup.md`): per-employee e-mail via Postmark, off by default; needs provider setup, a test e-mail
   and a Super Admin go-live switch. Duplicate-send protection, retries, bounce/delivery webhooks, controlled resend, audit.
 
+## Send to Employees (publishing)
+
+Workflow: Calculate → Review attendance / leave / LOP → **Approve** → **Generate payslips** → **Send to Employees** → the
+employee's dashboard Payslip widget updates by itself.
+
+* Generating payslips does **not** expose them. Only "Send to Employees" (payroll edit access, approved + generated month,
+  typed `PUBLISH n PAYSLIPS`) sets `published` on each payslip, with who/when. Pressing it twice, or from two tabs,
+  publishes each payslip once (per-payslip transaction); failures are listed per employee and retried by pressing again.
+* Employees: the dashboard widget listens in real time to `payslipIndex/{uid}` (server-written; Firestore rules let only
+  that employee read it) and shows latest month, name/ID, net salary, publication date, status (Published / Reissued),
+  Open + Download, previous payslips, and an empty state. The PDF itself is always served by the server after an
+  ownership + published check. HR can open any payslip of the company; nobody else can.
+* Published payslips are immutable snapshots. A correction = Super Admin reversal (withdraws that month's payslips and
+  the employees' list) → approve → generate → send again: employees then see the new revision labelled **Reissued**.
+* E-mail is separate: it records its own delivery status, defaults to a notification with **no salary data**
+  ("your payslip is available"), requires the month to be published first, and a failed e-mail never hides a published payslip.
+
 ## Data (all written by the server only)
 
 `settings/payrollPolicy` · `payrollRuns/{YYYY-MM}` (status, revision, summary, policy snapshot, history) ·

@@ -48,9 +48,10 @@ async function sendState(): Promise<SendState> {
 const providerOf = (cfg: EmailConfig) => new PostmarkProvider(cfg.token);
 
 // Why a real send is not allowed yet (empty = allowed).
-export function sendBlockers(cfg: EmailConfig, state: SendState, runStatus: string | null): string[] {
+export function sendBlockers(cfg: EmailConfig, state: SendState, runStatus: string | null, published = true): string[] {
   const out: string[] = [];
   if (runStatus !== "payslips_generated") out.push("Approve the payroll and generate the payslips first.");
+  else if (!published) out.push("Press “Send to Employees” first — e-mails are sent only for payslips that are published to employees.");
   for (const p of configProblems(cfg)) if (!p.startsWith("PAYSLIP_EMAIL_MODE")) out.push(`Server setup: ${p}.`);
   if (cfg.mode !== "live") out.push(`Server mode is "${cfg.mode}". Real payslips are sent only when PAYSLIP_EMAIL_MODE is "live".`);
   if (!state.testSentAt) out.push("No test e-mail has been sent yet. A Super Admin must send one and check it arrived.");
@@ -63,6 +64,7 @@ const toDelivery = (id: string, d: DocumentData): Delivery => ({
   id, period: d.period, revision: Number(d.revision), uid: d.uid, employeeId: d.employeeId, employeeName: d.employeeName, toEmail: d.toEmail ?? null,
   status: d.status, attempts: Number(d.attempts || 0), lastError: d.lastError ?? null, retryable: d.retryable === true, skipReason: d.skipReason ?? null,
   providerMessageId: d.providerMessageId ?? null, leaseUntilMs: d.leaseUntilMs ?? null, batchId: d.batchId ?? null, mode: d.mode === "test" ? "test" : "live",
+  content: d.content === "link" ? "link" : "attachment", // records written before this option always carried the PDF
 });
 
 class FirestoreStore implements DeliveryStore {
@@ -91,13 +93,15 @@ async function buildMessage(cfg: EmailConfig, d: Delivery): Promise<EmailMessage
   const entry = await db().doc(`payrollEntries/${slip.entryId}`).get();
   if (!entry.exists || hashOf(entry.data()!.result) !== slip.entryHash) throw new Error("payslip failed its integrity check");
   const result = entry.data()!.result as EmployeeResult;
-  const pdf = await retainedPdf(d.id, slip, result);
-  const content = renderEmail({ employeeName: result.name, periodLabel: periodLabel(d.period), companyName: String(slip.meta?.companyName || "Omtatva Digitals"), portalUrl: cfg.portalUrl, test: false });
+  if (slip.published !== true) throw new Error("the payslip has not been published to the employee");
+  const attach = d.content !== "link";
+  const pdf = attach ? await retainedPdf(d.id, slip, result) : null;
+  const content = renderEmail({ employeeName: result.name, periodLabel: periodLabel(d.period), companyName: String(slip.meta?.companyName || "Omtatva Digitals"), portalUrl: cfg.portalUrl, test: false, attached: attach });
   const to = validateEmail(d.toEmail, cfg.allowedDomains);
   if (!to.ok) throw new Error(to.reason);
   return {
     from: cfg.from, to: to.email, replyTo: cfg.replyTo || undefined, ...content, deliveryId: d.id,
-    attachment: { name: `Payslip_${result.employeeId}_${d.period}.pdf`, contentType: "application/pdf", data: pdf },
+    ...(pdf ? { attachment: { name: `Payslip_${result.employeeId}_${d.period}.pdf`, contentType: "application/pdf", data: pdf } } : {}),
   };
 }
 
@@ -139,7 +143,7 @@ async function deliveriesFor(period: string, revision: number) {
 async function context(periodIn: unknown) {
   const period = validatePeriod(periodIn, await loadRules());
   const { state, data } = await getRunState(period);
-  return { period, revision: state?.revision ?? 0, runStatus: state?.status ?? null, run: data };
+  return { period, revision: state?.revision ?? 0, runStatus: state?.status ?? null, run: data, published: !!data?.publishedAt };
 }
 
 // ---------------------------------------------------------- read-only views
@@ -162,7 +166,7 @@ export async function emailStatus(user: VerifiedUser, periodIn: unknown) {
 
 export async function emailPreview(user: VerifiedUser, periodIn: unknown) {
   await actorWith(user, "payroll", "edit");
-  const { period, revision, runStatus } = await context(periodIn);
+  const { period, revision, runStatus, published } = await context(periodIn);
   const cfg = loadEmailConfig();
   const state = await sendState();
   const slips = runStatus === "payslips_generated" ? await currentPayslips(period, revision) : [];
@@ -174,7 +178,7 @@ export async function emailPreview(user: VerifiedUser, periodIn: unknown) {
     period, periodLabel: periodLabel(period), revision, runStatus,
     recipients: plan.filter((p) => p.action === "queue").map((p) => ({ employeeId: byId.get(p.id)!.employeeId, name: byId.get(p.id)!.employeeName, email: maskEmail((p as { email: string }).email) })),
     skipped: plan.filter((p) => p.action === "skip").map((p) => ({ employeeId: byId.get(p.id)!.employeeId, name: byId.get(p.id)!.employeeName, reason: (p as { reason: string }).reason, kind: (p as { kind: string }).kind })),
-    blockers: sendBlockers(cfg, state, runStatus),
+    blockers: sendBlockers(cfg, state, runStatus, published),
     mode: cfg.mode, from: cfg.from || null, state,
   };
 }
@@ -246,14 +250,14 @@ async function processQueued(period: string, revision: number, cfg: EmailConfig,
   return res;
 }
 
-async function writeDeliveries(plan: ReturnType<typeof planBatch>, slips: { id: string; uid: string; employeeId: string; employeeName: string }[], period: string, revision: number, batchId: string, mode: "test" | "live") {
+async function writeDeliveries(plan: ReturnType<typeof planBatch>, slips: { id: string; uid: string; employeeId: string; employeeName: string }[], period: string, revision: number, batchId: string, mode: "test" | "live", content: "link" | "attachment") {
   const byId = new Map(slips.map((s) => [s.id, s]));
   for (const item of plan) {
     if (item.action === "skip" && item.kind !== "invalid") continue; // already sent / needs review: leave the record alone
     const s = byId.get(item.id)!;
     const ref = db().doc(`payslipEmails/${item.id}`);
     const base = {
-      period, revision, uid: s.uid, employeeId: s.employeeId, employeeName: s.employeeName, batchId, mode, attempts: 0, lastError: null, retryable: false,
+      period, revision, uid: s.uid, employeeId: s.employeeId, employeeName: s.employeeName, batchId, mode, content, attempts: 0, lastError: null, retryable: false,
       providerMessageId: null, leaseUntilMs: null, queuedAt: Timestamp.now(), updatedAt: Timestamp.now(),
     };
     await db().runTransaction(async (tx) => {
@@ -266,9 +270,9 @@ async function writeDeliveries(plan: ReturnType<typeof planBatch>, slips: { id: 
 
 export async function sendPayslipEmails(user: VerifiedUser, body: Record<string, unknown>) {
   const actor = await actorWith(user, "payroll", "edit");
-  const { period, revision, runStatus } = await context(body.period);
+  const { period, revision, runStatus, published } = await context(body.period);
   const cfg = loadEmailConfig();
-  const blockers = sendBlockers(cfg, await sendState(), runStatus);
+  const blockers = sendBlockers(cfg, await sendState(), runStatus, published);
   if (blockers.length) throw new ApiError(409, "blocked", blockers.join(" "));
 
   const slips = await currentPayslips(period, revision);
@@ -281,10 +285,12 @@ export async function sendPayslipEmails(user: VerifiedUser, body: Record<string,
   }
   if (body.confirm !== `SEND ${toQueue} PAYSLIPS`) throw new ApiError(400, "confirmation-required", `Type SEND ${toQueue} PAYSLIPS to confirm.`);
 
+  // Default: a notification only ("your payslip is available") — no salary data in the e-mail itself.
+  const content: "link" | "attachment" = body.content === "attachment" ? "attachment" : "link";
   const batchId = `eb_${Date.now()}`;
-  await db().doc(`payslipEmailBatches/${batchId}`).set({ period, revision, createdBy: actor.email, createdByUid: actor.uid, createdAt: Timestamp.now(), recipients: toQueue, mode: "live" });
+  await db().doc(`payslipEmailBatches/${batchId}`).set({ period, revision, createdBy: actor.email, createdByUid: actor.uid, createdAt: Timestamp.now(), recipients: toQueue, mode: "live", content });
   await audit(actor, "email-send-started", period, { batchId, recipients: toQueue, revision }, `Payslip e-mails for ${period}: sending to ${toQueue} employee(s).`);
-  await writeDeliveries(plan, slips, period, revision, batchId, "live");
+  await writeDeliveries(plan, slips, period, revision, batchId, "live", content);
   const res = await processQueued(period, revision, cfg);
   await audit(actor, "email-send-progress", period, { batchId, sent: res.sent, failed: res.failed, remaining: res.remaining.length, stopped: res.stoppedFatal ? "provider rejected our credentials" : null }, `Payslip e-mails ${period}: ${res.sent} accepted by the provider, ${res.failed} failed, ${res.remaining.length} still queued.`);
   return { batchId, queued: toQueue, sent: res.sent, failed: res.failed, remaining: res.remaining.length, stopped: res.stoppedFatal };
@@ -293,9 +299,9 @@ export async function sendPayslipEmails(user: VerifiedUser, body: Record<string,
 // The UI keeps calling this until `remaining` is 0 (each call has a time budget).
 export async function continueSending(user: VerifiedUser, body: Record<string, unknown>) {
   await actorWith(user, "payroll", "edit");
-  const { period, revision, runStatus } = await context(body.period);
+  const { period, revision, runStatus, published } = await context(body.period);
   const cfg = loadEmailConfig();
-  const blockers = sendBlockers(cfg, await sendState(), runStatus);
+  const blockers = sendBlockers(cfg, await sendState(), runStatus, published);
   if (blockers.length) throw new ApiError(409, "blocked", blockers.join(" "));
   const res = await processQueued(period, revision, cfg);
   return { sent: res.sent, failed: res.failed, remaining: res.remaining.length, stopped: res.stoppedFatal };
@@ -305,9 +311,9 @@ export async function continueSending(user: VerifiedUser, body: Record<string, u
 // anything other than a plain temporary failure — a corrected address.
 export async function resendPayslipEmails(user: VerifiedUser, body: Record<string, unknown>) {
   const actor = await actorWith(user, "payroll", "edit");
-  const { period, revision, runStatus } = await context(body.period);
+  const { period, revision, runStatus, published } = await context(body.period);
   const cfg = loadEmailConfig();
-  const blockers = sendBlockers(cfg, await sendState(), runStatus);
+  const blockers = sendBlockers(cfg, await sendState(), runStatus, published);
   if (blockers.length) throw new ApiError(409, "blocked", blockers.join(" "));
   const why = reasonText(body.reason, 10);
   const uids = Array.isArray(body.uids) ? (body.uids as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 500) : [];

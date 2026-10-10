@@ -174,7 +174,7 @@ test("screen: honest statuses (accepted ≠ delivered), typed confirmation, prev
   const ui = read("components/payroll/EmailPanel.tsx");
   assert.ok(ui.includes("NOT yet confirmation that it reached the inbox"));
   assert.ok(ui.includes("It may still be filtered to spam"));
-  assert.ok(ui.includes("will each get their own e-mail with only their own payslip PDF"));
+  assert.ok(ui.includes("will each get their own e-mail") && ui.includes("with only their own payslip PDF attached") && ui.includes("A notification only"));
   assert.ok(ui.includes("`SEND ${preview.recipients.length} PAYSLIPS`") && ui.includes("periodLabel"));
   assert.ok(ui.includes("Controlled resend") && ui.includes("never sends anyone a second copy"));
   assert.ok(!/guarantee(?!d? inbox)/i.test(ui.replace("no setup can guarantee", "")), "no delivery guarantees are claimed");

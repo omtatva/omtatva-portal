@@ -216,6 +216,9 @@ service cloud.firestore {
     match /payslips/{id}                { allow read, write: if false; }
     match /salaryChangeHistory/{id}     { allow read, write: if false; }
     match /salaryImports/{id}           { allow read, write: if false; }
+    // Each employee's own published-payslip list (written by the server only). Real-time source for the
+    // dashboard widget; the owner can read their own document and nobody else's.
+    match /payslipIndex/{uid}           { allow read: if isMember() && request.auth.uid == uid; allow write: if false; }
     match /payslipFiles/{id}            { allow read, write: if false; }   // the retained PDFs
     match /payslipEmails/{id}           { allow read, write: if false; }   // e-mail delivery tracking
     match /payslipEmailBatches/{id}     { allow read, write: if false; }
