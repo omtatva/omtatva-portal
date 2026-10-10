@@ -12,6 +12,7 @@ export const DEPARTMENTS = [
   "Creative",
   "AI",
   "Finance",
+  "Business Development",
 ] as const;
 
 // The shared list plus any department already stored on someone but not in
