@@ -146,7 +146,7 @@ gap:25
 <div>
 
 <label>
-Account Holder Name 
+Account Holder 
 {!isAdminOrIT && "*"}
 </label>
 
