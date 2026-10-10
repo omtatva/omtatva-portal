@@ -1852,13 +1852,13 @@ v
 
 label="Account Holder"
 
-value={employee.accountHolder}
+value={employee.bankAccountHolder}
 
 edit={editMode}
 
 onChange={(v)=>
 updateField(
-"accountHolder",
+"bankAccountHolder",
 v
 )
 }
