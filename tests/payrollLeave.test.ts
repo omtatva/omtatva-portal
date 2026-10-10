@@ -125,4 +125,12 @@ test("screens: employee Leave, dashboard and admin Leave all use the shared bala
   assert.ok(read("components/payroll/RunTab.tsx").includes("Leave taken (from the Leave records)"));
 });
 
+test("Settings → Leave & Payroll Policy hosts the real policy editor (Super Admin only, the settings layout guards it)", () => {
+  const page = read("app/settings/leave-policy/page.tsx");
+  assert.ok(page.includes("<PolicyTab isSuperAdmin={isSuperAdmin} />") && page.includes("Leave &amp; Payroll Policy"));
+  assert.ok(page.includes("no longer used"), "the old quotas are kept but marked unused");
+  assert.ok(read("app/settings/page.tsx").includes('title: "Leave & Payroll Policy"'));
+  assert.ok(read("app/settings/layout.tsx").includes("!isSuperAdmin"));
+});
+
 console.log(`\n${passed} passed (leave ↔ payroll)${process.exitCode ? " - with FAILURES" : ""}`);

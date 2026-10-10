@@ -48,9 +48,9 @@ export default function SettingsPage() {
       link: "/settings/access",
     },
     {
-      title: "Leave Policy",
+      title: "Leave & Payroll Policy",
       icon: <CalendarRange size={24} />,
-      desc: "Casual, sick and paid leave quotas",
+      desc: "Leave entitlement, holidays, salary and deduction rules",
       link: "/settings/leave-policy",
     },
     {

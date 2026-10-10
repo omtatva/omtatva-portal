@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { CalendarRange } from "lucide-react";
+import PolicyTab from "@/components/payroll/PolicyTab";
+import { useAccess } from "@/lib/useAccess";
 
 const SETTINGS_REF = () => doc(db, "settings", "leavePolicy");
 
@@ -14,6 +16,7 @@ const DEFAULTS = {
 };
 
 export default function LeavePolicyPage() {
+  const { isSuperAdmin } = useAccess();
   const [casualLeave, setCasualLeave] = useState(DEFAULTS.casualLeave);
   const [sickLeave, setSickLeave] = useState(DEFAULTS.sickLeave);
   const [paidLeave, setPaidLeave] = useState(DEFAULTS.paidLeave);
@@ -71,11 +74,6 @@ export default function LeavePolicyPage() {
 
   return (
     <div style={{ padding: "30px", background: "var(--bg-color)", minHeight: "100vh" }}>
-      <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e", padding: "14px 18px", borderRadius: 12, marginBottom: 20, maxWidth: 760 }}>
-        <b>These per-type quotas are no longer used.</b> Leave balances and salary deductions now follow the company leave policy
-        (annual entitlement, monthly accrual, paid / unpaid leave types, carry-forward…), which is set by a Super Admin under{" "}
-        <a href="/admin/payroll" style={{ textDecoration: "underline" }}>Payroll → Policy &amp; leave rules</a>.
-      </div>
       <h1
         style={{
           fontSize: "30px",
@@ -86,19 +84,25 @@ export default function LeavePolicyPage() {
           gap: 10,
         }}
       >
-        <CalendarRange size={28} /> Leave Policy
-        {saving && (
-          <span style={{ fontSize: 14, color: "#3d6fa8", marginLeft: 12, fontWeight: 500 }}>
-            Saving...
-          </span>
-        )}
+        <CalendarRange size={28} /> Leave &amp; Payroll Policy
       </h1>
-
-      <p style={{ color: "var(--text-muted)", marginBottom: 30 }}>
-        Company-wide annual leave quotas. Changes apply to every employee's leave balance
-        immediately.
+      <p style={{ color: "var(--text-muted)", marginBottom: 24, maxWidth: 820 }}>
+        The company rules behind leave balances and salary: annual leave and monthly accrual, paid / unpaid leave types,
+        carry-forward, company holidays, and how loss of pay and deductions are calculated. Payroll cannot be approved
+        until the policy has been reviewed and confirmed here. Changing it never alters a payroll month that is already approved.
       </p>
 
+      <div style={{ maxWidth: 1100 }}>
+        <PolicyTab isSuperAdmin={isSuperAdmin} />
+      </div>
+
+      <details style={{ marginTop: 40, maxWidth: 560 }}>
+        <summary style={{ cursor: "pointer", color: "#92400e", fontWeight: 600 }}>
+          Old per-type quotas (no longer used — kept for reference)
+        </summary>
+        <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
+          These Casual / Sick / Paid quotas no longer drive leave balances or salary. Balances now come from the policy above.
+        </p>
       <div
         style={{
           background: "var(--card-bg)",
@@ -127,9 +131,10 @@ export default function LeavePolicyPage() {
             fontWeight: 600,
           }}
         >
-          {saving ? "Saving..." : "Save Policy"}
+          {saving ? "Saving..." : "Save old quotas"}
         </button>
       </div>
+      </details>
     </div>
   );
 }

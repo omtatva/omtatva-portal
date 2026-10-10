@@ -38,6 +38,7 @@ import {
 import { companyTimezone, resolveShift, type PolicyRules } from "@/lib/attendancePolicy";
 import BulkCorrectionDialog, { type BulkGroup } from "@/components/BulkCorrectionDialog";
 import BulkPunchOutDialog, { type PunchOutRow } from "@/components/BulkPunchOutDialog";
+import BulkPunchTimesDialog, { type PunchTimesRow } from "@/components/BulkPunchTimesDialog";
 import { groupBySuggestion, toBulkItem, type BulkResult } from "@/lib/bulkCorrection";
 import { CORRECTION_STATUSES } from "@/lib/attendanceCorrection";
 
@@ -94,6 +95,7 @@ export default function AttendanceReportsPage() {
   const [bulk, setBulk] = useState<{ groups: BulkGroup[]; dateRange: { from: string; to: string }; stillIncomplete: number } | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>("Leave");
   const [punchOutBulk, setPunchOutBulk] = useState<{ rows: PunchOutRow[]; dateRange: { from: string; to: string } } | null>(null);
+  const [punchTimesBulk, setPunchTimesBulk] = useState<{ rows: PunchTimesRow[]; dateRange: { from: string; to: string } } | null>(null);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [downloading, setDownloading] = useState<string>("");
 
@@ -313,6 +315,29 @@ export default function AttendanceReportsPage() {
       });
     }
     if (rows.length) setPunchOutBulk({ rows, dateRange: rangeOf(picked) });
+  };
+
+  // Any ticked record that exists can get punch-in / punch-out times (the dialog
+  // skips the ones whose status is not Present, and never overwrites a time).
+  const punchTimeRows = useMemo(() => {
+    if (!data) return [] as PunchTimesRow[];
+    const out: PunchTimesRow[] = [];
+    for (const f of selectedFindings) {
+      const rec = f.recordId ? data.records.find((r) => r.id === f.recordId) : undefined;
+      if (!rec) continue;
+      const emp = data.employees.find((e) => e.uid === f.userId);
+      const base = resolveShift(data.rules, rec.shiftId || emp?.shiftId);
+      out.push({
+        recordId: rec.id, name: emp?.name || f.employeeName, date: rec.date, status: rec.status,
+        punchIn: rec.punchIn, punchOut: rec.punchOut, shiftEndAt: rec.shiftEndAt,
+        shift: rec.shiftSnapshot?.startTime ? ({ ...base, ...rec.shiftSnapshot } as typeof base) : base,
+      });
+    }
+    return out;
+  }, [data, selectedFindings]);
+
+  const openPunchTimes = () => {
+    if (punchTimeRows.length) setPunchTimesBulk({ rows: punchTimeRows, dateRange: rangeOf(selectedFindings) });
   };
 
   const openSetStatus = () => {
@@ -604,6 +629,11 @@ export default function AttendanceReportsPage() {
                     ))}
                   </select>
                   <button className="ar-btn ar-ghost ar-small" onClick={openSetStatus} disabled={selectedFindings.length === 0}>Set status…</button>
+                  {punchTimeRows.length > 0 && (
+                    <button className="ar-btn ar-primary ar-small" onClick={openPunchTimes}>
+                      Set punch in / out… ({punchTimeRows.length})
+                    </button>
+                  )}
                   {missingPunchOutCount > 0 && (
                     <button className="ar-btn ar-primary ar-small" onClick={openPunchOut}>
                       Set punch-out… ({missingPunchOutCount})
@@ -673,6 +703,16 @@ export default function AttendanceReportsPage() {
         <div className="ar-card">
           <p style={{ color: "var(--text-muted)" }}>No completed month yet — there is nothing to back up.</p>
         </div>
+      )}
+
+      {punchTimesBulk && (
+        <BulkPunchTimesDialog
+          rows={punchTimesBulk.rows}
+          tz={tz}
+          dateRange={punchTimesBulk.dateRange}
+          onClose={() => setPunchTimesBulk(null)}
+          onFinished={onBulkFinished}
+        />
       )}
 
       {punchOutBulk && (

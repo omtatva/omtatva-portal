@@ -60,7 +60,7 @@ ledger as payroll — so the balance shown is the balance used for salary.
 * Payroll employee detail lists the leave days taken, straight from those records.
 * Rules: a person can create only their own `Pending` request and read only their own; only admin tier can
   approve/edit/delete. (Previously any employee could approve their own leave or change dates.)
-* The per-type quotas in Settings → Leave Policy no longer drive anything (a notice there points to Payroll → Policy).
+* Settings → **Leave & Payroll Policy** now hosts the policy editor (same one as Payroll → Policy & leave rules; Super Admin only). The old per-type quotas are kept there, collapsed and marked unused.
 
 ## Finalized payroll: review, exports, e-mail
 
