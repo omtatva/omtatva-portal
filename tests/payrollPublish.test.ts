@@ -148,4 +148,21 @@ test("e-mail notification is separate from publication, needs a published month,
   assert.ok(ui.includes("PUBLISH ${p.toPublish} PAYSLIPS") && ui.includes("Payroll month") && ui.includes("Payslips to publish now") && ui.includes("never duplicates anything"));
 });
 
+test("published payslips appear in My Documents → Payroll (real time, opened only through the ownership-checked API) and the dashboard section links there", () => {
+  const docs = read("app/documents/page.tsx");
+  assert.ok(docs.includes('doc(db, "payslipIndex", user.uid)') && docs.includes("onSnapshot("));
+  assert.ok(docs.includes('category: "Payroll"') && docs.includes("[...payslipDocs, ...documents]"));
+  assert.ok(docs.includes("/api/payroll/payslip-pdf?id=") && docs.includes("item.payslipId ?"), "payslip rows use the API, never a public URL");
+  assert.ok(read("components/PayslipWidget.tsx").includes('href="/documents"'));
+});
+test("Admin → Documents → employee → Payslip lists the PUBLISHED payslips of that employee, via a payroll-view-checked API", () => {
+  const page = read("app/admin/documents/[id]/page.js");
+  assert.ok(page.includes("<PublishedPayslips employeeUid={id} />") && page.includes("/api/payroll/employee-payslips?uid="));
+  assert.ok(page.includes("/api/payroll/payslip-pdf?id="));
+  const b = fn(actions, "employeePayslips");
+  assert.ok(/await actorWith\(user, "payroll", "view"\)/.test(b.split("\n").slice(0, 3).join("\n")));
+  assert.ok(b.includes('.where("uid", "==", uid)') && b.includes("published === true") && b.includes('status === "issued"'));
+  assert.ok(read("app/api/payroll/[action]/route.ts").includes('"employee-payslips"'));
+});
+
 console.log(`\n${passed} passed (payslip publication)${process.exitCode ? " - with FAILURES" : ""}`);

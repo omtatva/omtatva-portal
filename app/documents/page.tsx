@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { auth, db } from "../../lib/firebase";
+import { ApiClientError, getBlob, triggerDownload } from "../../lib/reportsClient";
 
 import {
   collection,
+  doc,
   query,
   where,
   onSnapshot,
@@ -18,6 +20,10 @@ type DocItem = {
   uploadedBy?: string;
   uploadedAt?: any;
   category?: string;
+  // set for payslips published by Payroll: opened through the server (ownership checked), never by a public link
+  payslipId?: string;
+  payslipPeriod?: string;
+  employeeId?: string;
 };
 
 const CATEGORY_CONFIG = [
@@ -37,6 +43,21 @@ const ONBOARDING_CATEGORY = {
   icon: "📋",
   color: "#0891b2",
 };
+
+const PAYSLIP_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const payslipMonth = (period: string) => `${PAYSLIP_MONTHS[Number(period.slice(5, 7)) - 1] || period} ${period.slice(0, 4)}`;
+
+type PayslipIndexItem = { id: string; period: string; employeeId: string; status: string; publishedAt: string | null };
+
+async function openPayslip(item: DocItem, download: boolean) {
+  try {
+    const blob = await getBlob(`/api/payroll/payslip-pdf?id=${encodeURIComponent(item.payslipId || "")}`);
+    if (download) triggerDownload(blob, `Payslip_${item.employeeId || ""}_${item.payslipPeriod || ""}.pdf`);
+    else window.open(URL.createObjectURL(blob), "_blank");
+  } catch (e) {
+    alert(e instanceof ApiClientError ? e.message : "Could not open the payslip.");
+  }
+}
 
 function getViewUrl(file: DocItem) {
   const name = file.fileName?.toLowerCase() || "";
@@ -81,6 +102,7 @@ const ONBOARDING_TYPE_LABELS: Record<string, string> = {
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocItem[]>([]);
   const [onboardingDocs, setOnboardingDocs] = useState<DocItem[]>([]);
+  const [payslipDocs, setPayslipDocs] = useState<DocItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [search, setSearch] = useState("");
@@ -89,6 +111,7 @@ export default function DocumentsPage() {
   useEffect(() => {
     let unsubscribeDocsSnapshot: (() => void) | undefined;
     let unsubscribeOnboardingSnapshot: (() => void) | undefined;
+    let unsubscribePayslips: (() => void) | undefined;
 
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (!user) {
@@ -97,6 +120,28 @@ export default function DocumentsPage() {
       }
 
       setCheckingAuth(false);
+
+      // Payslips PUBLISHED by Payroll ("Send to Employees"): a server-written list only this employee can read,
+      // so a new payslip shows up here by itself.
+      unsubscribePayslips = onSnapshot(
+        doc(db, "payslipIndex", user.uid),
+        (snap) => {
+          const items = snap.exists() ? ((snap.data().items as PayslipIndexItem[]) || []) : [];
+          setPayslipDocs(
+            items.map((p) => ({
+              id: `payslip-${p.id}`,
+              payslipId: p.id,
+              payslipPeriod: p.period,
+              employeeId: p.employeeId,
+              fileName: `Payslip - ${payslipMonth(p.period)}${p.status === "Reissued" ? " (reissued)" : ""}.pdf`,
+              title: `Payslip ${payslipMonth(p.period)}`,
+              uploadedBy: `Payroll${p.publishedAt ? ` · ${new Date(p.publishedAt).toLocaleDateString("en-IN")}` : ""}`,
+              category: "Payroll",
+            }))
+          );
+        },
+        () => setPayslipDocs([])
+      );
 
       // Existing HR-posted documents
       const q = query(
@@ -161,10 +206,14 @@ export default function DocumentsPage() {
       unsubscribeAuth();
       if (unsubscribeDocsSnapshot) unsubscribeDocsSnapshot();
       if (unsubscribeOnboardingSnapshot) unsubscribeOnboardingSnapshot();
+      if (unsubscribePayslips) unsubscribePayslips();
     };
   }, []);
 
-  const filteredDocs = documents.filter((d) => {
+  // published payslips first, then the HR-posted documents
+  const allDocs = [...payslipDocs, ...documents];
+
+  const filteredDocs = allDocs.filter((d) => {
     const name = (d.fileName || d.title || "").toLowerCase();
     const matchesSearch = name.includes(search.toLowerCase());
     const matchesCategory =
@@ -177,7 +226,7 @@ export default function DocumentsPage() {
     return name.includes(search.toLowerCase());
   });
 
-  const totalCount = documents.length + onboardingDocs.length;
+  const totalCount = allDocs.length + onboardingDocs.length;
 
   if (checkingAuth) {
     return null;
@@ -547,17 +596,25 @@ function DocumentGrid({ docs }: { docs: DocItem[] }) {
           </div>
 
           <div className="docs-row-actions" style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <a
-              href={getViewUrl(item)}
-              target="_blank"
-              rel="noreferrer"
-              style={viewBtn}
-            >
-              View
-            </a>
-            <a href={item.url} download style={downloadBtn}>
-              ⬇ Download
-            </a>
+            {item.payslipId ? (
+              <>
+                <button onClick={() => openPayslip(item, false)} style={{ ...viewBtn, border: "none", cursor: "pointer" }}>
+                  View
+                </button>
+                <button onClick={() => openPayslip(item, true)} style={{ ...downloadBtn, border: "none", cursor: "pointer" }}>
+                  ⬇ Download
+                </button>
+              </>
+            ) : (
+              <>
+                <a href={getViewUrl(item)} target="_blank" rel="noreferrer" style={viewBtn}>
+                  View
+                </a>
+                <a href={item.url} download style={downloadBtn}>
+                  ⬇ Download
+                </a>
+              </>
+            )}
           </div>
         </div>
       ))}

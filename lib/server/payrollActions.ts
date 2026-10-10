@@ -383,6 +383,21 @@ const pub = (x: DocumentData) => ({
   published: x.published === true, publishedAt: iso(x.publishedAt),
 });
 
+// HR: the PUBLISHED payslips of one employee (shown under Admin → Documents → that employee → Payslip).
+// Needs payroll view access; unpublished / voided payslips are not listed.
+export async function employeePayslips(user: VerifiedUser, uidIn: unknown) {
+  await actorWith(user, "payroll", "view");
+  const uid = typeof uidIn === "string" && /^[A-Za-z0-9_-]{6,128}$/.test(uidIn) ? uidIn : "";
+  if (!uid) throw new ApiError(400, "bad-request", "Invalid employee.");
+  const snap = await db().collection("payslips").where("uid", "==", uid).get();
+  return {
+    payslips: snap.docs
+      .filter((d) => d.data().status === "issued" && d.data().published === true)
+      .map((d) => ({ id: d.id, ...pub(d.data()) }))
+      .sort((a, b) => b.period.localeCompare(a.period)),
+  };
+}
+
 // The caller's OWN payslips — the uid always comes from the verified token.
 export async function myPayslips(user: VerifiedUser) {
   const actor = await memberFor(user);

@@ -5,7 +5,7 @@ import { exportPayroll, exportPayslipsZip } from "@/lib/server/payrollExports";
 import { continueSending, emailDns, emailPreview, emailStatus, resendPayslipEmails, sendPayslipEmails, sendTestEmail, setLive } from "@/lib/server/payslipEmail";
 import {
   applySalarySheet, approveRun, deleteSalary, generatePayslips, getPolicy, listPeriodPayslips, listRuns, myPayslips,
-  payslipPdf, previewRun, previewSalarySheet, resolveMissing, reverseRun, saveDecisions, savePolicy, saveSalary, salaryHistory,
+  employeePayslips, payslipPdf, previewRun, previewSalarySheet, resolveMissing, reverseRun, saveDecisions, savePolicy, saveSalary, salaryHistory,
 } from "@/lib/server/payrollActions";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ action: 
         return Response.json(await myLeave(user), { headers: NO_STORE });
       case "leave-overview":
         return Response.json(await leaveOverview(user), { headers: NO_STORE });
+      case "employee-payslips":
+        return Response.json(await employeePayslips(user, url.searchParams.get("uid")), { headers: NO_STORE });
       case "my-payslips":
         return Response.json(await myPayslips(user), { headers: NO_STORE });
       case "salary-history":

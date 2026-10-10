@@ -8,6 +8,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "../../../../lib/firebase";
 import { employeeKeyForAdminField } from "../../../../lib/documentFields";
 import { usePermission } from "../../../../lib/usePermission";
+import { getBlob, getJson, triggerDownload } from "../../../../lib/reportsClient";
 
 // Types marked `multiple: true` accept more than one file — HR can
 // keep adding files and every one shows up with its own View/Download.
@@ -347,8 +348,8 @@ export default function EmployeeDocumentsPage() {
           }}
         >
           {DOCUMENT_TYPES.map(({ title, type, multiple }) => (
+            <div key={type}>
             <DocumentRow
-              key={type}
               title={title}
               type={type}
               multiple={multiple}
@@ -361,9 +362,63 @@ export default function EmployeeDocumentsPage() {
               onDownload={handleDownload}
               onDelete={(file) => deleteDocument(type, multiple, file)}
             />
+            {type === "salarySlip" && <PublishedPayslips employeeUid={id} />}
+            </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Payslips that payroll has PUBLISHED to this employee (the same ones the employee sees under
+// My Documents → Payroll). Opened through the server, which checks the caller's payroll access.
+function PublishedPayslips({ employeeUid }) {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    getJson(`/api/payroll/employee-payslips?uid=${encodeURIComponent(employeeUid)}`)
+      .then((r) => { if (alive) setItems(r.payslips); })
+      .catch((e) => { if (alive) { setItems([]); setError(e.message || "Could not load payslips"); } });
+    return () => { alive = false; };
+  }, [employeeUid]);
+
+  const open = async (p, download) => {
+    try {
+      const blob = await getBlob(`/api/payroll/payslip-pdf?id=${encodeURIComponent(p.id)}`);
+      if (download) triggerDownload(blob, `Payslip_${p.employeeId}_${p.period}.pdf`);
+      else window.open(URL.createObjectURL(blob), "_blank");
+    } catch (e) {
+      setError(e.message || "Could not open the payslip");
+    }
+  };
+
+  const label = (period) => {
+    const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return `${names[Number(period.slice(5, 7)) - 1]} ${period.slice(0, 4)}`;
+  };
+
+  return (
+    <div style={{ padding: "6px 24px 18px", background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
+        Published from Payroll{items ? ` (${items.length})` : ""}
+      </div>
+      {items === null && <span style={{ color: "#64748b", fontSize: 13 }}>Loading…</span>}
+      {items && items.length === 0 && !error && (
+        <span style={{ color: "#64748b", fontSize: 13 }}>No payslip has been published to this employee yet. Payroll → Send to Employees publishes them here and in the employee&apos;s My Documents.</span>
+      )}
+      {error && <div style={{ color: "#dc2626", fontSize: 13 }}>{error}</div>}
+      {items && items.map((p) => (
+        <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0" }}>
+          <span style={{ minWidth: 150, fontWeight: 600 }}>{label(p.period)}{p.revision > 1 ? " · reissued" : ""}</span>
+          <span style={{ color: "#475569", fontSize: 13 }}>Net ₹{Number(p.netPay).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          <span style={{ color: "#64748b", fontSize: 12 }}>published {p.publishedAt ? new Date(p.publishedAt).toLocaleDateString("en-IN") : "—"}</span>
+          <button onClick={() => open(p, false)} style={{ ...btnStyle("#3d6fa8"), border: "none", cursor: "pointer" }}>View</button>
+          <button onClick={() => open(p, true)} style={{ ...btnStyle("#16a34a"), border: "none", cursor: "pointer" }}>Download</button>
+        </div>
+      ))}
     </div>
   );
 }

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:attendance": "tsx tests/attendancePolicy.test.ts && tsx tests/attendanceReport.test.ts && tsx tests/attendancePhase2.test.ts && tsx tests/attendancePhase3.test.ts && tsx tests/attendanceHistorical.test.ts && tsx tests/attendanceBulk.test.ts && tsx tests/employeeRemoval.test.ts && tsx tests/idleSession.test.ts && tsx tests/bulkPunchOut.test.ts && tsx tests/bulkPunchTimes.test.ts",
+    "test:attendance": "tsx tests/attendancePolicy.test.ts && tsx tests/attendanceReport.test.ts && tsx tests/attendancePhase2.test.ts && tsx tests/attendancePhase3.test.ts && tsx tests/attendanceHistorical.test.ts && tsx tests/attendanceBulk.test.ts && tsx tests/employeeRemoval.test.ts && tsx tests/idleSession.test.ts && tsx tests/bulkPunchOut.test.ts && tsx tests/bulkPunchTimes.test.ts && tsx tests/performance.test.ts",
     "rules:check": "firebase deploy --only firestore:rules,storage --dry-run",
     "rules:deploy": "firebase deploy --only firestore:rules,storage",
     "test:payroll": "tsx tests/payrollEngine.test.ts && tsx tests/payrollSheet.test.ts && tsx tests/payrollPayslip.test.ts && tsx tests/payrollRunState.test.ts && tsx tests/payrollLeave.test.ts && tsx tests/payrollTds.test.ts && tsx tests/payrollPublish.test.ts && tsx tests/payrollExport.test.ts && tsx tests/payrollEmail.test.ts && tsx tests/payrollEmailContracts.test.ts && tsx tests/payrollContracts.test.ts"

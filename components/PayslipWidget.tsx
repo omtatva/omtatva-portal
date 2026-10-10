@@ -56,7 +56,10 @@ export default function PayslipWidget() {
 
   return (
     <div style={{ background: "var(--card-bg)", borderRadius: 22, padding: 24, boxShadow: "0 12px 35px rgba(0,0,0,.08)", gridColumn: "span 1" }}>
-      <h2 style={{ margin: "0 0 12px", fontSize: 20 }}>💰 My Payslips</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>💰 My Payslips</h2>
+        <a href="/documents" style={{ fontSize: 13, color: "#2563eb", textDecoration: "underline" }}>All in My Documents →</a>
+      </div>
 
       {items === null && <p style={{ color: "var(--text-muted)" }}>Loading…</p>}
 

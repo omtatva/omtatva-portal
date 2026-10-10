@@ -20,6 +20,9 @@ import OrgHierarchySection from "../../components/OrgHierarchySection";
 import { isAttendedStatus } from "../../lib/attendanceRules";
 import { useMyLeave } from "../../lib/payroll/useMyLeave";
 import PayslipWidget from "../../components/PayslipWidget";
+import PerformanceCard from "../../components/PerformanceCard";
+import { useAccess } from "../../lib/useAccess";
+import { canUseRatings } from "../../lib/performance";
 import {
   ResponsiveContainer,
   Tooltip,
@@ -56,6 +59,9 @@ export default function DashboardPage() {
   const [myAttendance, setMyAttendance] = useState([]);
   // Leave balance comes from the server: the same leave records and rules payroll uses.
   const { data: leaveInfo } = useMyLeave();
+  // Team Lead / Manager / Head / Admin / Super Admin get a "Team Performance" shortcut (HR and employees do not).
+  const { role: accessRole } = useAccess();
+  const showTeamPerformance = canUseRatings(accessRole);
   const [userName, setUserName] = useState("");
   const [userData, setUserData] = useState(null);
   const [upcomingHolidays, setUpcomingHolidays] = useState([]);
@@ -359,27 +365,6 @@ export default function DashboardPage() {
   const totalAttendance = attendedDays;
   const totalTimesheets = myTimesheets.length;
 
-  // Use `||` (not `??`) so an accidental empty string from an in-progress
-  // HR edit falls back to "Pending" instead of rendering a blank badge.
-  const performance =
-    userData?.performance || userData?.performanceRating || "Pending";
-  console.log("userData:", userData);
-  console.log("performance:", userData?.performance);
-
-  const performanceColor =
-    performance === "Outstanding"
-      ? "#16a34a"
-      : performance === "Excellent"
-      ? "#22c55e"
-      : performance === "Very Good"
-      ? "#3b82f6"
-      : performance === "Good"
-      ? "#f59e0b"
-      : performance === "Average"
-      ? "#f97316"
-      : performance === "Needs Improvement"
-      ? "#dc2626"
-      : "#64748b";
 
   // ---------- LEAVE BALANCE ----------
   const leaveAllocation = leaveInfo?.policy.annualEntitlement ?? DEFAULT_LEAVE_ALLOCATION;
@@ -945,6 +930,9 @@ export default function DashboardPage() {
       </div>
       )}
 
+      {/* ================= MY PERFORMANCE ================= */}
+      <PerformanceCard legacyRating={userData?.performance || userData?.performanceRating || null} />
+
       {/* ================= QUICK ACTIONS ================= */}
       <h2 style={{ marginBottom: "20px", color: "#0f172a", fontWeight: 700 }}>
         🚀 Quick Actions
@@ -978,6 +966,12 @@ export default function DashboardPage() {
           <p>Payslips & HR Documents</p>
         </div>
 
+        {showTeamPerformance && (
+          <div style={actionCard} onClick={() => (window.location.href = "/performance")}>
+            <h3>⭐ Team Performance</h3>
+            <p>Rate &amp; review your team</p>
+          </div>
+        )}
         <div style={actionCard} onClick={() => (window.location.href = "/workspace")}>
           <h3>🤖 AI Workspace</h3>
           <p>Open AI Tools</p>
@@ -1031,76 +1025,8 @@ export default function DashboardPage() {
       {/* ================= ORGANIZATION HIERARCHY ================= */}
       <OrgHierarchySection />
 
-      {/* ================= PERFORMANCE + LEAVE BALANCE ================= */}
+      {/* ================= LEAVE BALANCE ================= */}
       <div className="dash-summary-grid">
-        {/* Performance */}
-        <div
-          style={{
-            background: "var(--card-bg)",
-            padding: "clamp(20px, 5vw, 35px)",
-            borderRadius: 22,
-            border: `1px solid ${COLORS.soft}`,
-            boxShadow: "0 10px 30px rgba(0,0,0,.08)",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 85,
-              height: 85,
-              margin: "auto",
-              borderRadius: "50%",
-              background: COLORS.primary,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              fontSize: 38,
-              color: "#fff",
-            }}
-          >
-            🏆
-          </div>
-
-          <h2 style={{ marginTop: 20, color: COLORS.text }}>Performance</h2>
-
-          <div
-            style={{
-              display: "inline-block",
-              marginTop: 20,
-              padding: "14px 38px",
-              background: `${performanceColor}15`,
-              color: performanceColor,
-              border: `2px solid ${performanceColor}`,
-              borderRadius: "40px",
-              fontSize: "24px",
-              fontWeight: "700",
-            }}
-          >
-            {performance}
-          </div>
-
-          <p
-            style={{
-              marginTop: 18,
-              fontSize: "17px",
-              fontWeight: "500",
-              color: COLORS.secondary,
-            }}
-          >
-            {performance === "Pending" ? "Awaiting HR Review" : "Rated by HR Department"}
-          </p>
-
-          <hr style={{ margin: "30px 0", borderColor: COLORS.soft }} />
-
-          <small style={{ display: "block", marginTop: "15px", color: COLORS.secondary, fontSize: "15px" }}>
-            <b>Last Updated</b>
-            <br />
-            {userData?.updatedAt?.seconds
-              ? new Date(userData.updatedAt.seconds * 1000).toLocaleDateString("en-IN")
-              : "--"}
-          </small>
-        </div>
-
         {/* Leave Balance */}
         {widgets.showLeave && (
         <div

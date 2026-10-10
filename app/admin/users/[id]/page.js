@@ -74,7 +74,6 @@ const [joiningDate,setJoiningDate]=useState("");
 const [designation,setDesignation]=useState("");
 
 
-const [performance,setPerformance]=useState("");
 
 
 const [shifts,setShifts]=useState([]);
@@ -267,9 +266,7 @@ setEmployee(finalEmployee);
 
 
 
-setPerformance(
-finalEmployee.performance || ""
-);
+
 
 
 
@@ -384,9 +381,6 @@ id
 ...employee,
 
 
-performance,
-
-
 updatedAt:
 serverTimestamp()
 
@@ -455,7 +449,6 @@ employee.status || "inactive",          // ⬅ changed default
 hrApprovalStatus:                          // ⬅ NEW
 employee.hrApprovalStatus || "Pending",
 
-performance: performance,
 updatedAt:
 serverTimestamp()
 
@@ -2525,87 +2518,17 @@ employee.updatedAt
 
 <div
   style={{
-    background:"#fff",
-    borderRadius:"18px",
-    padding:"25px",
+    background:"#eef2ff",
+    border:"1px solid #c7d2fe",
+    borderRadius:"14px",
+    padding:"14px 18px",
     marginBottom:"30px",
-    boxShadow:"0 6px 18px rgba(0,0,0,.08)"
+    color:"#3730a3"
   }}
 >
-
-<h2 style={{marginBottom:"20px"}}>
-⭐ Employee Performance
-</h2>
-
-<div
-style={{
-display:"flex",
-justifyContent:"space-between",
-alignItems:"center",
-flexWrap:"wrap",
-gap:"20px"
-}}
->
-
-<div>
-
-<h1
-style={{
-margin:0,
-fontSize:"34px",
-color:
-performance==="Excellent"
-?"#16a34a"
-:performance==="Very Good"
-?"#15803d"
-:performance==="Good"
-?"#2563eb"
-:performance==="Average"
-?"#d97706"
-:"#dc2626"
-}}
->
-{performance || "Not Rated"}
-</h1>
-
-<p style={{color:"#6b7280"}}>
-Current Employee Performance
-</p>
-
+⭐ Performance ratings are no longer edited here. Managers, team leads and admins rate from <b>Performance Ratings</b> on the dashboard,
+and the employee sees the approved rating on their own dashboard.
 </div>
-
-<div>
-
-<select
-disabled={!editMode}
-style={{
-padding:"12px 20px",
-borderRadius:"10px",
-fontSize:"16px",
-border:"1px solid #ddd",
-minWidth:"220px"
-}}
-value={performance}
-onChange={(e)=>setPerformance(e.target.value)}
->
-
-<option value="">Select Rating</option>
-<option value="Excellent">🌟 Excellent</option>
-<option value="Very Good">✅ Very Good</option>
-<option value="Good">👍 Good</option>
-<option value="Average">⚠️ Average</option>
-<option value="Needs Improvement">
-❌ Needs Improvement
-</option>
-
-</select>
-
-</div>
-
-</div>
-
-</div>
-
 
 {/* HR QUICK ACTIONS */}
 

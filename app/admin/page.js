@@ -7,7 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebase";
-import { isAdminTierRole, isSuperAdminRole } from "../../lib/roles";
+import { isAdminTierRole, isSuperAdminRole, normalizeRole } from "../../lib/roles";
 import { lookupRoleForEmail } from "../../lib/adminAccess";
 
 import {
@@ -38,6 +38,8 @@ export default function AdminPage() {
   const [trendData, setTrendData] = useState([]);
   // Attendance Reports are Super Admin only (also enforced by the API).
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // Performance ratings: Head, Admin and Super Admin (managers / team leads use the same page from their dashboard).
+  const [canRate, setCanRate] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -61,6 +63,7 @@ export default function AdminPage() {
         }
 
         setIsSuperAdmin(isSuperAdminRole(role));
+        setCanRate(["head", "admin", "super_admin"].includes(normalizeRole(role)));
 
         await loadDashboard();
 
@@ -299,8 +302,10 @@ export default function AdminPage() {
             ["📊 Reports", "/admin/tools-report"],
             ["🎬 AI Production", "/admin/production"],
             ["📅 Holidays", "/admin/holidays"],
+            ["⭐ Performance Ratings", "/performance"],
           ]
             .filter(([, link]) => link !== "/admin/attendance-reports" || isSuperAdmin)
+            .filter(([, link]) => link !== "/performance" || canRate)
             .map(([title, link]) => (
             <button
               key={title}
