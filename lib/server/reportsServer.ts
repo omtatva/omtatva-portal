@@ -10,6 +10,7 @@ import { availableMonths, findArchiveMonth } from "../attendanceMonths";
 import { companyTimezone, type PolicyRules } from "../attendancePolicy";
 import { shouldIncludeDemo } from "../demoAttendance";
 import { ForbiddenError, requireSuperAdminEmail } from "../superAdmin";
+import { exemptUids } from "./attendanceExempt";
 import { ApiError, adminDb, type VerifiedUser } from "./firebaseAdmin";
 
 export type SuperAdmin = VerifiedUser & { role: "super_admin" };
@@ -76,8 +77,13 @@ export async function loadDataset(now: Date = new Date()): Promise<ReportDataset
   const rulesData = rulesSnap.exists ? (rulesSnap.data() as DocumentData) : null;
   const rules = rulesData ? Object.fromEntries(RULE_FIELDS.filter((k) => k in rulesData).map((k) => [k, rulesData[k]])) : null;
 
+  // People whose role does not need to mark attendance (default: IT Support / Admin) are left out of the
+  // reports entirely — they must not appear as "missing record" or "unknown employee" findings.
+  const exempt = await exemptUids();
+
   const employees: DatasetEmployee[] = usersSnap.docs
     .filter((d) => includesDemo || d.data().isDemo !== true)
+    .filter((d) => !exempt.has(d.id))
     .map((d) => {
       const u = d.data();
       return {
@@ -95,6 +101,7 @@ export async function loadDataset(now: Date = new Date()): Promise<ReportDataset
 
   const records = attSnap.docs
     .filter((d) => includesDemo || d.data().isDemo !== true)
+    .filter((d) => !exempt.has(String(d.data().userId || "")))
     .map((d) => {
       const x = d.data();
       const history = Array.isArray(x.statusHistory) ? x.statusHistory : [];

@@ -68,6 +68,8 @@ workingDays:[
 "Friday",
 "Saturday"
 ],
+// Roles that do not need to mark attendance (shared IT Support / Admin accounts by default).
+attendanceExemptRoles:["admin","super_admin"],
 
 // Optional named shifts (e.g. "Morning 10-7", "Afternoon 12-9") an
 // employee can be assigned to from Admin -> Users, instead of everyone
@@ -788,6 +790,41 @@ className="w-5 h-5 accent-[#3d6fa8]"
 
 </div>
 
+</div>
+
+{/* Roles that do not need attendance */}
+<div className="bg-white rounded-3xl border border-[#eaf3ff] shadow-sm p-7">
+<h2 className="text-xl font-bold text-[#111] mb-2">
+🙅 No attendance needed for these roles
+</h2>
+<p className="text-sm text-gray-500 mb-5">
+People with a ticked role are never marked Absent, are left out of attendance reports and audits, and their salary month is
+not held for missing attendance. They can still punch in if they want to.
+</p>
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+{[
+["super_admin","IT Support / Super Admin"],
+["admin","Admin"],
+["head","Head"],
+["hr","HR Admin"],
+["manager","Manager"],
+["team_lead","Team Lead"],
+["employee","Employee"]
+].map(([value,label])=>(
+<label key={value} className="flex items-center gap-3 cursor-pointer">
+<input
+type="checkbox"
+checked={(settings.attendanceExemptRoles||[]).includes(value)}
+onChange={()=>setSettings(prev=>{
+const cur=prev.attendanceExemptRoles||[];
+return {...prev,attendanceExemptRoles:cur.includes(value)?cur.filter(r=>r!==value):[...cur,value]};
+})}
+className="w-5 h-5 accent-[#3d6fa8]"
+/>
+<span>{label}</span>
+</label>
+))}
+</div>
 </div>
 
 {/* Attendance Rules */}

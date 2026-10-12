@@ -15,6 +15,7 @@ import { hashOf } from "../payroll/runState";
 import { resolvePolicy, type PayrollPolicy } from "../payroll/policy";
 import { normalizeRole } from "../roles";
 import { ApiError, adminDb, type VerifiedUser } from "./firebaseAdmin";
+import { exemptUids } from "./attendanceExempt";
 
 // ------------------------------------------------------------------ access
 export type Actor = VerifiedUser & { role: string; matrix: Matrix };
@@ -189,6 +190,7 @@ export async function computeRun(period: string, policyIn?: PayrollPolicy): Prom
     db.collection("removedEmployees").get(),
   ]);
   const removed = new Set(removedSnap.docs.map((d) => d.id));
+  const exempt = await exemptUids();
 
   const holidays: HolidayRec[] = holSnap.docs.map((d) => {
     const x = d.data();
@@ -247,6 +249,7 @@ export async function computeRun(period: string, policyIn?: PayrollPolicy): Prom
       joiningDate: u.joiningDate, lastWorkingDate: u.lastWorkingDate,
       weeklyOffDays: [0, 1, 2, 3, 4, 5, 6].filter((d) => !shift.workdays.includes(d)),
       salary,
+      attendanceExempt: exempt.has(u.uid),
       attendance: attByUid.get(u.uid) || [],
       leaveRequests: leaveByUid.get(u.uid) || [],
       overrides: Object.fromEntries(

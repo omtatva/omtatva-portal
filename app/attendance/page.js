@@ -33,6 +33,7 @@ import {
 
 import AttendanceCalendar from "./AttendanceCalendar";
 import { computeDisplayStatus, getShiftTimes, statusCategory } from "@/lib/attendanceRules";
+import { getJson } from "@/lib/reportsClient";
 import {
   DEFAULT_TIMEZONE,
   addDays,
@@ -45,6 +46,8 @@ import {
 
 export default function AttendancePage() {
   const [user, setUser] = useState(null);
+  // IT Support / Admin accounts do not need to mark attendance (set in Admin → Attendance Settings).
+  const [attendanceExempt, setAttendanceExempt] = useState(false);
   const [todayData, setTodayData] = useState(null);
   const [history, setHistory] = useState([]);
   const [attendanceRules, setAttendanceRules] = useState(null);
@@ -109,7 +112,17 @@ export default function AttendancePage() {
       // loading history, so the dashboard (and anything reading the
       // attendance collection, e.g. payroll) sees them. Company
       // holidays are excluded so they don't get marked Absent.
-      await syncMissingAbsences(currentUser.uid, holidays, rules, employeeShiftId, currentUser);
+      // IT Support / Admin accounts do not need to mark attendance: never create "Absent" records for them.
+      let exempt = false;
+      try {
+        exempt = (await getJson("/api/attendance/exempt")).me === true;
+      } catch (e) {
+        console.log("exempt check failed:", e);
+      }
+      setAttendanceExempt(exempt);
+      if (!exempt) {
+        await syncMissingAbsences(currentUser.uid, holidays, rules, employeeShiftId, currentUser);
+      }
       await loadHistory(currentUser.uid, rules, employeeShiftId);
 
       if (rules) {
@@ -681,6 +694,13 @@ export default function AttendancePage() {
   return (
     <div className="w-full flex flex-col gap-4">
       <main className="w-full max-w-full px-3 sm:px-6 lg:px-8 py-4">
+        {attendanceExempt && (
+          <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 text-blue-900 px-5 py-4 text-sm sm:text-base">
+            <b>Attendance is not required for your role.</b> You will not be marked Absent and you do not appear in attendance
+            reports. You can still punch in or out if you wish.
+          </div>
+        )}
+
         {/* TOP HEADER */}
         <section className="bg-[var(--card-bg)] rounded-3xl p-4 sm:p-8 mb-6 border border-[var(--border-color)] shadow-sm">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-5">

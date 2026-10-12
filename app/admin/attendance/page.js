@@ -29,6 +29,7 @@ db
 } from "../../../lib/firebase";
 
 import { logActivity } from "../../../lib/activityLog";
+import { getJson } from "../../../lib/reportsClient";
 import { computeDisplayStatus, statusCategory } from "../../../lib/attendanceRules";
 import { usePermission } from "../../../lib/usePermission";
 
@@ -130,7 +131,15 @@ async function loadAttendance() {
       };
     });
 
-    setAttendance(list);
+    // People whose role does not need attendance (IT Support / Admin by default) are not listed.
+    let exempt = new Set();
+    try {
+      const r = await getJson("/api/attendance/exempt");
+      exempt = new Set(r.uids || []);
+    } catch (e) {
+      console.log("exempt list unavailable:", e);
+    }
+    setAttendance(list.filter((r) => !exempt.has(r.userId)));
 
   } catch (error) {
     console.log(error);

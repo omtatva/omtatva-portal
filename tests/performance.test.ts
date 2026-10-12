@@ -156,4 +156,13 @@ test("approval path is explained to the rater: who approves, and whether that pe
   assert.ok(fn("submitRating").includes("will see it under"), "the confirmation names the approver");
 });
 
+test("Access Management: typing in Assign Role suggests employees by name / ID / e-mail; the Hierarchy page's own picker is untouched", () => {
+  const access = read("app/settings/access/page.js");
+  assert.ok(access.includes("<EmailPersonPicker") && access.includes('getDocs(collection(db, "users"))') && access.includes("existingRoles="));
+  const picker = read("components/EmailPersonPicker.tsx");
+  assert.ok(picker.includes("employeeId") && picker.includes("choose(") && picker.includes("ArrowDown") && picker.includes("already has the role"));
+  assert.ok(read("components/PersonPicker.tsx").includes("options: OrgPerson[]"), "the original reporting-manager picker is intact");
+  assert.ok(read("app/admin/hierarchy/page.tsx").includes("PersonPicker"));
+});
+
 console.log(`\n${passed} passed (performance ratings)${process.exitCode ? " - with FAILURES" : ""}`);

@@ -5,6 +5,9 @@ import { listAdminAccess, upsertAdminAccess, removeAdminAccess } from "@/lib/adm
 import { ROLES, normalizeRole } from "@/lib/roles";
 import { checkRemoval, checkRoleChange } from "@/lib/accessGuards";
 import { MODULES, getPermissionMatrix, savePermissionMatrix } from "@/lib/permissions";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import EmailPersonPicker from "@/components/EmailPersonPicker";
 
 export default function AccessManagementPage() {
   const [entries, setEntries] = useState([]);
@@ -15,6 +18,9 @@ export default function AccessManagementPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState(ROLES.find((r) => r.value === "hr").value); // default to "hr"
 
+  // employees offered as suggestions while typing in "Assign Role"
+  const [people, setPeople] = useState([]);
+
   const [matrix, setMatrix] = useState({});
   const [matrixLoading, setMatrixLoading] = useState(true);
   const [matrixSaving, setMatrixSaving] = useState(false);
@@ -22,7 +28,33 @@ export default function AccessManagementPage() {
   useEffect(() => {
     load();
     loadMatrix();
+    loadPeople();
   }, []);
+
+  async function loadPeople() {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      setPeople(
+        snap.docs
+          .map((d) => {
+            const u = d.data();
+            const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.name || "";
+            return {
+              uid: d.id,
+              name: name || String(u.email || "").split("@")[0],
+              email: String(u.email || "").trim().toLowerCase(),
+              employeeId: u.employeeId || "",
+              designation: u.designation || "",
+              department: u.department || "",
+            };
+          })
+          .filter((p) => p.email)
+      );
+    } catch (err) {
+      // suggestions are a convenience; typing an e-mail still works
+      console.warn("Could not load employees for suggestions:", err);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -189,16 +221,18 @@ export default function AccessManagementPage() {
 
       <Section
         title="Assign Role"
-        subtitle="Add someone by email and pick their role from the full list."
+        subtitle="Start typing an employee's name (or ID / email), pick them from the list, then choose their role."
       >
         <div style={{ display: "flex", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-          <input
-            placeholder="name@company.com"
+          <EmailPersonPicker
             value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPerson()}
+            onChange={setNewEmail}
+            people={people}
+            existingRoles={Object.fromEntries(entries.map((e) => [e.email, roleLabelFor(e.role)]))}
+            placeholder="Search employee by name, ID or email"
+            onEnter={addPerson}
             disabled={saving}
-            style={{ ...inputStyle, minWidth: 220 }}
+            style={inputStyle}
           />
           <RoleSelect
             value={newRole}
@@ -385,6 +419,11 @@ function CenteredMessage({ text }) {
       <h2>{text}</h2>
     </div>
   );
+}
+
+function roleLabelFor(role) {
+  const r = ROLES.find((x) => x.value === normalizeRole(role));
+  return r ? r.label : "Employee";
 }
 
 const inputStyle = {

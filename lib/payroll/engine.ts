@@ -56,6 +56,8 @@ export type EmployeeInput = {
   attendance: AttendanceRec[];
   leaveRequests: LeaveRequest[]; // APPROVED only
   overrides?: Record<string, Override>; // by date
+  // Role that does not mark attendance (IT Support / Admin): every working day counts as present.
+  attendanceExempt?: boolean;
 };
 
 export type Line = { key: string; label: string; amount: number };
@@ -219,6 +221,7 @@ export function computeEmployee(period: string, policy: PayrollPolicy, holidays:
     if (notEmployed(d)) cls = "not-employed";
     else if (isWeeklyOff(d)) cls = "weekly-off";
     else if (holidaySet.has(d)) cls = "holiday";
+    else if (emp.attendanceExempt === true) cls = "present";
     else if (attendedDates.has(d)) {
       const onlyIncomplete = records.filter((r) => isAttendedStatus(r.status)).every((r) => statusCategory(r.status) === "incomplete");
       if (onlyIncomplete) {
