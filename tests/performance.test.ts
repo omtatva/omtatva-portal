@@ -139,4 +139,21 @@ test("UI: rating editor removed from Users → details; new page + dashboard ent
   assert.ok(card.includes('doc(db, "performanceIndex", u.uid)') && card.includes("onSnapshot("));
 });
 
+test("the employee card still works if the live listener is refused: it falls back to the server's own-only endpoint (and the endpoint reads only the caller's document)", () => {
+  const card = read("components/PerformanceCard.tsx");
+  assert.ok(card.includes("/api/performance/mine") && card.includes("() => poll()") && card.includes("setInterval"));
+  const mine = fn("myPerformance");
+  assert.ok(mine.includes("memberFor(user)") && mine.includes("performanceIndex/${actor.uid}"), "uid comes from the verified token");
+  assert.ok(read("app/api/performance/[action]/route.ts").includes('action === "mine"'));
+  const widget = read("components/PayslipWidget.tsx");
+  assert.ok(widget.includes("/api/payroll/my-payslips"), "the payslip widget has the same safety net");
+});
+test("approval path is explained to the rater: who approves, and whether that person can actually open the approvals", () => {
+  const b = fn("performanceOverview");
+  assert.ok(b.includes("reportsTo") && b.includes("canApprove"));
+  const page = read("app/performance/page.tsx");
+  assert.ok(page.includes("How your ratings are approved") && page.includes("Settings → Access Management") && page.includes("published to the employee"));
+  assert.ok(fn("submitRating").includes("will see it under"), "the confirmation names the approver");
+});
+
 console.log(`\n${passed} passed (performance ratings)${process.exitCode ? " - with FAILURES" : ""}`);

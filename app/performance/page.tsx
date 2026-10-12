@@ -12,7 +12,7 @@ type Person = {
   published: { rating: string; comment: string; ratedBy: string } | null;
 };
 type Pending = { id: string; period: string; employeeUid: string; employeeId: string; employeeName: string; rating: string; comment: string; submittedByName: string; submittedAt: string | null; previous: string | null };
-type Overview = { period: string; currentPeriod: string; role: string; roleLabel: string; submitsForApproval: boolean; myApprover: string | null; people: Person[]; pending: Pending[] };
+type Overview = { reportsTo: { name: string; roleLabel: string; canApprove: boolean } | null; period: string; currentPeriod: string; role: string; roleLabel: string; submitsForApproval: boolean; myApprover: string | null; people: Person[]; pending: Pending[] };
 
 const msg = (e: unknown) => (e instanceof ApiClientError || e instanceof Error ? e.message : "Something went wrong.");
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -91,6 +91,22 @@ export default function PerformancePage() {
           {data.submitsForApproval && <span className="px-3 py-1 rounded-full bg-white/20 text-sm">Approver: {data.myApprover || "Head / Admin"}</span>}
         </div>
       </div>
+
+      {data.submitsForApproval && (
+        <div className={`p-4 rounded-2xl text-sm border ${data.reportsTo?.canApprove ? "bg-indigo-50 border-indigo-200 text-indigo-900" : "bg-amber-50 border-amber-300 text-amber-900"}`}>
+          <b>How your ratings are approved:</b>{" "}
+          {!data.reportsTo
+            ? "You have no reporting manager set, so only a Head / Admin / Super Admin can approve your ratings. Ask an admin to set your manager under Admin → Hierarchy."
+            : data.reportsTo.canApprove
+              ? `${data.reportsTo.name} (${data.reportsTo.roleLabel}) will see each rating under “Waiting for your approval” on this page and approves it before the employee sees it.`
+              : `Your manager ${data.reportsTo.name} is shown as “${data.reportsTo.roleLabel}”, which cannot approve ratings. Ask a Super Admin to give them the Manager role in Settings → Access Management — until then only a Head / Admin / Super Admin can approve.`}
+        </div>
+      )}
+      {!data.submitsForApproval && (
+        <div className="p-3 rounded-2xl text-sm bg-green-50 border border-green-200 text-green-900">
+          As <b>{data.roleLabel}</b> your ratings are published to the employee&apos;s dashboard immediately — only Team Lead ratings wait for a manager&apos;s approval.
+        </div>
+      )}
 
       {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm" role="alert">{error}</div>}
       {notice && <div className="p-3 rounded-xl bg-green-50 text-green-800 text-sm" role="status">{notice}</div>}

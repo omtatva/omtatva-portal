@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { ApiClientError, getBlob, triggerDownload } from "@/lib/reportsClient";
+import { ApiClientError, getBlob, getJson, triggerDownload } from "@/lib/reportsClient";
 
 type Item = {
   id: string; period: string; revision: number; employeeId: string; employeeName: string;
@@ -34,7 +34,21 @@ export default function PayslipWidget() {
       off = onSnapshot(
         doc(db, "payslipIndex", u.uid),
         (snap) => setItems(snap.exists() ? ((snap.data().items as Item[]) || []) : []),
-        () => { setItems([]); setError("Could not load your payslips right now."); }
+        () => {
+          // live listener not available (e.g. rules not published yet): ask the server for the same own-only list
+          getJson<{ payslips: (Item & { status: string })[] }>("/api/payroll/my-payslips")
+            .then((r) => {
+              const byPeriod = new Map<string, Item>();
+              for (const p of r.payslips) {
+                const have = byPeriod.get(p.period);
+                if (!have || p.revision > have.revision) {
+                  byPeriod.set(p.period, { ...p, status: p.revision > 1 ? "Reissued" : "Published", publishedAt: (p as unknown as { publishedAt?: string | null }).publishedAt ?? null });
+                }
+              }
+              setItems([...byPeriod.values()].sort((a, b) => b.period.localeCompare(a.period)));
+            })
+            .catch(() => { setItems([]); setError("Could not load your payslips right now."); });
+        }
       );
     });
     return () => { off(); stop(); };

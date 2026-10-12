@@ -9,7 +9,7 @@ import { canOpenPayslip, can } from "../payroll/access";
 import { maskAccount, renderPayslip, type PayslipMeta } from "../payroll/payslipPdf";
 import { buildYtd, fiscalYearStart, type YtdInput } from "../payroll/ytd";
 import {
-  RunConflict, canEditDecisions, entryId, hashOf, planApprove, planGenerate, planPayslips, planReverse, sha256,
+  RunConflict, canEditDecisions, entryId, generationOutcome, hashOf, planApprove, planGenerate, planPayslips, planReverse, sha256,
   type RunState,
 } from "../payroll/runState";
 import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, previewSheet, type SheetPreview, type SheetRow } from "../payroll/salarySheet";
@@ -306,6 +306,14 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
     return conflict(e);
   }
   const entryDocs = await entriesFor(period, plan.revision);
+  if (entryDocs.length === 0) {
+    // Without approved records there is nothing to issue — and the month must not look "generated".
+    throw new ApiError(
+      409, "no-records",
+      `No approved payroll records were found for ${period} (revision ${plan.revision}), so there are no payslips to generate. ` +
+        `A Super Admin can reverse this approval and approve the month again.`
+    );
+  }
   const existingSnap = await db().collection("payslips").where("period", "==", period).get();
   const existing = new Map(existingSnap.docs.filter((d) => Number(d.data().revision) === plan.revision).map((d) => [d.id, { status: String(d.data().status), entryHash: String(d.data().entryHash) }]));
   const users = new Map((await loadUsers()).map((u) => [u.uid, u]));
@@ -324,6 +332,7 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
 
   let created = 0;
   const failed: string[] = [];
+  const failureMessages: string[] = [];
   for (const item of todo.create) {
     try {
       const entry = byUid.get(item.uid)!;
@@ -353,19 +362,40 @@ export async function generatePayslips(user: VerifiedUser, body: Record<string, 
       });
       created++;
     } catch (error) {
-      // create() on an existing id means another click got there first: that is a skip, not an error
-      if ((error as { code?: number }).code === 6) continue;
+      // ALREADY_EXISTS means another click got there first — fine, but only if that payslip really is
+      // the issued one for this snapshot. Anything else is reported, never silently skipped.
+      if ((error as { code?: number }).code === 6) {
+        const have = await db().doc(`payslips/${item.id}`).get();
+        if (have.exists && have.data()!.status === "issued" && have.data()!.entryHash === item.entryHash) {
+          todo.skip.push(item.id);
+          continue;
+        }
+      }
       console.error("Payslip failed", item.id, error);
       failed.push(item.id);
+      failureMessages.push(`${byUid.get(item.uid)?.data().employeeId || item.id}: ${String((error as Error).message || error).slice(0, 160)}`);
     }
   }
-  const total = existing.size + created;
+
+  const issued = todo.skip.length + created;
+  const outcome = generationOutcome({ entries: entryDocs.length, issued, failed: failed.length, conflicts: todo.conflict.length });
   await db().doc(`payrollRuns/${period}`).set({
-    status: failed.length === 0 && todo.conflict.length === 0 ? "payslips_generated" : state!.status,
-    payslipCount: total, payslipsGeneratedAt: Timestamp.now(), payslipsGeneratedBy: actor.email,
+    // only a COMPLETE run moves the month to "generated"; otherwise it stays as it was
+    status: outcome.complete ? "payslips_generated" : state!.status,
+    payslipCount: issued, payslipsGeneratedAt: Timestamp.now(), payslipsGeneratedBy: actor.email,
   }, { merge: true });
-  await audit(actor, "payslips-generated", period, { revision: plan.revision, created, skipped: todo.skip.length, failed: failed.length, conflicts: todo.conflict.length }, `Payslips ${period}: ${created} created, ${todo.skip.length} already existed, ${failed.length} failed.`);
-  return { period, revision: plan.revision, created, skipped: todo.skip.length, failed: failed.length, conflicts: todo.conflict.length };
+  await audit(actor, "payslips-generated", period, { revision: plan.revision, created, skipped: todo.skip.length, failed: failed.length, conflicts: todo.conflict.length, complete: outcome.complete }, `Payslips ${period}: ${created} created, ${todo.skip.length} already existed, ${failed.length} failed${outcome.complete ? "" : " — NOT complete"}.`);
+
+  if (!outcome.complete) {
+    throw new ApiError(
+      409, "incomplete",
+      `Payslips were not fully generated: ${created} created, ${failed.length} failed` +
+        (failureMessages.length ? ` — ${failureMessages.slice(0, 3).join("; ")}` : "") +
+        (todo.conflict.length ? `; ${todo.conflict.length} already exist with different content` : "") +
+        `. Nothing was lost; fix the cause and press Generate Payslips again.`
+    );
+  }
+  return { period, revision: plan.revision, created, skipped: todo.skip.length, failed: 0, conflicts: 0, issued };
 }
 
 export async function listPeriodPayslips(user: VerifiedUser, periodIn: unknown) {

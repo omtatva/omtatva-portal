@@ -1,5 +1,5 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
-import { performanceOverview, reviewRating, submitRating } from "@/lib/server/performanceServer";
+import { myPerformance, performanceOverview, reviewRating, submitRating } from "@/lib/server/performanceServer";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -13,6 +13,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ action: 
     if (action === "overview") {
       return Response.json(await performanceOverview(user, new URL(req.url).searchParams.get("period")), { headers: NO_STORE });
     }
+    if (action === "mine") return Response.json(await myPerformance(user), { headers: NO_STORE });
     throw new ApiError(404, "not-found", "Unknown action.");
   } catch (error) {
     return errorResponse(error);

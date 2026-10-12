@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { getJson } from "@/lib/reportsClient";
 import { ratingInfo, RATINGS } from "@/lib/performance";
 
 type Entry = { period: string; rating: string; score: number; comment: string; publishedAt: string | null; ratedBy: string; approvedBy: string | null };
@@ -48,16 +49,24 @@ export default function PerformanceCard({ legacyRating }: { legacyRating?: strin
 
   useEffect(() => {
     let off = () => {};
+    let timer: ReturnType<typeof setInterval> | null = null;
+    // If the live listener is not allowed (for example the latest security rules are not published yet), fall
+    // back to asking the server for the SAME employee-only data, and keep refreshing it.
+    const poll = () => {
+      const load = () => getJson<Index>("/api/performance/mine").then(setIndex).catch(() => setIndex((cur) => cur ?? { latest: null, items: [], average: null }));
+      load();
+      if (!timer) timer = setInterval(load, 30000);
+    };
     const stop = onAuthStateChanged(auth, (u) => {
       off();
       if (!u) return;
       off = onSnapshot(
         doc(db, "performanceIndex", u.uid),
         (snap) => setIndex(snap.exists() ? (snap.data() as Index) : { latest: null, items: [], average: null }),
-        () => setIndex({ latest: null, items: [], average: null })
+        () => poll()
       );
     });
-    return () => { off(); stop(); };
+    return () => { off(); stop(); if (timer) clearInterval(timer); };
   }, []);
 
   const latest = index?.latest || null;

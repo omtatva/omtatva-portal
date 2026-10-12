@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { buildIndex, planPublish, stageOf, visibleToEmployee, type SlipLite } from "../lib/payroll/publish";
+import { generationOutcome } from "../lib/payroll/runState";
 
 let passed = 0;
 const test = (name: string, fn: () => void) => {
@@ -163,6 +164,30 @@ test("Admin → Documents → employee → Payslip lists the PUBLISHED payslips 
   assert.ok(/await actorWith\(user, "payroll", "view"\)/.test(b.split("\n").slice(0, 3).join("\n")));
   assert.ok(b.includes('.where("uid", "==", uid)') && b.includes("published === true") && b.includes('status === "issued"'));
   assert.ok(read("app/api/payroll/[action]/route.ts").includes('"employee-payslips"'));
+});
+
+test("regression: a month with NO issued payslips is never 'generated' or 'published' (the stuck state)", () => {
+  const run = { status: "payslips_generated", publishedAt: "2026-10-01" };
+  assert.equal(stageOf(run, { issued: 0, toPublish: 0, published: 0 }), "approved");
+  assert.equal(stageOf(run, { issued: 5, toPublish: 5, published: 0 }), "generated");
+  assert.equal(stageOf(run, { issued: 5, toPublish: 2, published: 3 }), "generated", "partly published is not 'published'");
+  assert.equal(stageOf(run, { issued: 5, toPublish: 0, published: 5 }), "published");
+});
+test("regression: generation is complete only when EVERY approved record has an issued payslip", () => {
+  assert.deepEqual(generationOutcome({ entries: 0, issued: 0, failed: 0, conflicts: 0 }), { complete: false, reason: "no-records" });
+  assert.deepEqual(generationOutcome({ entries: 3, issued: 3, failed: 0, conflicts: 0 }), { complete: true, reason: null });
+  assert.equal(generationOutcome({ entries: 3, issued: 2, failed: 0, conflicts: 0 }).complete, false, "a silently skipped payslip is not success");
+  assert.equal(generationOutcome({ entries: 3, issued: 2, failed: 1, conflicts: 0 }).reason, "failed");
+  assert.equal(generationOutcome({ entries: 3, issued: 3, failed: 0, conflicts: 1 }).reason, "conflict");
+});
+test("server: generate refuses an empty month with a clear message, reports real failures, and only a complete run moves the month on; send refuses when nothing exists", () => {
+  const g = fn(actions, "generatePayslips");
+  assert.ok(g.includes("entryDocs.length === 0") && g.includes('"no-records"') && g.includes("Super Admin can reverse this approval"));
+  assert.ok(g.includes("generationOutcome(") && g.includes("outcome.complete ? \"payslips_generated\" : state!.status"));
+  assert.ok(g.includes('"incomplete"') && g.includes("failureMessages"), "the real reason is returned to the screen");
+  assert.ok(!g.includes("if ((error as { code?: number }).code === 6) continue;"), "ALREADY_EXISTS is no longer skipped blindly");
+  const p = fn(pub, "publishPayslips");
+  assert.ok(p.includes('"no-payslips"') && p.includes("totalPublished > 0 && !run?.publishedAt"));
 });
 
 console.log(`\n${passed} passed (payslip publication)${process.exitCode ? " - with FAILURES" : ""}`);

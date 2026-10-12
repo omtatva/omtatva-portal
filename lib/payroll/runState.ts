@@ -87,6 +87,17 @@ export function planPayslips(
   return { create, skip, conflict };
 }
 
+// A generation run is COMPLETE only when every approved payroll record has an issued payslip.
+// Nothing may be marked "generated" on the strength of "no errors" alone — zero records or a
+// silently skipped payslip must never look like success.
+export function generationOutcome(input: { entries: number; issued: number; failed: number; conflicts: number }): { complete: boolean; reason: string | null } {
+  if (input.entries === 0) return { complete: false, reason: "no-records" };
+  if (input.failed > 0) return { complete: false, reason: "failed" };
+  if (input.conflicts > 0) return { complete: false, reason: "conflict" };
+  if (input.issued < input.entries) return { complete: false, reason: "missing" };
+  return { complete: true, reason: null };
+}
+
 // ------------------------------------------------------------------ hashing
 export function stableStringify(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v ?? null);

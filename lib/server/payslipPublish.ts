@@ -35,7 +35,7 @@ export async function publishPreview(user: VerifiedUser, periodIn: unknown) {
   if (state?.status === "payslips_generated" && slips.length === 0) blockers.push("There are no issued payslips for this month.");
   return {
     period, periodLabel: periodLabel(period), revision,
-    stage: stageOf(run ? { status: String(run.status), publishedAt: run.publishedAt } : null),
+    stage: stageOf(run ? { status: String(run.status), publishedAt: run.publishedAt } : null, { issued: slips.length, toPublish: plan.toPublish.length, published: plan.already.length }),
     employees: new Set(slips.map((d) => String(d.data().uid))).size,
     toPublish: plan.toPublish.length,
     alreadyPublished: plan.already.length,
@@ -51,6 +51,9 @@ export async function publishPayslips(user: VerifiedUser, body: Record<string, u
     throw new ApiError(409, "conflict", "Only an approved month with generated payslips can be sent to employees.");
   }
   const lite = slips.map((d) => toSlip(d.id, d.data()));
+  if (lite.length === 0) {
+    throw new ApiError(409, "no-payslips", "There are no issued payslips for this month yet, so there is nothing to send. Press Generate Payslips first.");
+  }
   const plan = planPublish(lite);
 
   // Confirmation names the exact number about to be published. When there is
@@ -94,7 +97,7 @@ export async function publishPayslips(user: VerifiedUser, body: Record<string, u
   }
 
   const totalPublished = plan.already.length + published.length;
-  if (published.length > 0 || !run?.publishedAt) {
+  if (published.length > 0 || (totalPublished > 0 && !run?.publishedAt)) {
     await db().doc(`payrollRuns/${period}`).set({
       ...(run?.publishedAt ? {} : { publishedAt: Timestamp.now(), publishedBy: actor.email }),
       lastPublishedAt: Timestamp.now(), lastPublishedBy: actor.email, publishedCount: totalPublished, publishedRevision: revision,

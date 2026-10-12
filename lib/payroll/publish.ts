@@ -71,9 +71,20 @@ export function buildIndex(slips: SlipLite[]): IndexItem[] {
 // Where a month stands, for the HR screen.
 export type PublishStage = "draft" | "approved" | "generated" | "published";
 
-export function stageOf(run: { status: string; publishedAt?: unknown } | null): PublishStage {
+export function stageOf(
+  run: { status: string; publishedAt?: unknown } | null,
+  slips?: { issued: number; toPublish: number; published: number }
+): PublishStage {
   if (!run) return "draft";
   if (run.status === "approved") return "approved";
-  if (run.status === "payslips_generated") return run.publishedAt ? "published" : "generated";
+  if (run.status === "payslips_generated") {
+    // Judge by what really exists: a month with no issued payslips is not "generated", and it is
+    // "published" only when nothing is left to publish.
+    if (slips) {
+      if (slips.issued === 0) return "approved";
+      return slips.toPublish === 0 && slips.published > 0 ? "published" : "generated";
+    }
+    return run.publishedAt ? "published" : "generated";
+  }
   return "draft";
 }

@@ -98,7 +98,15 @@ export async function performanceOverview(user: VerifiedUser, periodIn: unknown)
     }))
     .sort((a, b) => b.period.localeCompare(a.period));
 
+  const myManagerUid = c.managerOf.get(c.actor.uid) || "";
+  const myManager = myManagerUid ? c.users.find((u) => u.uid === myManagerUid) : undefined;
+  const myManagerRole = myManager ? c.roleOf(myManager) : null;
+  const reportsTo = myManager
+    ? { name: myManager.name, roleLabel: roleLabel(myManagerRole), canApprove: canUseRatings(myManagerRole) && normalizeRole(myManagerRole) !== "team_lead" }
+    : null;
+
   return {
+    reportsTo,
     period, currentPeriod: c.period, role: c.actor.role, roleLabel: roleLabel(c.actor.role),
     submitsForApproval: needsApproval(c.actor.role),
     myApprover: needsApproval(c.actor.role) ? nameOf(c.users, approverOf(c.actor.uid, c.managerOf) || "") || null : null,
@@ -122,6 +130,7 @@ export async function submitRating(user: VerifiedUser, body: Record<string, unkn
   const id = `${v.period}_${subjectUid}`;
   const ref = db().doc(`performanceRatings/${id}`);
   const raterName = nameOf(c.users, c.actor.uid) || c.actor.name || c.actor.email;
+  const approverName = pending ? nameOf(c.users, approverOf(c.actor.uid, c.managerOf) || "") : "";
   const now = Timestamp.now();
   const ratedBy = `${raterName} (${roleLabel(c.actor.role)})`;
 
@@ -155,7 +164,11 @@ export async function submitRating(user: VerifiedUser, body: Record<string, unkn
   await audit(c.actor, pending ? "Performance Rating Proposed" : "Performance Rating Published", subject, `${v.period}: ${v.rating}${pending ? " (awaiting approval)" : ""} — by ${ratedBy}`);
   return {
     id, status: pending ? "pending" : "approved",
-    message: pending ? "Submitted. It will be visible to the employee after your manager approves it." : "Saved and published to the employee's dashboard.",
+    message: pending
+      ? approverName
+        ? `Submitted for approval. ${approverName} will see it under "Waiting for your approval"; the employee sees it after it is approved.`
+        : "Submitted for approval. You have no reporting manager set, so a Head / Admin / Super Admin must approve it before the employee sees it."
+      : "Saved and published — it is now on the employee's dashboard.",
   };
 }
 
@@ -201,4 +214,13 @@ export async function reviewRating(user: VerifiedUser, body: Record<string, unkn
   if (decision === "approve") await rebuildPerformanceIndex(subjectUid);
   await audit(c.actor, decision === "approve" ? "Performance Rating Approved" : "Performance Rating Rejected", c.users.find((u) => u.uid === subjectUid), summary);
   return { id, status: decision === "approve" ? "approved" : "rejected" };
+}
+
+// The signed-in employee's OWN published ratings, read by the server. The dashboard card normally listens to
+// performanceIndex/{uid} directly; this is its safety net when that direct read is not available.
+export async function myPerformance(user: VerifiedUser) {
+  const actor = await memberFor(user);
+  const snap = await db().doc(`performanceIndex/${actor.uid}`).get();
+  const d = snap.exists ? snap.data()! : null;
+  return { latest: d?.latest ?? null, items: Array.isArray(d?.items) ? d!.items : [], average: d?.average ?? null };
 }
