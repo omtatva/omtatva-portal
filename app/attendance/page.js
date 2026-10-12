@@ -685,7 +685,16 @@ export default function AttendancePage() {
     ? shiftOptions.find((o) => o.id === selectedShiftId) || null
     : shiftOptions[0] || null;
   const { startTime: myShiftStart, endTime: myShiftEnd } = getShiftTimes(attendanceRules, shiftId);
-  const myShiftLabel = effectiveShift
+  // The header chip follows the shift in use: once punched in, the shift LOCKED on today's record; before that,
+  // the shift picked in the selector below (so it changes the moment you choose one); else HR's assigned shift.
+  const punchedShift = todayData
+    ? todayData.shiftSnapshot?.startTime
+      ? `${todayData.shiftName || todayData.shiftSnapshot.name || "Shift"} (${todayData.shiftSnapshot.startTime}–${todayData.shiftSnapshot.endTime})`
+      : todayData.shiftName || null
+    : null;
+  const myShiftLabel = punchedShift
+    ? punchedShift
+    : effectiveShift
     ? `${effectiveShift.name} (${effectiveShift.startTime}–${effectiveShift.endTime})`
     : myShift
     ? `${myShift.name} (${myShiftStart}–${myShiftEnd})`

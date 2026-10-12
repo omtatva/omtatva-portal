@@ -27,6 +27,7 @@ import {
 import { availableMonths, ARCHIVE_START_MONTH } from "@/lib/attendanceMonths";
 import type { EmployeeReport, ReportDay } from "@/lib/attendanceReport";
 import { FINDING_META, runAudit, type AuditResult, type Finding } from "@/lib/attendanceAudit";
+import { explainAll, summarizeWhy } from "@/lib/attendanceWhy";
 import {
   bulkChangeGate,
   compareWithLive,
@@ -180,6 +181,10 @@ export default function AttendanceReportsPage() {
   }, [data, selectedMonth, employeeFilter, search, now]);
 
   const selectedReport = employeeFilter !== "all" ? reports[0] : undefined;
+
+  // read-only: WHY each person's percentage is what it is (real punches vs. status set without a punch, etc.)
+  const why = useMemo(() => explainAll(reports), [reports]);
+  const whySummary = useMemo(() => summarizeWhy(why), [why]);
 
   const fmtTime = (d: Date | null) =>
     d ? new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d) : "—";
@@ -440,6 +445,48 @@ export default function AttendanceReportsPage() {
       {/* ======================= MONTHLY REPORT ======================= */}
       {tab === "report" && (
         <>
+          {selectedMonth && why.length > 0 && (
+            <details className="ar-card" open={whySummary.hundredWithoutPunch > 0}>
+              <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                🔍 Why do percentages differ? — {selectedMonth.label}
+                {whySummary.hundredWithoutPunch > 0 && (
+                  <span style={{ marginLeft: 10, color: "#b45309" }}>
+                    {whySummary.hundredWithoutPunch} of {whySummary.total} show 100% with NO punch times
+                  </span>
+                )}
+              </summary>
+              <p className="ar-note">
+                Read-only. A day counts as Present when its status is Present — with or without a punch. A day with no record, an
+                &quot;Absent&quot; placeholder or a missing punch-out does not. Below is what each person&apos;s counted days are made of.
+              </p>
+              <div className="ar-scroll">
+                <table className="ar-table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th><th>%</th><th>Real punches</th><th>Present, NO punch</th><th>Absent (auto)</th><th>Absent (other)</th>
+                      <th>No record</th><th>No punch-out</th><th>Why</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {why.map((w) => (
+                      <tr key={w.uid}>
+                        <td><b>{w.name}</b><div className="ar-sub">{w.employeeId}</div></td>
+                        <td style={{ fontWeight: 800 }}>{w.percentage === null ? "—" : `${w.percentage}%`}</td>
+                        <td>{w.presentWithPunch}</td>
+                        <td style={w.presentWithoutPunch ? { color: "#b45309", fontWeight: 700 } : undefined}>{w.presentWithoutPunch}</td>
+                        <td>{w.absentAuto}</td><td>{w.absentOther}</td><td>{w.noRecord}</td><td>{w.incomplete}</td>
+                        <td className="ar-sub">
+                          {w.reasons.map((r, i) => <div key={i}>{r}</div>)}
+                          {w.sources.length > 0 && <div>Source of the no-punch records: {w.sources.map((s) => `${s.source} (${s.days})`).join("; ")}</div>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+
           <div className="ar-card">
             <h3 style={{ margin: "0 0 4px" }}>Monthly archive</h3>
             <p className="ar-note" style={{ marginTop: 0 }}>
