@@ -10,6 +10,7 @@ type Person = {
   uid: string; employeeId: string; name: string; designation: string; department: string; role: string; direct: boolean;
   rating: { value: string; score: number; comment: string; status: "pending" | "approved" | "rejected"; submittedByName: string; submittedAt: string | null; reviewNote: string } | null;
   published: { rating: string; comment: string; ratedBy: string } | null;
+  canRemove?: boolean;
 };
 type Pending = { id: string; period: string; employeeUid: string; employeeId: string; employeeName: string; rating: string; comment: string; submittedByName: string; submittedAt: string | null; previous: string | null };
 type Overview = { reportsTo: { name: string; roleLabel: string; canApprove: boolean } | null; period: string; currentPeriod: string; role: string; roleLabel: string; submitsForApproval: boolean; myApprover: string | null; people: Person[]; pending: Pending[] };
@@ -178,6 +179,28 @@ export default function PerformancePage() {
 
                 {p.rating?.status === "rejected" && <p className="text-sm text-red-700">Sent back: {p.rating.reviewNote || "no reason given"}</p>}
                 {p.rating?.status === "pending" && <p className="text-xs text-amber-800">Proposed by {p.rating.submittedByName}. The employee still sees: {p.published ? p.published.rating : "no rating yet"}.</p>}
+
+                {p.rating && p.canRemove && (
+                  <div>
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => {
+                        const pending = p.rating!.status === "pending";
+                        const reason = pending ? "" : window.prompt(`Remove ${p.name}'s rating for ${monthLabel(period)}?\nGive a short reason (it is kept in the audit trail):`) || "";
+                        if (!pending && reason.trim().length < 5) return;
+                        act(`rm${p.uid}`, async () => {
+                          const r = await postJson<{ message: string }>("/api/performance/remove", { employeeUid: p.uid, period, reason });
+                          setDraft((x) => { const n = { ...x }; delete n[p.uid]; return n; });
+                          return r.message;
+                        });
+                      }}
+                      className="text-xs font-semibold text-red-700 underline disabled:opacity-40"
+                    >
+                      {p.rating.status === "pending" ? "↩ Withdraw this proposal" : "🗑 Remove this rating"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-center gap-2">
                   <span className="text-xs text-gray-500">{p.published ? <>Visible to employee: <Pill value={p.published.rating} /></> : "Nothing visible to the employee yet"}</span>

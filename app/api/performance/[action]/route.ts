@@ -1,5 +1,5 @@
 import { ApiError, errorResponse, verifyRequest } from "@/lib/server/firebaseAdmin";
-import { myPerformance, performanceOverview, reviewRating, submitRating } from "@/lib/server/performanceServer";
+import { myPerformance, performanceOverview, removeRating, reviewRating, submitRating } from "@/lib/server/performanceServer";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -32,6 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
     }
     if (action === "rate") return Response.json(await submitRating(user, body), { headers: NO_STORE });
     if (action === "review") return Response.json(await reviewRating(user, body), { headers: NO_STORE });
+    if (action === "remove") return Response.json(await removeRating(user, body), { headers: NO_STORE });
     throw new ApiError(404, "not-found", "Unknown action.");
   } catch (error) {
     return errorResponse(error);

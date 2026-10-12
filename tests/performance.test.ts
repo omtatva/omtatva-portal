@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  approverOf, buildPerformanceIndex, canRate, canReview, canUseRatings, descendants, directReports, needsApproval, ratableUids, validateSubmission,
+  approverOf, buildPerformanceIndex, canRate, canRemove, canReview, canUseRatings, descendants, directReports, needsApproval, ratableUids, validateSubmission,
   type IndexEntry, type ManagerMap,
 } from "../lib/performance";
 
@@ -163,6 +163,45 @@ test("Access Management: typing in Assign Role suggests employees by name / ID /
   assert.ok(picker.includes("employeeId") && picker.includes("choose(") && picker.includes("ArrowDown") && picker.includes("already has the role"));
   assert.ok(read("components/PersonPicker.tsx").includes("options: OrgPerson[]"), "the original reporting-manager picker is intact");
   assert.ok(read("app/admin/hierarchy/page.tsx").includes("PersonPicker"));
+});
+
+test("remove: whoever submitted it, Head/Admin/Super Admin, or the submitter's manager — and only while they may rate that person", () => {
+  // head ─ mgr1 ─ tl1 ─ e1 ;  mgr2 ─ tl2 ─ e3
+  const m: ManagerMap = new Map([["mgr1", "head"], ["mgr2", "head"], ["tl1", "mgr1"], ["e1", "tl1"], ["tl2", "mgr2"], ["e3", "tl2"]]);
+  const base = { subjectUid: "e1", managerOf: m };
+  assert.equal(canRemove({ ...base, actorRole: "team_lead", actorUid: "tl1", submittedByUid: "tl1" }), true, "a team lead takes back their own proposal");
+  assert.equal(canRemove({ ...base, actorRole: "team_lead", actorUid: "tl1", submittedByUid: "mgr1" }), false, "…but not a rating their manager gave");
+  assert.equal(canRemove({ ...base, actorRole: "manager", actorUid: "mgr1", submittedByUid: "tl1" }), true, "the manager of the submitting team lead");
+  assert.equal(canRemove({ ...base, actorRole: "manager", actorUid: "mgr1", submittedByUid: "mgr1" }), true, "their own");
+  assert.equal(canRemove({ ...base, actorRole: "manager", actorUid: "mgr2", submittedByUid: "tl1" }), false, "another team's manager");
+  for (const r of ["head", "admin", "super_admin"]) assert.equal(canRemove({ ...base, actorRole: r, actorUid: "x", submittedByUid: "tl1" }), true, r);
+  assert.equal(canRemove({ ...base, actorRole: "employee", actorUid: "e1", submittedByUid: "e1" }), false);
+  assert.equal(canRemove({ ...base, actorRole: "admin", actorUid: "e1", submittedByUid: "tl1" }), false, "never about yourself");
+});
+test("remove (server + page): keeps an audit trail, hides it from the employee at once, withdraws a proposal without touching the approved rating", () => {
+  const b = fn("removeRating");
+  assert.ok(b.includes("canRemove({") && b.includes('"removed"') && b.includes("published: null") && b.includes("rebuildPerformanceIndex(subjectUid)"));
+  assert.ok(b.includes("withdrawn = true") && b.includes('status: "approved"') && b.includes("reason.length < 5"));
+  assert.ok(b.includes("history.push("), "an audit trail is kept");
+  assert.ok(read("app/api/performance/[action]/route.ts").includes('action === "remove"'));
+  const page = read("app/performance/page.tsx");
+  assert.ok(page.includes("/api/performance/remove") && page.includes("Remove this rating") && page.includes("Withdraw this proposal") && page.includes("p.canRemove"));
+  assert.ok(fn("performanceOverview").includes('status !== "removed"'), "a removed rating reads as not rated");
+});
+test("profile documents: employees can delete a wrong upload; it disappears from My Documents, the profile AND Admin → Documents, and the stored file is deleted", () => {
+  const src = read("app/profile/components/DocumentUpload.tsx");
+  const a = src.indexOf("const deleteDocument = async (");
+  const b = src.indexOf("const uploadMultipleFiles = (");
+  assert.ok(a > 0 && b > a);
+  const f = src.slice(a, b);
+  assert.ok(f.includes("window.confirm("));
+  assert.ok(f.includes('"employeeDocuments"') && f.includes('"employeeProfiles"') && f.includes('doc(db,"users",user.uid)'), "all three copies");
+  assert.ok(f.includes("ADMIN_DOCUMENTS_FIELD_MAP[type]") && f.includes("deleteField()") && f.includes("deleteObject(ref(storage,url))"));
+  assert.ok(f.includes("f?.url!==url") && f.includes("===url"), "HR's own uploads are not touched — only this file");
+  assert.ok(src.includes("onClick={()=>deleteDocument(key, f)}") && src.includes("onClick={()=>deleteDocument(key)}"), "Delete buttons for multi and single uploads");
+  // storage rules let the owner delete their own employee documents
+  const sr = read("storage.rules");
+  assert.ok(/match \/employees\/\{uid\}\/documents\/\{file=\*\*\}[\s\S]*?allow delete: if isOwner\(uid\) \|\| isAdminTier\(\);/.test(sr));
 });
 
 console.log(`\n${passed} passed (performance ratings)${process.exitCode ? " - with FAILURES" : ""}`);

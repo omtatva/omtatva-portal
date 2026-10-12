@@ -7,7 +7,7 @@
 
 import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import {
-  approverOf, buildPerformanceIndex, canRate, canReview, canUseRatings, needsApproval, ratableUids, ratingInfo, validateSubmission,
+  approverOf, buildPerformanceIndex, canRate, canRemove, canReview, canUseRatings, needsApproval, ratableUids, ratingInfo, validateSubmission,
   type IndexEntry, type ManagerMap, type PublishedRating,
 } from "../performance";
 import { normalizeRole, roleLabel } from "../roles";
@@ -69,7 +69,8 @@ export async function performanceOverview(user: VerifiedUser, periodIn: unknown)
   const ratable = new Set(ratableUids({ raterRole: c.actor.role, raterUid: c.actor.uid, everyone: c.people.map((p) => p.uid), managerOf: c.managerOf }));
 
   const snap = await db().collection("performanceRatings").where("period", "==", period).get();
-  const byEmployee = new Map(snap.docs.map((d) => [String(d.data().employeeUid), d.data()]));
+  // a removed rating is simply "not rated" again
+  const byEmployee = new Map(snap.docs.filter((d) => d.data().status !== "removed").map((d) => [String(d.data().employeeUid), d.data()]));
   const direct = new Set([...c.managerOf.entries()].filter(([, m]) => m === c.actor.uid).map(([e]) => e));
 
   const people = c.people
@@ -81,7 +82,9 @@ export async function performanceOverview(user: VerifiedUser, periodIn: unknown)
         role: roleLabel(c.roleOf(p)), direct: direct.has(p.uid),
         rating: r ? { value: r.rating, score: r.score, comment: r.comment || "", status: r.status, submittedByName: r.submittedByName || "", submittedAt: iso(r.submittedAt), reviewNote: r.reviewNote || "" } : null,
         published: r?.published ? { rating: r.published.rating, comment: r.published.comment || "", ratedBy: r.published.ratedBy } : null,
-        needsApprovalFromMe: false,
+        canRemove: r
+          ? canRemove({ actorRole: c.actor.role, actorUid: c.actor.uid, subjectUid: p.uid, submittedByUid: String(r.submittedByUid || ""), managerOf: c.managerOf })
+          : false,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -223,4 +226,51 @@ export async function myPerformance(user: VerifiedUser) {
   const snap = await db().doc(`performanceIndex/${actor.uid}`).get();
   const d = snap.exists ? snap.data()! : null;
   return { latest: d?.latest ?? null, items: Array.isArray(d?.items) ? d!.items : [], average: d?.average ?? null };
+}
+
+// ------------------------------------------------------------------- remove
+// Removes a rating (or withdraws a pending proposal). The record is kept for the audit trail, marked "removed";
+// the employee stops seeing a removed rating immediately.
+export async function removeRating(user: VerifiedUser, body: Record<string, unknown>) {
+  const c = await context(user);
+  const subjectUid = String(body.employeeUid || "");
+  const period = String(body.period || "");
+  if (!subjectUid || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new ApiError(400, "bad-request", "Invalid rating.");
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 300) : "";
+
+  const ref = db().doc(`performanceRatings/${period}_${subjectUid}`);
+  const now = Timestamp.now();
+  const actorName = nameOf(c.users, c.actor.uid) || c.actor.name || c.actor.email;
+  let withdrawn = false;
+
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const r = snap.exists ? snap.data()! : null;
+    if (!r || r.status === "removed") throw new ApiError(404, "not-found", "There is no rating to remove for that month.");
+    if (!canRemove({ actorRole: c.actor.role, actorUid: c.actor.uid, subjectUid, submittedByUid: String(r.submittedByUid || ""), managerOf: c.managerOf })) {
+      throw new ApiError(403, "forbidden", "You cannot remove this rating — it was given by someone above you, or the employee is not under you.");
+    }
+    const publishedExists = !!r.published;
+    // taking back a pending PROPOSAL needs no reason; removing something the employee can see does
+    if (r.status !== "pending" && publishedExists && reason.length < 5) {
+      throw new ApiError(400, "bad-request", "Give a short reason (at least 5 characters) for removing a published rating.");
+    }
+    const history = Array.isArray(r.history) ? r.history : [];
+    history.push({ at: now.toDate().toISOString(), by: c.actor.email, byRole: c.actor.role, action: r.status === "pending" ? "withdrawn" : "removed", rating: r.rating, comment: reason });
+
+    if (r.status === "pending" && publishedExists) {
+      // only the proposal is withdrawn; the approved rating stays exactly as it was
+      withdrawn = true;
+      tx.update(ref, {
+        status: "approved", rating: r.published.rating, score: r.published.score, comment: r.published.comment || "",
+        reviewNote: "", history: history.slice(-HISTORY_CAP), updatedAt: now,
+      });
+    } else {
+      tx.update(ref, { status: "removed", published: null, removedAt: now, removedBy: `${actorName} (${roleLabel(c.actor.role)})`, removedReason: reason, history: history.slice(-HISTORY_CAP), updatedAt: now });
+    }
+  });
+
+  await rebuildPerformanceIndex(subjectUid);
+  await audit(c.actor, withdrawn ? "Performance Rating Withdrawn" : "Performance Rating Removed", c.users.find((u) => u.uid === subjectUid), `${period}${reason ? ` — ${reason}` : ""}`);
+  return { removed: true, withdrawn, message: withdrawn ? "Your proposal was withdrawn. The employee's current rating is unchanged." : "The rating was removed. The employee no longer sees it." };
 }

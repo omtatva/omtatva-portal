@@ -77,6 +77,22 @@ export function canReview(input: { reviewerRole: string | null | undefined; revi
   return role === "manager" && (input.managerOf.get(input.submitterUid) || "") === input.reviewerUid;
 }
 
+// Who may REMOVE (or, for a pending proposal, withdraw) a rating:
+//   * whoever submitted it (they can take back their own work),
+//   * Head / Admin / Super Admin,
+//   * the submitter's own manager (the one who approves Team Lead ratings).
+// …and only while they are still allowed to rate that employee. A Team Lead can therefore never delete a
+// rating their manager gave.
+export function canRemove(input: {
+  actorRole: string | null | undefined; actorUid: string; subjectUid: string; submittedByUid: string; managerOf: ManagerMap;
+}): boolean {
+  if (!canRate({ raterRole: input.actorRole, raterUid: input.actorUid, subjectUid: input.subjectUid, managerOf: input.managerOf })) return false;
+  if (input.submittedByUid && input.submittedByUid === input.actorUid) return true;
+  const role = normalizeRole(input.actorRole);
+  if (COMPANY_WIDE_ROLES.includes(role)) return true;
+  return role === "manager" && !!input.submittedByUid && (input.managerOf.get(input.submittedByUid) || "") === input.actorUid;
+}
+
 // The person who should approve a team lead's rating (for display / routing).
 export const approverOf = (submitterUid: string, managerOf: ManagerMap): string | null => managerOf.get(submitterUid) || null;
 

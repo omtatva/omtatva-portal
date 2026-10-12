@@ -20,7 +20,8 @@ import { useProfile } from "../ProfileContext";
 import {
 ref,
 getDownloadURL,
-uploadBytesResumable
+uploadBytesResumable,
+deleteObject
 }
 from "firebase/storage";
 
@@ -30,7 +31,10 @@ collection,
 query,
 where,
 getDocs,
+getDoc,
 setDoc,
+deleteDoc,
+deleteField,
 doc,
 serverTimestamp,
 arrayUnion
@@ -40,6 +44,8 @@ from "firebase/firestore";
 
 import { MULTI_UPLOAD_TYPES, ADMIN_DOCUMENTS_FIELD_MAP } from "../../../lib/documentFields";
 
+
+type UploadedFile = { fileName:string; url:string };
 
 export default function DocumentUpload({
 
@@ -629,6 +635,100 @@ toast.error(
 
 
 
+// Deletes an uploaded document everywhere it was saved, so a wrong upload can be replaced:
+//   employeeDocuments (what "My Documents" shows) · employeeProfiles.documents (the profile)
+//   · users.documents (what HR sees under Admin → Documents) · the stored file itself.
+// For HR's side, an entry is removed only if it is THIS file — a file HR uploaded themselves is left alone.
+const deleteDocument = async (
+type:string,
+file?:{ fileName:string; url:string }
+)=>{
+const user=auth.currentUser;
+if(!user)
+return;
+const isMulti = MULTI_UPLOAD_TYPES.includes(type);
+const url:string = isMulti ? (file?.url || "") : (documents[type] as string);
+if(!url)
+return;
+const label = isMulti ? (file?.fileName || "this file") : "this document";
+if(!window.confirm(`Delete ${label}?\n\nIt will also be removed for HR (Admin → Documents). You can upload a new one afterwards.`))
+return;
+const adminField = ADMIN_DOCUMENTS_FIELD_MAP[type];
+try{
+if(isMulti){
+const remaining = ((documents[type] as UploadedFile[]) || []).filter((f)=>f.url!==url);
+// 1) what the employee sees under My Documents
+await setDoc(
+doc(db,"employeeDocuments",`${user.uid}_${type}`),
+{ files:remaining, updatedAt:serverTimestamp() },
+{ merge:true }
+);
+// 2) the profile copy
+await setDoc(
+doc(db,"employeeProfiles",user.uid),
+{ documents:{ [type]:remaining } },
+{ merge:true }
+);
+// 3) HR's copy (Admin → Documents): drop only the entry with this URL
+if(adminField){
+const uSnap = await getDoc(doc(db,"users",user.uid));
+const current:{ url?:string }[] = uSnap.exists() ? (uSnap.data().documents?.[adminField] || []) : [];
+if(Array.isArray(current) && current.some((f)=>f?.url===url)){
+await setDoc(
+doc(db,"users",user.uid),
+{ documents:{ [adminField]: current.filter((f)=>f?.url!==url) } },
+{ merge:true }
+);
+}
+}
+setDocuments((prev:Record<string,unknown>)=>({ ...prev, [type]:remaining }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+setProfile((prev:any)=>({ ...prev, documents:{ ...prev.documents, [type]:remaining } }));
+}
+else{
+await deleteDoc(doc(db,"employeeDocuments",`${user.uid}_${type}`));
+await setDoc(
+doc(db,"employeeProfiles",user.uid),
+{ documents:{ [type]:deleteField() }, ...(type==="photo" ? { profilePhoto:deleteField() } : {}) },
+{ merge:true }
+);
+if(adminField){
+const uSnap = await getDoc(doc(db,"users",user.uid));
+const same = uSnap.exists() && uSnap.data().documents?.[adminField]===url;
+if(same){
+await setDoc(
+doc(db,"users",user.uid),
+{ documents:{ [adminField]:deleteField() } },
+{ merge:true }
+);
+}
+}
+if(type==="photo"){
+await setDoc(
+doc(db,"users",user.uid),
+{ photoURL:deleteField(), profilePhoto:deleteField() },
+{ merge:true }
+);
+}
+setDocuments((prev:Record<string,unknown>)=>{ const n={...prev}; delete n[type]; return n; });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+setProfile((prev:any)=>{ const d={...prev.documents}; delete d[type]; return { ...prev, documents:d }; });
+}
+// 4) the file itself (best effort — the records above are already updated)
+try{
+await deleteObject(ref(storage,url));
+}
+catch(e){
+console.log("Stored file could not be deleted (it may already be gone):", e);
+}
+toast.success(`${label} deleted`);
+}
+catch(err){
+console.log(err);
+toast.error("Could not delete — please try again");
+}
+};
+
 const uploadMultipleFiles = (
 
 fileList:FileList,
@@ -855,61 +955,60 @@ isMulti && multiFiles.length > 0 &&
 <div style={{ marginTop:15, textAlign:"left" }}>
 
 {multiFiles.map((f, i)=>(
-
-<a
-
+<div
 key={i}
-
-href={f.url}
-
-target="_blank"
-
 style={{
-
 display:"flex",
-
-justifyContent:"space-between",
-
-gap:10,
-
-padding:"8px 10px",
-
+alignItems:"center",
+gap:8,
+padding:"6px 10px",
 marginBottom:6,
-
 background:"#fff",
-
 border:"1px solid #e2e8f0",
-
 borderRadius:8,
-
-color:"#3d6fa8",
-
-textDecoration:"none",
-
 fontSize:13.5,
-
 }}
-
 >
-
+<a
+href={f.url}
+target="_blank"
+style={{
+flex:1,
+minWidth:0,
+display:"flex",
+justifyContent:"space-between",
+gap:10,
+color:"#3d6fa8",
+textDecoration:"none",
+}}
+>
 <span style={{
-
 overflow:"hidden",
-
 textOverflow:"ellipsis",
-
 whiteSpace:"nowrap",
-
 }}>
-
 📄 {f.fileName}
-
 </span>
-
 <span>View →</span>
-
 </a>
-
+<button
+type="button"
+onClick={()=>deleteDocument(key, f)}
+title="Delete this file"
+style={{
+border:"1px solid #fecaca",
+background:"#fef2f2",
+color:"#b91c1c",
+borderRadius:8,
+padding:"4px 10px",
+cursor:"pointer",
+fontWeight:600,
+fontSize:12.5,
+}}
+>
+🗑 Delete
+</button>
+</div>
 ))}
 
 </div>
@@ -922,33 +1021,32 @@ whiteSpace:"nowrap",
 {/* Single-upload view link */}
 
 {
-
 !isMulti && documents[key] &&
-
-
+<div style={{ marginTop:15, display:"flex", gap:14, justifyContent:"center", alignItems:"center", flexWrap:"wrap" }}>
 <a
-
 href={documents[key]}
-
 target="_blank"
-
-style={{
-
-display:"block",
-
-marginTop:15,
-
-color:"#3d6fa8"
-
-}}
-
+style={{ color:"#3d6fa8" }}
 >
-
 View Document
-
 </a>
-
-
+<button
+type="button"
+onClick={()=>deleteDocument(key)}
+style={{
+border:"1px solid #fecaca",
+background:"#fef2f2",
+color:"#b91c1c",
+borderRadius:8,
+padding:"4px 12px",
+cursor:"pointer",
+fontWeight:600,
+fontSize:13,
+}}
+>
+🗑 Delete
+</button>
+</div>
 }
 
 
