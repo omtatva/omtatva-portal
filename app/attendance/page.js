@@ -106,6 +106,11 @@ export default function AttendancePage() {
       const employeeShiftId = userSnap.exists() ? userSnap.data().shiftId || null : null;
       setShiftId(employeeShiftId);
 
+      // Wake the server (cold start: Admin SDK + Firestore connection) while
+      // the employee is still reading the page, so the first Punch In is not
+      // the slow one. Fire-and-forget; the endpoint returns no data.
+      fetch("/api/attendance/health", { cache: "no-store" }).catch(() => {});
+
       await loadToday(currentUser.uid);
 
       // Backfill any missing past working days as "Absent" before
@@ -464,11 +469,31 @@ export default function AttendancePage() {
   async function callAttendanceApi(path, body) {
     const token = await auth.currentUser.getIdToken();
 
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body),
-    });
+    // Without a limit a slow/cold server leaves the button spinning for
+    // minutes. Fail after 25 s with a clear message instead.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+
+    let res;
+    try {
+      res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      const timedOut = e?.name === "AbortError";
+      const err = new Error(
+        timedOut
+          ? "The server took too long to respond (timed out after 25 seconds). Your punch may still have been saved - the page will refresh to check. If it is not recorded, wait a few seconds and try again."
+          : "Could not reach the server. Please check your internet connection and try again."
+      );
+      err.apiCode = timedOut ? "timeout" : "network";
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     let data = null;
     try {
@@ -478,8 +503,16 @@ export default function AttendancePage() {
     }
 
     if (!res.ok) {
-      const err = new Error(data?.error?.message || "Request failed. Please try again.");
-      err.apiCode = data?.error?.code || "error";
+      // 502/503/504 come from the hosting gateway (cold start / overloaded
+      // instance) and have no JSON body of ours.
+      const gateway = [502, 503, 504].includes(res.status) && !data?.error;
+      const err = new Error(
+        data?.error?.message ||
+          (gateway
+            ? "The server is starting up or busy. Please wait a few seconds and try again."
+            : "Request failed. Please try again.")
+      );
+      err.apiCode = data?.error?.code || (gateway ? "unavailable" : "error");
       throw err;
     }
 
@@ -491,6 +524,12 @@ export default function AttendancePage() {
     // API errors carry a readable message; GeolocationPositionError has a
     // numeric code and gets the GPS-specific help text.
     alert(error?.apiCode ? error.message : getLocationErrorMessage(error));
+
+    // After a timeout / lost connection the punch may or may not have been
+    // saved - re-read today's record so the screen shows the truth.
+    if (user && ["timeout", "network", "unavailable"].includes(error?.apiCode)) {
+      loadToday(user.uid).catch(() => {});
+    }
   }
 
   async function punchIn() {

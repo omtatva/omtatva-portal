@@ -21,6 +21,27 @@ export class ApiError extends Error {
   }
 }
 
+// Local development with no credentials at all: Application Default
+// Credentials would spend a long time probing the Google metadata server
+// (and spray unhandled rejections) before failing, which the browser sees as
+// a request timeout. Say what is missing straight away instead. Never applies
+// in production / on Cloud Run, where ADC is provided.
+function assertCredentialsConfigured() {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    !process.env.FIREBASE_SERVICE_ACCOUNT_JSON &&
+    !process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+    !process.env.FIRESTORE_EMULATOR_HOST &&
+    !process.env.K_SERVICE
+  ) {
+    throw new ApiError(
+      503,
+      "server-not-configured",
+      "The attendance server has no Firebase Admin credentials in this environment. Set FIREBASE_SERVICE_ACCOUNT_JSON in .env.local (see .env.local.example) and restart the dev server."
+    );
+  }
+}
+
 function adminApp(): App {
   const existing = getApps()[0];
   if (existing) return existing;
@@ -37,6 +58,7 @@ function adminApp(): App {
 let settingsApplied = false;
 
 export function adminDb() {
+  assertCredentialsConfigured();
   const db = getFirestore(adminApp());
   if (!settingsApplied) {
     settingsApplied = true;
@@ -66,9 +88,14 @@ export async function verifyRequest(req: Request): Promise<VerifiedUser> {
   try {
     // checkRevoked: a removed/disabled account is refused immediately, not
     // after its ID token expires.
+    // Signature/expiry first (needs no credentials), so a fake token is a 401
+    // everywhere; the revocation check below does need credentials.
+    await getAuth(adminApp()).verifyIdToken(token, false);
+    assertCredentialsConfigured();
     const decoded = await getAuth(adminApp()).verifyIdToken(token, true);
     return { uid: decoded.uid, email: decoded.email || "", name: (decoded.name as string) || "" };
   } catch (error) {
+    if (error instanceof ApiError) throw error; // e.g. server not configured - not the user's fault
     console.error("ID token verification failed:", (error as Error).message);
     throw new ApiError(401, "invalid-token", "Your session has expired. Please sign in again.");
   }
